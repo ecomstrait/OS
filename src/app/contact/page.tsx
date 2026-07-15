@@ -1,0 +1,75 @@
+import type { Metadata } from "next";
+import { Mail, MessageCircle, Briefcase, LifeBuoy } from "lucide-react";
+import { PageHeader } from "@/components/shared/page-header";
+import { Section, SectionHeading } from "@/components/ui/section";
+import { Reveal } from "@/components/ui/reveal";
+import { LeadForm } from "@/components/shared/lead-form";
+import { siteConfig } from "@/lib/site";
+
+export const metadata: Metadata = {
+  title: "Contact",
+  description:
+    "Talk to the EcomStrait team about launching a store, becoming a supplier, partnerships, or support.",
+};
+
+const channels = [
+  { icon: Briefcase, title: "Sales", body: "Launch a store or explore partnerships.", value: siteConfig.email },
+  { icon: LifeBuoy, title: "Support", body: "Questions about your account or store.", value: "support@ecomstrait.com" },
+  { icon: MessageCircle, title: "WhatsApp", body: "Chat with us for quick answers.", value: siteConfig.whatsapp },
+  { icon: Mail, title: "Partnerships", body: "Agencies, integrations, and resellers.", value: "partners@ecomstrait.com" },
+];
+
+export default function ContactPage() {
+  return (
+    <>
+      <PageHeader
+        eyebrow="Contact"
+        title="Let's build something together"
+        description="Whether you're launching a store, joining as a supplier, or exploring a partnership — we'd love to hear from you."
+      />
+
+      <Section tone="light">
+        <div className="grid gap-12 lg:grid-cols-[1fr_1.2fr]">
+          {/* Channels */}
+          <div className="flex flex-col gap-4">
+            {channels.map((c, i) => (
+              <Reveal key={c.title} delay={i * 0.4}>
+                <div className="flex items-start gap-4 rounded-2xl border border-ink-100 bg-white p-5">
+                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-600">
+                    <c.icon className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <h3 className="text-sm font-bold text-ink-950">{c.title}</h3>
+                    <p className="text-sm text-ink-500">{c.body}</p>
+                    <p className="mt-1 text-sm font-medium text-brand-700">{c.value}</p>
+                  </div>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+
+          {/* Form */}
+          <div>
+            <SectionHeading
+              align="left"
+              eyebrow="Send a message"
+              title="Tell us what you need"
+              className="mb-8"
+            />
+            <LeadForm
+              submitLabel="Send Message"
+              successTitle="Message sent!"
+              successMessage="Thanks for reaching out. We'll get back to you within one business day."
+              fields={[
+                { name: "name", label: "Your name", required: true },
+                { name: "email", label: "Email", type: "email", required: true },
+                { name: "topic", label: "I'm reaching out about", type: "select", required: true, full: true, options: ["Launching a store", "Becoming a supplier", "Partnership", "Support", "Something else"] },
+                { name: "message", label: "Message", type: "textarea", required: true, full: true },
+              ]}
+            />
+          </div>
+        </div>
+      </Section>
+    </>
+  );
+}

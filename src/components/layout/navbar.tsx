@@ -1,0 +1,109 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { AnimatePresence, motion } from "framer-motion";
+import { Menu, X } from "lucide-react";
+import { Logo } from "@/components/ui/logo";
+import { Button } from "@/components/ui/button";
+import { primaryNav, secondaryNav } from "@/lib/site";
+import { cn } from "@/lib/utils";
+
+const allNav = [...primaryNav, ...secondaryNav];
+
+export function Navbar() {
+  const [scrolled, setScrolled] = useState(false);
+  const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 12);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  return (
+    <header
+      className={cn(
+        "sticky top-0 z-40 transition-all duration-300",
+        scrolled
+          ? "border-b border-ink-100 bg-white/80 backdrop-blur-xl"
+          : "border-b border-transparent bg-white/0",
+      )}
+    >
+      <nav className="container-px flex h-16 items-center justify-between gap-4">
+        <Logo />
+
+        <div className="hidden items-center gap-1 lg:flex">
+          {primaryNav.map((item) => (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                "rounded-full px-3.5 py-2 text-sm font-medium transition-colors",
+                pathname === item.href
+                  ? "text-ink-950"
+                  : "text-ink-500 hover:text-ink-950",
+              )}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </div>
+
+        <div className="hidden items-center gap-2 lg:flex">
+          <Button href="/store-owners" variant="ghost" size="sm">
+            Launch My Store
+          </Button>
+          <Button href="/suppliers" variant="primary" size="sm">
+            Become a Supplier
+          </Button>
+        </div>
+
+        <button
+          onClick={() => setOpen((v) => !v)}
+          aria-label="Toggle menu"
+          aria-expanded={open}
+          className="grid h-10 w-10 place-items-center rounded-lg text-ink-800 hover:bg-ink-100 lg:hidden"
+        >
+          {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        </button>
+      </nav>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.25 }}
+            className="overflow-hidden border-t border-ink-100 bg-white lg:hidden"
+          >
+            <div className="container-px flex flex-col gap-1 py-4">
+              {allNav.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setOpen(false)}
+                  className="rounded-lg px-3 py-2.5 text-[15px] font-medium text-ink-700 hover:bg-ink-50"
+                >
+                  {item.label}
+                </Link>
+              ))}
+              <div className="mt-3 flex flex-col gap-2">
+                <Button href="/store-owners" variant="outline" size="md" onClick={() => setOpen(false)}>
+                  Launch My Store
+                </Button>
+                <Button href="/suppliers" variant="primary" size="md" onClick={() => setOpen(false)}>
+                  Become a Supplier
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </header>
+  );
+}
