@@ -33,7 +33,7 @@ export function Reveal({ children, className, delay = 0, as = "div" }: RevealPro
       variants={variants}
       initial="hidden"
       whileInView="visible"
-      viewport={{ once: true, margin: "-80px" }}
+      viewport={{ once: false, margin: "-80px" }}
     >
       {children}
     </MotionTag>

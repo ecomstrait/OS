@@ -1,195 +1,578 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { useCallback, useEffect, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
-  ArrowRight, Play, Search, Sparkles, TrendingUp, Bot, Package, CheckCircle2,
+  ArrowRight, Play, Search, Sparkles, Boxes, Tag, Warehouse, Layers,
+  DollarSign, Store, ListChecks, ClipboardList, CreditCard, Users, Brain,
+  RefreshCw, BarChart3, CheckCircle2, Rocket, Handshake,
+  TrendingUp, MapPin, ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { heroStats } from "@/content/stats";
+import { OceanBackdrop } from "@/components/ui/ocean-backdrop";
 
-const container = {
-  hidden: {},
-  show: { transition: { staggerChildren: 0.1, delayChildren: 0.05 } },
+type IconType = React.ComponentType<{ className?: string }>;
+
+/* ------------------------------------------------------------------ */
+/*  Slide content — mirrors the two-panel "strait" concept            */
+/* ------------------------------------------------------------------ */
+
+type Feature = { icon: IconType; label: string };
+type Slide = {
+  id: string;
+  eyebrow: string;
+  supplierItems: Feature[];
+  storeItems: Feature[];
+  chips: Feature[];
+  center: { sub: string };
+  /** particle direction along the beams */
+  direction: "forward" | "reverse";
+  accent: "ai" | "brand";
 };
-const item = {
-  hidden: { opacity: 0, y: 20 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.22, 1, 0.36, 1] as const } },
+
+const SLIDES: Slide[] = [
+  {
+    id: "connect",
+    eyebrow: "One Strait. Endless Opportunities.",
+    direction: "forward",
+    accent: "ai",
+    center: { sub: "Build · Manage · Automate" },
+    supplierItems: [
+      { icon: Boxes, label: "Inventory" },
+      { icon: Tag, label: "Products" },
+      { icon: Warehouse, label: "Warehouse" },
+      { icon: Layers, label: "Bulk Supply" },
+      { icon: DollarSign, label: "Best Prices" },
+    ],
+    storeItems: [
+      { icon: Store, label: "Online Store" },
+      { icon: ListChecks, label: "Product Listing" },
+      { icon: ClipboardList, label: "Order Management" },
+      { icon: CreditCard, label: "Payments" },
+      { icon: Users, label: "Customer Reach" },
+    ],
+    chips: [
+      { icon: Sparkles, label: "AI Website Builder" },
+      { icon: Brain, label: "AI Business Consultant" },
+      { icon: RefreshCw, label: "Smart Automation" },
+      { icon: BarChart3, label: "Real-time Insights" },
+    ],
+  },
+  {
+    id: "deliver",
+    eyebrow: "Orders Delivered. Relationships Strengthened.",
+    direction: "reverse",
+    accent: "brand",
+    center: { sub: "Automated Fulfillment" },
+    supplierItems: [
+      { icon: CheckCircle2, label: "Order Received" },
+      { icon: CheckCircle2, label: "Packing" },
+      { icon: CheckCircle2, label: "Shipping" },
+      { icon: CheckCircle2, label: "Delivered" },
+      { icon: CheckCircle2, label: "Growth" },
+    ],
+    storeItems: [
+      { icon: CheckCircle2, label: "Order Placed" },
+      { icon: CheckCircle2, label: "Payment Success" },
+      { icon: CheckCircle2, label: "Processing" },
+      { icon: CheckCircle2, label: "Shipped" },
+      { icon: CheckCircle2, label: "Customer Happy" },
+    ],
+    chips: [
+      { icon: Rocket, label: "Faster Deliveries" },
+      { icon: DollarSign, label: "Lower Costs" },
+      { icon: Handshake, label: "Better Relationships" },
+      { icon: TrendingUp, label: "Business Growth" },
+      { icon: Sparkles, label: "Powered by AI" },
+    ],
+  },
+];
+
+const HEADLINES: Record<string, React.ReactNode> = {
+  connect: (
+    <>
+      Connecting Suppliers to Online Stores with{" "}
+      <span className="text-gradient">EcomAI</span>
+    </>
+  ),
+  deliver: (
+    <>
+      From Stores to Suppliers —{" "}
+      <span className="text-gradient">Orders Delivered</span>
+    </>
+  ),
 };
+
+const AUTO_MS = 7000;
+const EASE = [0.22, 1, 0.36, 1] as const;
+
+/* ------------------------------------------------------------------ */
+/*  Hero                                                               */
+/* ------------------------------------------------------------------ */
 
 export function Hero() {
+  const [index, setIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
+  const reduce = useReducedMotion();
+  const slide = SLIDES[index];
+
+  const go = useCallback((next: number) => {
+    setIndex(((next % SLIDES.length) + SLIDES.length) % SLIDES.length);
+  }, []);
+
+  useEffect(() => {
+    if (paused) return;
+    const t = setInterval(() => setIndex((i) => (i + 1) % SLIDES.length), AUTO_MS);
+    return () => clearInterval(t);
+  }, [paused, index]);
+
+  const accentHex = slide.accent === "ai" ? "#3b82f6" : "#10b981";
+
   return (
-    <section className="relative overflow-hidden bg-white">
-      {/* Backgrounds */}
-      <div aria-hidden className="pointer-events-none absolute inset-0 bg-grid opacity-60" />
-      <div
+    <section
+      className="relative overflow-hidden bg-ink-950 text-white"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+    >
+      <style>{`@keyframes strait-dash { to { stroke-dashoffset: -32; } }`}</style>
+
+      {/* ---- Ocean backdrop ---- */}
+      <OceanBackdrop accentHex={accentHex} />
+
+      {/* ---- Ambient backdrop: night strait ---- */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 bg-grid-dark opacity-25" />
+      <motion.div
         aria-hidden
-        className="pointer-events-none absolute -top-32 right-0 h-[560px] w-[560px] rounded-full opacity-50 blur-3xl animate-aurora"
-        style={{ background: "radial-gradient(circle, rgba(16,185,129,0.35), transparent 65%)" }}
-      />
-      <div
-        aria-hidden
-        className="pointer-events-none absolute -top-20 -left-20 h-[520px] w-[520px] rounded-full opacity-40 blur-3xl animate-aurora"
-        style={{ background: "radial-gradient(circle, rgba(59,130,246,0.3), transparent 65%)" }}
+        key={`glow-${slide.id}`}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 0.5 }}
+        transition={{ duration: 1.2 }}
+        className="pointer-events-none absolute left-1/2 top-[42%] h-[420px] w-[720px] -translate-x-1/2 -translate-y-1/2 rounded-full blur-3xl"
+        style={{ background: `radial-gradient(circle, ${accentHex}55, transparent 68%)` }}
       />
 
-      <div className="container-px relative grid items-center gap-14 py-16 sm:py-20 lg:grid-cols-[1.05fr_1fr] lg:py-24">
-        {/* Copy */}
-        <motion.div variants={container} initial="hidden" animate="show" className="flex flex-col gap-6">
-          <motion.div variants={item}>
-            <span className="inline-flex items-center gap-2 rounded-full border border-ink-200 bg-white/70 px-3.5 py-1.5 text-xs font-semibold text-ink-600 backdrop-blur">
-              <Sparkles className="h-3.5 w-3.5 text-brand-500" />
-              AI-Powered Commerce Operating System
-            </span>
-          </motion.div>
-
-          <motion.h1
-            variants={item}
-            className="text-4xl font-bold leading-[1.06] tracking-tight text-ink-950 sm:text-5xl lg:text-[3.5rem]"
+      <div className="container-px relative py-14 sm:py-16 lg:py-20">
+        {/* ---- Headline ---- */}
+        <div className="mx-auto max-w-3xl text-center">
+          <motion.span
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3.5 py-1.5 text-xs font-semibold text-white/80 backdrop-blur"
           >
-            Launch your online business{" "}
-            <span className="text-gradient">without inventory</span> or technical
-            expertise.
-          </motion.h1>
+            <Sparkles className="h-3.5 w-3.5 text-ai-400" />
+            AI-Powered Commerce Operating System
+          </motion.span>
 
-          <motion.p variants={item} className="max-w-xl text-lg leading-relaxed text-ink-500">
-            Connect with verified suppliers, build your ecommerce store with AI,
-            and manage everything from one intelligent platform — then start
-            selling with confidence.
-          </motion.p>
+          <div className="mt-6 min-h-[7.5rem] sm:min-h-[8.5rem]">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={slide.id}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -16 }}
+                transition={{ duration: 0.5, ease: EASE }}
+              >
+                <h1 className="text-balance text-3xl font-bold leading-[1.08] tracking-tight sm:text-4xl lg:text-[3.25rem]">
+                  {HEADLINES[slide.id]}
+                </h1>
+                <p className="mx-auto mt-3 max-w-xl text-base text-white/60 sm:text-lg">
+                  {slide.eyebrow}
+                </p>
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        </div>
 
-          <motion.div variants={item} className="flex flex-col flex-wrap gap-3 sm:flex-row">
+        {/* ---- The animated strait ---- */}
+        <StraitStage slide={slide} reduce={!!reduce} accentHex={accentHex} />
+
+        {/* ---- Feature chips (per slide) ---- */}
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-2.5">
+          <AnimatePresence mode="popLayout">
+            {slide.chips.map((c, i) => (
+              <motion.span
+                key={`${slide.id}-${c.label}`}
+                initial={{ opacity: 0, y: 10, scale: 0.94 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -6, scale: 0.94 }}
+                transition={{ duration: 0.4, delay: i * 0.06 }}
+                className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/5 px-3.5 py-2 text-xs font-medium text-white/80 backdrop-blur"
+              >
+                <c.icon className={slide.accent === "ai" ? "h-4 w-4 text-ai-400" : "h-4 w-4 text-brand-400"} />
+                {c.label}
+              </motion.span>
+            ))}
+          </AnimatePresence>
+        </div>
+
+        {/* ---- CTAs ---- */}
+        <div className="mt-10 flex flex-col items-center gap-4">
+          <div className="flex flex-col flex-wrap justify-center gap-3 sm:flex-row">
             <Button href="/store-owners" variant="primary" size="lg">
               Launch My Store <ArrowRight className="h-4 w-4" />
             </Button>
             <Button href="/suppliers" variant="ai" size="lg">
-              <Search className="h-4 w-4" /> Find Supplier
+              <Search className="h-4 w-4" /> Find a Supplier
             </Button>
-            <Button href="/suppliers" variant="secondary" size="lg">
-              Become a Supplier
-            </Button>
-            <Button href="/how-it-works" variant="ghost" size="lg">
+            <Button href="/how-it-works" variant="outline-light" size="lg">
               <Play className="h-4 w-4" /> Watch Demo
             </Button>
-          </motion.div>
+          </div>
 
-          <motion.dl variants={item} className="mt-4 grid grid-cols-3 gap-6 border-t border-ink-100 pt-6">
-            {heroStats.map((s) => (
-              <div key={s.label}>
-                <dt className="text-2xl font-extrabold text-ink-950 font-display">
-                  {s.prefix}{s.value}{s.suffix}
-                </dt>
-                <dd className="mt-1 text-xs leading-tight text-ink-500">{s.label}</dd>
-              </div>
-            ))}
-          </motion.dl>
-        </motion.div>
-
-        {/* Visual */}
-        <HeroVisual />
+          {/* Slide controls */}
+          <div className="mt-2 flex items-center gap-3">
+            {SLIDES.map((s, i) => {
+              const active = i === index;
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => go(i)}
+                  aria-label={`Show slide ${i + 1}`}
+                  aria-current={active}
+                  className="relative h-2.5 overflow-hidden rounded-full transition-all duration-300"
+                  style={{
+                    width: active ? 40 : 10,
+                    background: active ? `${accentHex}40` : "rgba(255,255,255,0.25)",
+                  }}
+                >
+                  {active && (
+                    <motion.span
+                      key={`${index}-${paused}`}
+                      className="absolute inset-y-0 left-0 rounded-full"
+                      style={{ background: accentHex }}
+                      initial={{ width: "0%" }}
+                      animate={{ width: paused ? "22%" : "100%" }}
+                      transition={{ duration: paused ? 0.4 : AUTO_MS / 1000, ease: "linear" }}
+                    />
+                  )}
+                </button>
+              );
+            })}
+            <button
+              onClick={() => go(index + 1)}
+              aria-label="Next slide"
+              className="ml-1 grid h-8 w-8 place-items-center rounded-full border border-white/15 bg-white/5 text-white/70 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              <ChevronDown className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
       </div>
     </section>
   );
 }
 
-function HeroVisual() {
+/* ------------------------------------------------------------------ */
+/*  Strait stage — panels + beams + AI orb                            */
+/* ------------------------------------------------------------------ */
+
+function StraitStage({
+  slide,
+  reduce,
+  accentHex,
+}: {
+  slide: Slide;
+  reduce: boolean;
+  accentHex: string;
+}) {
+  return (
+    <div className="relative mx-auto mt-10 w-full max-w-6xl">
+      {/* Beams layer (behind panels, desktop only) */}
+      <ConnectionBeams direction={slide.direction} accentHex={accentHex} reduce={reduce} />
+
+      <div className="relative grid items-center gap-6 lg:grid-cols-[1fr_auto_1fr]">
+        <SidePanel
+          title="SUPPLIERS"
+          items={slide.supplierItems}
+          align="left"
+          accent={slide.accent}
+          accentHex={accentHex}
+          slideId={slide.id}
+          reduce={reduce}
+          reversed={slide.direction === "reverse"}
+        />
+
+        <CenterOrb slide={slide} accentHex={accentHex} reduce={reduce} />
+
+        <SidePanel
+          title="ONLINE STORES"
+          items={slide.storeItems}
+          align="right"
+          accent={slide.accent}
+          accentHex={accentHex}
+          slideId={slide.id}
+          reduce={reduce}
+          reversed={slide.direction === "reverse"}
+        />
+      </div>
+    </div>
+  );
+}
+
+function SidePanel({
+  title,
+  items,
+  align,
+  accent,
+  accentHex,
+  slideId,
+  reduce,
+  reversed,
+}: {
+  title: string;
+  items: Feature[];
+  align: "left" | "right";
+  accent: "ai" | "brand";
+  accentHex: string;
+  slideId: string;
+  reduce: boolean;
+  reversed: boolean;
+}) {
+  const isLeft = align === "left";
+  const n = items.length;
+  const STEP = 0.45; // stagger between rows in the sweep
+  const PULSE = 0.75; // how long each row stays lit
+  const CYCLE = n * STEP + 1.2; // full sweep + rest
+  const pinColor = isLeft ? "text-ai-400" : "text-brand-400";
+  const badge = isLeft
+    ? "border-ai-400/40 bg-ai-500/15 text-ai-200"
+    : "border-brand-400/40 bg-brand-500/15 text-brand-200";
+
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.94, y: 24 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
-      transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] as const, delay: 0.2 }}
-      className="relative mx-auto w-full max-w-lg"
+      initial={{ opacity: 0, x: isLeft ? -30 : 30 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: 0.7, ease: EASE }}
+      className={`relative w-full max-w-xs ${isLeft ? "lg:justify-self-start" : "lg:justify-self-end"}`}
     >
-      {/* Dashboard window */}
-      <div className="overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-2xl shadow-ink-950/10">
-        <div className="flex items-center gap-1.5 border-b border-ink-100 bg-ink-50 px-4 py-3">
-          <span className="h-2.5 w-2.5 rounded-full bg-red-400" />
-          <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
-          <span className="h-2.5 w-2.5 rounded-full bg-brand-400" />
-          <span className="ml-3 rounded-md bg-white px-2 py-1 text-[10px] font-medium text-ink-400">
-            lumiere-beauty.store
-          </span>
-        </div>
-        <div className="space-y-4 p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-ink-400">Revenue this month</p>
-              <p className="text-2xl font-extrabold text-ink-950 font-display">$42,580</p>
-            </div>
-            <span className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-600">
-              <TrendingUp className="h-3.5 w-3.5" /> +28%
-            </span>
-          </div>
-          {/* Mini chart */}
-          <div className="flex h-24 items-end gap-1.5">
-            {[40, 55, 45, 70, 60, 85, 75, 95, 88, 100].map((h, i) => (
-              <motion.div
-                key={i}
-                initial={{ height: 0 }}
-                animate={{ height: `${h}%` }}
-                transition={{ duration: 0.6, delay: 0.6 + i * 0.05, ease: "easeOut" }}
-                className="flex-1 rounded-t bg-gradient-to-t from-brand-500/70 to-ai-500/70"
-              />
-            ))}
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            {[
-              { label: "Orders", value: "1,284" },
-              { label: "Products", value: "342" },
-              { label: "Visitors", value: "28.4k" },
-            ].map((c) => (
-              <div key={c.label} className="rounded-xl bg-ink-50 p-3">
-                <p className="text-sm font-bold text-ink-950">{c.value}</p>
-                <p className="text-[10px] text-ink-400">{c.label}</p>
-              </div>
-            ))}
-          </div>
-        </div>
+      <div
+        className="mb-3 flex items-center gap-2"
+        style={{ justifyContent: isLeft ? "flex-start" : "flex-end" }}
+      >
+        <MapPin className={`h-4 w-4 ${pinColor}`} />
+        <span className={`rounded-full border px-3 py-1 text-[11px] font-bold tracking-wider ${badge}`}>
+          {title}
+        </span>
       </div>
 
-      {/* Floating: AI chat */}
-      <motion.div
-        animate={{ y: [0, -10, 0] }}
-        transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
-        className="absolute -left-6 top-24 hidden w-52 rounded-xl border border-ink-100 bg-white p-3 shadow-xl shadow-ink-950/10 sm:block"
-      >
-        <div className="flex items-center gap-2">
-          <span className="grid h-7 w-7 place-items-center rounded-lg bg-ai-500 text-white">
-            <Bot className="h-4 w-4" />
-          </span>
-          <span className="text-xs font-semibold text-ink-950">EcomAI</span>
-        </div>
-        <p className="mt-2 text-[11px] leading-snug text-ink-500">
-          Your best-selling product is up 34%. Want me to restock and adjust pricing?
-        </p>
-      </motion.div>
-
-      {/* Floating: order notification */}
-      <motion.div
-        animate={{ y: [0, 10, 0] }}
-        transition={{ duration: 6, repeat: Infinity, ease: "easeInOut", delay: 1 }}
-        className="absolute -right-4 top-8 hidden items-center gap-2 rounded-xl border border-ink-100 bg-white px-3 py-2.5 shadow-xl shadow-ink-950/10 sm:flex"
-      >
-        <CheckCircle2 className="h-5 w-5 text-brand-500" />
-        <div>
-          <p className="text-[11px] font-semibold text-ink-950">New order · $128</p>
-          <p className="text-[10px] text-ink-400">Routed to supplier ✓</p>
-        </div>
-      </motion.div>
-
-      {/* Floating: supplier card */}
-      <motion.div
-        animate={{ y: [0, -8, 0] }}
-        transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut", delay: 0.5 }}
-        className="absolute -bottom-6 -right-2 hidden items-center gap-2 rounded-xl border border-ink-100 bg-white px-3 py-2.5 shadow-xl shadow-ink-950/10 sm:flex"
-      >
-        <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand-50 text-brand-600">
-          <Package className="h-4 w-4" />
-        </span>
-        <div>
-          <p className="text-[11px] font-semibold text-ink-950">Verified Supplier</p>
-          <p className="text-[10px] text-ink-400">1,240 products in sync</p>
-        </div>
-      </motion.div>
+      <div className="glass-dark rounded-2xl p-3">
+        <ul className="space-y-1.5">
+          <AnimatePresence mode="popLayout">
+            {items.map((it, i) => {
+              // sweep order follows the flow direction
+              const order = reversed ? n - 1 - i : i;
+              const pulseTransition = {
+                duration: PULSE,
+                delay: order * STEP,
+                repeat: Infinity,
+                repeatDelay: CYCLE - PULSE,
+                ease: "easeInOut" as const,
+              };
+              return (
+                <motion.li
+                  key={`${slideId}-${it.label}`}
+                  initial={{ opacity: 0, x: isLeft ? -16 : 16 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.4, delay: 0.15 + i * 0.08 }}
+                  className={`relative flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-white/85 ${isLeft ? "" : "flex-row-reverse text-right"}`}
+                >
+                  {/* traveling row highlight */}
+                  {!reduce && (
+                    <motion.span
+                      aria-hidden
+                      className="absolute inset-0 rounded-lg"
+                      style={{ background: `linear-gradient(${isLeft ? "90deg" : "270deg"}, ${accentHex}26, transparent)` }}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: [0, 1, 0] }}
+                      transition={pulseTransition}
+                    />
+                  )}
+                  <motion.span
+                    className={`relative grid h-7 w-7 shrink-0 place-items-center rounded-lg ${
+                      accent === "ai" ? "bg-ai-500/15 text-ai-300" : "bg-brand-500/15 text-brand-300"
+                    }`}
+                    animate={reduce ? {} : { scale: [1, 1.15, 1], boxShadow: [`0 0 0px ${accentHex}00`, `0 0 12px ${accentHex}aa`, `0 0 0px ${accentHex}00`] }}
+                    transition={pulseTransition}
+                  >
+                    <it.icon className="h-4 w-4" />
+                  </motion.span>
+                  <span className="relative font-medium">{it.label}</span>
+                </motion.li>
+              );
+            })}
+          </AnimatePresence>
+        </ul>
+      </div>
     </motion.div>
+  );
+}
+
+function CenterOrb({
+  slide,
+  accentHex,
+  reduce,
+}: {
+  slide: Slide;
+  accentHex: string;
+  reduce: boolean;
+}) {
+  const isAi = slide.accent === "ai";
+  return (
+    <div className="relative flex flex-col items-center justify-center py-2">
+      <div className="relative grid h-32 w-32 place-items-center sm:h-40 sm:w-40">
+        {!reduce && (
+          <>
+            <motion.span
+              aria-hidden
+              animate={{ scale: [1, 1.18, 1], opacity: [0.5, 0.85, 0.5] }}
+              transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
+              className="absolute inset-0 rounded-full"
+              style={{ background: `radial-gradient(circle, ${accentHex}66, transparent 70%)` }}
+            />
+            <motion.span
+              aria-hidden
+              animate={{ scale: [1, 1.08, 1], opacity: [0.7, 0.3, 0.7] }}
+              transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
+              className="absolute inset-2 rounded-full border"
+              style={{ borderColor: `${accentHex}55` }}
+            />
+          </>
+        )}
+        <motion.div
+          animate={reduce ? {} : { scale: [1, 1.04, 1] }}
+          transition={{ duration: 3.5, repeat: Infinity, ease: "easeInOut" }}
+          className="relative grid h-24 w-24 place-items-center rounded-full sm:h-28 sm:w-28"
+          style={{
+            background: `radial-gradient(circle at 30% 30%, ${accentHex}, ${isAi ? "#1d4ed8" : "#047857"})`,
+            boxShadow: `0 0 60px ${accentHex}88, inset 0 0 20px rgba(255,255,255,0.25)`,
+          }}
+        >
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={slide.id}
+              initial={{ opacity: 0, scale: 0.6 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.6 }}
+              transition={{ duration: 0.4 }}
+              className="flex flex-col items-center text-center"
+            >
+              <span className="font-display text-lg font-extrabold tracking-tight text-white sm:text-xl">
+                {isAi ? "EcomAI" : "Strait"}
+              </span>
+            </motion.div>
+          </AnimatePresence>
+        </motion.div>
+      </div>
+
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={slide.id}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.4 }}
+          className="mt-3 text-center"
+        >
+          <p className="font-display text-sm font-bold text-white">
+            {isAi ? "EcomAI" : "Orders Delivered"}
+          </p>
+          <p className="text-[11px] text-white/50">{slide.center.sub}</p>
+        </motion.div>
+      </AnimatePresence>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Connection beams — SVG paths with flowing particles               */
+/* ------------------------------------------------------------------ */
+
+const BEAMS = [
+  "M 60 210 C 260 120, 380 100, 500 200",
+  "M 60 260 C 260 240, 380 210, 500 210",
+  "M 60 310 C 260 380, 380 330, 500 220",
+  "M 500 200 C 620 100, 740 120, 940 210",
+  "M 500 210 C 620 210, 740 240, 940 260",
+  "M 500 220 C 620 330, 740 380, 940 310",
+].map((d, i) => ({ id: `strait-beam-${i}`, d }));
+
+function ConnectionBeams({
+  direction,
+  accentHex,
+  reduce,
+}: {
+  direction: "forward" | "reverse";
+  accentHex: string;
+  reduce: boolean;
+}) {
+  const reversed = direction === "reverse";
+  return (
+    <svg
+      aria-hidden
+      viewBox="0 0 1000 420"
+      preserveAspectRatio="none"
+      className="pointer-events-none absolute inset-0 hidden h-full w-full lg:block"
+    >
+      <defs>
+        <linearGradient id="strait-beam-fade" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor={accentHex} stopOpacity="0.05" />
+          <stop offset="50%" stopColor={accentHex} stopOpacity="0.55" />
+          <stop offset="100%" stopColor={accentHex} stopOpacity="0.05" />
+        </linearGradient>
+      </defs>
+
+      {/* reference / base paths */}
+      {BEAMS.map((b) => (
+        <path
+          key={b.id}
+          id={b.id}
+          d={b.d}
+          fill="none"
+          stroke="url(#strait-beam-fade)"
+          strokeWidth={1.5}
+          strokeLinecap="round"
+        />
+      ))}
+
+      {/* flowing dashed overlay */}
+      {!reduce &&
+        BEAMS.map((b) => (
+          <path
+            key={`flow-${b.id}`}
+            d={b.d}
+            fill="none"
+            stroke={accentHex}
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeDasharray="2 14"
+            style={{
+              animation: "strait-dash 1.4s linear infinite",
+              animationDirection: reversed ? "reverse" : "normal",
+              filter: `drop-shadow(0 0 4px ${accentHex})`,
+            }}
+          />
+        ))}
+
+      {/* traveling packets */}
+      {!reduce &&
+        BEAMS.map((b, i) => (
+          <circle key={`pkt-${b.id}-${direction}`} r={3.5} fill="#fff" opacity={0.95}>
+            {/* negative begin => already mid-path at load, never parks at (0,0) */}
+            <animateMotion
+              dur={`${2.4 + (i % 3) * 0.5}s`}
+              begin={`-${i * 0.55}s`}
+              repeatCount="indefinite"
+              keyPoints={reversed ? "1;0" : "0;1"}
+              keyTimes="0;1"
+              calcMode="linear"
+              rotate="auto"
+            >
+              <mpath href={`#${b.id}`} />
+            </animateMotion>
+          </circle>
+        ))}
+    </svg>
   );
 }

@@ -28,13 +28,13 @@ function useCountUp(target: number, active: boolean, duration = 1400) {
 
 export function StatCounter({ stat, invert }: { stat: Stat; invert?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { once: true, margin: "-40px" });
+  const inView = useInView(ref, { margin: "-40px" });
   const display = useCountUp(stat.value, inView);
 
   return (
-    <div ref={ref} className="flex flex-col gap-1">
+    <div ref={ref} className="flex min-w-0 flex-col items-center gap-1">
       <div
-        className={`text-4xl font-extrabold tracking-tight font-display sm:text-5xl ${
+        className={`whitespace-nowrap font-display text-3xl font-extrabold leading-tight tracking-tight tabular-nums sm:text-4xl ${
           invert ? "text-white" : "text-ink-950"
         }`}
       >
@@ -42,7 +42,7 @@ export function StatCounter({ stat, invert }: { stat: Stat; invert?: boolean }) 
         {display}
         {stat.suffix}
       </div>
-      <div className={invert ? "text-sm text-ink-300" : "text-sm text-ink-500"}>
+      <div className={invert ? "text-xs text-ink-300 sm:text-sm" : "text-xs text-ink-500 sm:text-sm"}>
         {stat.label}
       </div>
     </div>

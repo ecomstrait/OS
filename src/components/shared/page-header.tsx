@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Reveal } from "@/components/ui/reveal";
+import { OceanBackdrop } from "@/components/ui/ocean-backdrop";
 
 type PageHeaderProps = {
   eyebrow?: string;
@@ -16,6 +17,7 @@ export function PageHeader({ eyebrow, title, description, children }: PageHeader
         aria-hidden
         className="pointer-events-none absolute inset-0 bg-grid-dark opacity-40"
       />
+      <OceanBackdrop accentHex="#3b82f6" />
       <div
         aria-hidden
         className="pointer-events-none absolute -top-40 left-1/2 h-[420px] w-[720px] -translate-x-1/2 rounded-full opacity-30 blur-3xl animate-aurora"

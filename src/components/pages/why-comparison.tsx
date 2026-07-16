@@ -2,103 +2,27 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion, useInView, useReducedMotion } from "framer-motion";
-import { ArrowRight, Check, X, Zap, Trophy } from "lucide-react";
+import { Check, X, Zap, Trophy } from "lucide-react";
 import { Section, SectionHeading } from "@/components/ui/section";
-import { Button } from "@/components/ui/button";
-import { Reveal } from "@/components/ui/reveal";
 import { cn } from "@/lib/utils";
-
-const highlights = [
-  "AI-first, not AI as an afterthought",
-  "One platform replaces ten tools",
-  "Verified, ready-to-sell suppliers",
-  "Live desktop & mobile preview",
-  "Built-in AI business consultant",
-  "White-label ready for agencies",
-];
 
 const comparison = [
   { task: "Find suppliers", traditional: "Weeks", ecom: "Minutes" },
   { task: "Build website", traditional: "Weeks", ecom: "Hours" },
+  { task: "Product setup", traditional: "Days", ecom: "Automated" },
+  { task: "SEO", traditional: "Manual", ecom: "AI generated" },
   { task: "Product descriptions", traditional: "Manual", ecom: "AI generated" },
-  { task: "SEO", traditional: "Manual", ecom: "Automated" },
-  { task: "Analytics & AI advisor", traditional: "Not included", ecom: "Included" },
+  { task: "Inventory", traditional: "Separate tool", ecom: "Built in" },
+  { task: "Analytics", traditional: "Multiple tools", ecom: "Built in" },
+  { task: "AI consultant", traditional: "Not available", ecom: "Included" },
 ];
 
 /** How far the slow "Traditional" bar limps — partial + varied per row. */
-const TRAD_FILL = [24, 30, 22, 34, 16];
+const TRAD_FILL = [24, 30, 22, 34, 20, 28, 18, 16];
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
-export function WhyEcomStrait() {
-  return (
-    <Section tone="light" id="why">
-      <div className="grid items-center gap-14 lg:grid-cols-2">
-        {/* ---- Left column: heading + highlights ---- */}
-        <div>
-          <SectionHeading
-            align="left"
-            eyebrow="Why EcomStrait"
-            title={<>More than a marketplace. More than a website builder.</>}
-            description="Most platforms solve one problem. EcomStrait unifies suppliers, AI, automation, and commerce into a single operating system."
-          />
-          <ul className="mt-8 grid gap-3 sm:grid-cols-2">
-            {highlights.map((h, i) => (
-              <Reveal as="li" key={h} delay={i * 0.4} className="flex items-center gap-3">
-                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-brand-500 text-white shadow-sm shadow-brand-500/40">
-                  <DrawCheck delay={0.15 + i * 0.1} />
-                </span>
-                <span className="text-[15px] font-medium text-ink-700">{h}</span>
-              </Reveal>
-            ))}
-          </ul>
-          <div className="mt-8">
-            <Button href="/why-ecomstrait" variant="primary" size="md">
-              Read the full comparison <ArrowRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-
-        {/* ---- Right column: the live scoreboard ---- */}
-        <ScoreboardCard />
-      </div>
-    </Section>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  A check mark that draws itself in on scroll                        */
-/* ------------------------------------------------------------------ */
-
-function DrawCheck({ delay = 0 }: { delay?: number }) {
-  const reduce = useReducedMotion();
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      className="h-3.5 w-3.5"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={3.5}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <motion.path
-        d="M5 13l4 4L19 7"
-        initial={reduce ? { pathLength: 1 } : { pathLength: 0 }}
-        whileInView={{ pathLength: 1 }}
-        viewport={{ once: false, margin: "-60px" }}
-        transition={reduce ? { duration: 0 } : { duration: 0.5, delay, ease: EASE }}
-      />
-    </svg>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Live "race" scoreboard                                             */
-/* ------------------------------------------------------------------ */
-
-function ScoreboardCard() {
+export function WhyComparison() {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: false, margin: "-100px" });
   const reduce = useReducedMotion();
@@ -108,20 +32,20 @@ function ScoreboardCard() {
   const [wins, setWins] = useState(0);
   const [hovered, setHovered] = useState<number | null>(null);
 
-  // Count the winner tally up once the card is in view (and on every replay).
+  // Count the winner tally up once the board is in view (and on every replay).
   useEffect(() => {
     if (!inView) return;
     if (reduce) {
-      const t = setTimeout(() => setWins(total), 0);
-      return () => clearTimeout(t);
+      const t = window.setTimeout(() => setWins(total), 0);
+      return () => window.clearTimeout(t);
     }
     let n = 0;
-    const iv = setInterval(() => {
+    const iv = window.setInterval(() => {
       n += 1;
       setWins(n);
-      if (n >= total) clearInterval(iv);
-    }, 280);
-    return () => clearInterval(iv);
+      if (n >= total) window.clearInterval(iv);
+    }, 240);
+    return () => window.clearInterval(iv);
   }, [inView, reduce, total, runKey]);
 
   const replay = () => {
@@ -132,12 +56,22 @@ function ScoreboardCard() {
   const started = inView || reduce;
 
   return (
-    <Reveal>
-      <div
+    <Section tone="light">
+      <SectionHeading
+        eyebrow="Save Time. Save Money."
+        title="Traditional vs. EcomStrait"
+        description="The same work, a fraction of the time and cost."
+      />
+
+      <motion.div
         ref={ref}
-        className="overflow-hidden rounded-3xl border border-ink-100 bg-white shadow-xl shadow-ink-950/5"
+        initial={reduce ? false : { opacity: 0, y: 24 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: false, margin: "-100px" }}
+        transition={{ duration: 0.6, ease: EASE }}
+        className="mx-auto mt-12 max-w-3xl overflow-hidden rounded-3xl border border-ink-100 bg-white shadow-xl shadow-ink-950/5"
       >
-        {/* ---- Card header: title + live badge + replay ---- */}
+        {/* ---- Header: live badge + replay ---- */}
         <div className="flex items-center justify-between gap-3 border-b border-ink-100 bg-ink-50/70 px-5 py-4">
           <div className="flex items-center gap-2.5">
             <span className="relative flex h-2.5 w-2.5">
@@ -196,7 +130,7 @@ function ScoreboardCard() {
               key={row.task}
               initial={reduce ? false : { opacity: 0, y: 14 }}
               animate={started ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.5, delay: 0.1 + i * 0.12, ease: EASE }}
+              transition={{ duration: 0.5, delay: 0.1 + i * 0.1, ease: EASE }}
               onMouseEnter={() => setHovered(i)}
               onMouseLeave={() => setHovered(null)}
               className={cn(
@@ -223,7 +157,7 @@ function ScoreboardCard() {
                     transition={
                       reduce
                         ? { duration: 0 }
-                        : { duration: 2, delay: 0.25 + i * 0.12, ease: EASE }
+                        : { duration: 2, delay: 0.25 + i * 0.1, ease: EASE }
                     }
                   />
                 </div>
@@ -251,7 +185,7 @@ function ScoreboardCard() {
                     transition={
                       reduce
                         ? { duration: 0 }
-                        : { duration: 0.7, delay: 0.25 + i * 0.12, ease: EASE }
+                        : { duration: 0.7, delay: 0.25 + i * 0.1, ease: EASE }
                     }
                   />
                   {/* continuous shimmer on the full bar signals "live" */}
@@ -268,7 +202,7 @@ function ScoreboardCard() {
                         duration: 1.8,
                         repeat: Infinity,
                         ease: "easeInOut",
-                        delay: 1 + i * 0.12,
+                        delay: 1 + i * 0.1,
                         repeatDelay: 1.6,
                       }}
                     />
@@ -312,7 +246,7 @@ function ScoreboardCard() {
             <span className="text-sm text-ink-400">/ {total}</span>
           </span>
         </div>
-      </div>
-    </Reveal>
+      </motion.div>
+    </Section>
   );
 }
