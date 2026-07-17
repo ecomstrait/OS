@@ -13,13 +13,13 @@ export function AnnouncementBar() {
       <div className="container-px flex items-center justify-center gap-3 py-2.5 text-sm">
         <Sparkles className="hidden h-4 w-4 text-brand-400 sm:block" />
         <p className="text-center text-ink-100">
-          <span className="font-semibold text-white">Launch Offer</span> — the
-          first 100 suppliers receive premium access.{" "}
+          <span className="font-semibold text-white">EcomAI is in beta</span> —
+          watch it build a real store in seconds.{" "}
           <Link
-            href="/suppliers"
+            href="/#builder"
             className="font-semibold text-brand-400 underline-offset-4 hover:underline"
           >
-            Learn more →
+            Try it now →
           </Link>
         </p>
         <button

@@ -1,24 +1,41 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, Check } from "lucide-react";
+import { ArrowRight, Check, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-/** Newsletter capture. Client-side only for now — wire to an API/CRM later. */
+/** Newsletter capture — persists to Supabase + notifies via /api/newsletter. */
 export function NewsletterForm({
   invert = false,
   className,
+  source,
 }: {
   invert?: boolean;
   className?: string;
+  source?: string;
 }) {
   const [email, setEmail] = useState("");
-  const [done, setDone] = useState(false);
+  const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const done = status === "done";
 
-  function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!email.includes("@")) return;
-    setDone(true);
+    setStatus("loading");
+    try {
+      const res = await fetch("/api/newsletter", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          source: source ?? (typeof window !== "undefined" ? window.location.pathname : undefined),
+        }),
+      });
+      if (!res.ok) throw new Error();
+      setStatus("done");
+    } catch {
+      setStatus("error");
+    }
   }
 
   if (done) {
@@ -36,14 +53,14 @@ export function NewsletterForm({
   }
 
   return (
+    <div className={cn("w-full max-w-md", className)}>
     <form
       onSubmit={onSubmit}
       className={cn(
-        "flex w-full max-w-md items-center gap-2 rounded-full border p-1.5",
+        "flex w-full items-center gap-2 rounded-full border p-1.5",
         invert
           ? "border-white/15 bg-white/5"
           : "border-ink-200 bg-white",
-        className,
       )}
     >
       <input
@@ -60,11 +77,24 @@ export function NewsletterForm({
       />
       <button
         type="submit"
-        className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-brand-500 px-5 text-sm font-semibold text-white transition hover:bg-brand-600"
+        disabled={status === "loading"}
+        className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-brand-500 px-5 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:opacity-60"
       >
-        Subscribe
-        <ArrowRight className="h-4 w-4" />
+        {status === "loading" ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <>
+            Subscribe
+            <ArrowRight className="h-4 w-4" />
+          </>
+        )}
       </button>
     </form>
+    {status === "error" && (
+      <p className={cn("mt-2 px-4 text-xs", invert ? "text-red-300" : "text-red-500")}>
+        Something went wrong. Please try again.
+      </p>
+    )}
+    </div>
   );
 }

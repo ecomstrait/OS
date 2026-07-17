@@ -65,7 +65,7 @@ const NODES = unified.map((label, i) => {
 
 export function ProblemSolution() {
   return (
-    <Section tone="light">
+    <Section tone="light" id="problem">
       <style>{`
         @keyframes ps-flow { to { stroke-dashoffset: -20; } }
       `}</style>

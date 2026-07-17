@@ -15,30 +15,36 @@ export type Field = {
 };
 
 /**
- * Configurable lead-capture form. Client-side validation + simulated submit.
- * Wire `onSubmit` to an API route / CRM in a later phase.
+ * Configurable lead-capture form. Validates client-side, then persists to
+ * Supabase + emails the team via the /api/lead route handler.
  */
 export function LeadForm({
   fields,
+  formName = "lead",
   submitLabel = "Submit",
   successTitle = "Thank you!",
   successMessage = "We've received your details and will be in touch shortly.",
 }: {
   fields: Field[];
+  formName?: string;
   submitLabel?: string;
   successTitle?: string;
   successMessage?: string;
 }) {
   const [status, setStatus] = useState<"idle" | "loading" | "done">("idle");
   const [errors, setErrors] = useState<Record<string, boolean>>({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const data = new FormData(e.currentTarget);
+    setSubmitError(null);
+    const form = new FormData(e.currentTarget);
     const nextErrors: Record<string, boolean> = {};
+    const data: Record<string, string> = {};
     for (const f of fields) {
+      const value = String(form.get(f.name) ?? "").trim();
+      data[f.name] = value;
       if (!f.required) continue;
-      const value = String(data.get(f.name) ?? "").trim();
       if (!value) nextErrors[f.name] = true;
       if (f.type === "email" && value && !value.includes("@")) nextErrors[f.name] = true;
     }
@@ -46,7 +52,25 @@ export function LeadForm({
     if (Object.keys(nextErrors).length) return;
 
     setStatus("loading");
-    setTimeout(() => setStatus("done"), 900);
+    try {
+      const res = await fetch("/api/lead", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          formName,
+          data,
+          page: typeof window !== "undefined" ? window.location.pathname : undefined,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error || "Something went wrong.");
+      }
+      setStatus("done");
+    } catch (err) {
+      setStatus("idle");
+      setSubmitError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    }
   }
 
   if (status === "done") {
@@ -106,6 +130,11 @@ export function LeadForm({
       ))}
 
       <div className="sm:col-span-2">
+        {submitError && (
+          <p className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm text-red-600">
+            {submitError}
+          </p>
+        )}
         <button
           type="submit"
           disabled={status === "loading"}

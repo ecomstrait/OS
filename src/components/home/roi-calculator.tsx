@@ -114,8 +114,9 @@ export function RoiCalculator() {
   }, [investment, aov, orders, margin]);
 
   return (
-    <Section tone="light" id="roi">
+    <Section tone="dark" id="roi">
       <SectionHeading
+        invert
         eyebrow="ROI Calculator"
         title="See what your store could earn"
         description="Adjust the numbers to model your business. Estimates only — your results depend on products, pricing, and marketing."

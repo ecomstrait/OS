@@ -3,7 +3,7 @@ import { siteConfig } from "@/lib/site";
 
 const routes = [
   "", "/services", "/how-it-works", "/suppliers", "/store-owners",
-  "/ai-platform", "/store-gallery", "/why-ecomstrait", "/about",
+  "/why-ecomstrait", "/about", "/problem", "/faq",
   "/resources", "/contact", "/privacy", "/terms", "/cookies",
 ];
 

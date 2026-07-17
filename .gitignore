@@ -42,3 +42,8 @@ next-env.d.ts
 
 /docs
 /assets
+# Raw store-template library (curated copies live in public/themes)
+newstores-themes/
+
+# Themes are served from private Supabase Storage (see scripts/upload-themes.mjs), not git
+public/themes/

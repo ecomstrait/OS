@@ -1,12 +1,16 @@
+import Link from "next/link";
 import { ArrowUpRight, Monitor, Smartphone } from "lucide-react";
 import type { StoreTemplate } from "@/content/gallery";
 
 export function StoreCard({ store }: { store: StoreTemplate }) {
+  const href = `/store/${store.slug}`;
   return (
     <div className="group relative flex flex-col overflow-hidden rounded-2xl border border-ink-100 bg-white transition-all duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-ink-950/10">
       {/* Preview */}
-      <div
-        className="relative aspect-[4/3] overflow-hidden"
+      <Link
+        href={href}
+        aria-label={`Open the ${store.name} demo store`}
+        className="relative block aspect-[4/3] overflow-hidden"
         style={{ background: `linear-gradient(135deg, ${store.gradient[0]}, ${store.gradient[1]})` }}
       >
         {/* Faux storefront */}
@@ -37,7 +41,7 @@ export function StoreCard({ store }: { store: StoreTemplate }) {
             <Smartphone className="h-3.5 w-3.5" />
           </span>
         </div>
-      </div>
+      </Link>
 
       {/* Meta */}
       <div className="flex items-center justify-between p-4">
@@ -45,13 +49,13 @@ export function StoreCard({ store }: { store: StoreTemplate }) {
           <p className="text-sm font-bold text-ink-950">{store.name}</p>
           <p className="text-xs text-ink-400">{store.category} · {store.tagline}</p>
         </div>
-        <a
-          href="/store-owners"
-          aria-label={`Build a store like ${store.name}`}
+        <Link
+          href={href}
+          aria-label={`Open the ${store.name} demo store`}
           className="grid h-8 w-8 shrink-0 place-items-center rounded-full border border-ink-200 text-ink-600 transition group-hover:border-brand-500 group-hover:bg-brand-500 group-hover:text-white"
         >
           <ArrowUpRight className="h-4 w-4" />
-        </a>
+        </Link>
       </div>
     </div>
   );

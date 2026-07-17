@@ -12,31 +12,31 @@ export const howItWorks: Step[] = [
     icon: "Boxes",
     title: "Suppliers publish products",
     description:
-      "Verified suppliers upload their catalog once. AI enriches every product with descriptions, attributes, and imagery.",
+      "Verified suppliers list their catalog once. EcomAI enriches every product with descriptions, attributes, and imagery — ready to sell.",
   },
   {
     icon: "MessageSquare",
-    title: "You request a store",
+    title: "Ask EcomAI to build your business",
     description:
-      "Tell us what you want to sell. Pick a niche and products from the marketplace, or describe your dream store to EcomAI.",
+      "Tell your co-founder what you want to sell. EcomAI matches your niche to suppliers, products, and a store concept in seconds.",
   },
   {
     icon: "Wand2",
-    title: "AI builds your website",
+    title: "EcomAI builds your store",
     description:
-      "EcomAI generates branding, pages, product content, and SEO in minutes — fully responsive and ready to convert.",
+      "Branding, homepage, collections, product copy, and SEO — generated end to end in minutes, fully responsive and ready to convert.",
   },
   {
     icon: "Eye",
-    title: "Preview & refine",
+    title: "Preview & refine together",
     description:
-      "See your store live on desktop, tablet, and mobile. Tweak anything with a prompt until it feels exactly right.",
+      "See your store live on desktop, tablet, and mobile. Ask EcomAI to change the concept, colors, or copy until it feels exactly right.",
   },
   {
     icon: "Rocket",
-    title: "Deploy & start selling",
+    title: "Launch & grow on autopilot",
     description:
-      "Launch to your own domain with payments, shipping, and inventory sync configured. Orders route to suppliers automatically.",
+      "Go live on your own domain with payments and shipping wired up. EcomAI keeps optimizing SEO, marketing, and conversion as you sell.",
   },
 ];
 

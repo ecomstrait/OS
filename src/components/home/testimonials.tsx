@@ -37,7 +37,7 @@ export function Testimonials() {
   }, [paused, index, reduce, count]);
 
   return (
-    <Section tone="muted" id="stories">
+    <Section tone="dark" id="stories">
       <style>{`
         @keyframes tst-orb-a { 0%,100% { transform: translate3d(0,0,0) scale(1); } 50% { transform: translate3d(24px,-18px,0) scale(1.12); } }
         @keyframes tst-orb-b { 0%,100% { transform: translate3d(0,0,0) scale(1); } 50% { transform: translate3d(-28px,20px,0) scale(1.08); } }
@@ -45,6 +45,7 @@ export function Testimonials() {
       `}</style>
 
       <SectionHeading
+        invert
         eyebrow="Success Stories"
         title="Suppliers grow. Stores thrive."
         description="Entrepreneurs and suppliers building real businesses on EcomStrait."

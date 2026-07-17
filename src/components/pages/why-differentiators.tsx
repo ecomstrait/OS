@@ -28,7 +28,7 @@ export function WhyDifferentiators() {
   const [hovered, setHovered] = useState<number | null>(null);
 
   return (
-    <Section tone="muted">
+    <Section tone="dark">
       <style>{`
         @keyframes why-diff-sweep {
           0% { transform: translateX(-120%); }
@@ -36,6 +36,7 @@ export function WhyDifferentiators() {
         }
       `}</style>
       <SectionHeading
+        invert
         eyebrow="Why We're Different"
         title="One platform. Everything you need."
         description="Stop managing ten different tools. Run your entire business from one intelligent system."

@@ -101,8 +101,8 @@ export function WhyHero() {
               intelligent platform that helps you launch, manage, and grow.
             </p>
             <div className="mt-2 flex flex-col gap-3 sm:flex-row">
-              <Button href="/store-owners" variant="primary" size="lg">
-                Launch My Store <ArrowRight className="h-4 w-4" />
+              <Button href="/#builder" variant="primary" size="lg">
+                Build My Business <ArrowRight className="h-4 w-4" />
               </Button>
               <Button href="/suppliers" variant="outline-light" size="lg">
                 Become a Supplier

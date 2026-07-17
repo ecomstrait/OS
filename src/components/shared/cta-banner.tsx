@@ -47,8 +47,8 @@ function LiveCounter({ inView, reduce }: { inView: boolean; reduce: boolean }) {
 }
 
 export function CtaBanner({
-  title = "Ready to build your business?",
-  description = "Whether you're a supplier looking to reach more customers or an entrepreneur ready to launch your online store, EcomStrait gives you the tools, AI, and support to succeed.",
+  title = "Meet your future business partner.",
+  description = "EcomAI never sleeps. It builds your store, finds profitable products, writes your marketing, and helps you grow — 24/7. Tell EcomAI what business you want to build today.",
 }: CtaBannerProps) {
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: false, margin: "-80px" });
@@ -143,8 +143,8 @@ export function CtaBanner({
             </h2>
             <p className="text-lg text-ink-200">{description}</p>
             <div className="mt-2 flex flex-col gap-3 sm:flex-row">
-              <Button href="/store-owners" variant="primary" size="lg">
-                Launch My Store <ArrowRight className="h-4 w-4" />
+              <Button href="/#builder" variant="primary" size="lg">
+                Watch AI build a business <ArrowRight className="h-4 w-4" />
               </Button>
               <Button href="/suppliers" variant="outline-light" size="lg">
                 Become a Supplier

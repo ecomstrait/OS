@@ -144,11 +144,11 @@ export function StoreOwnersHero() {
               transition={{ duration: 0.6, delay: 0.24, ease: EASE }}
               className="mt-9 flex flex-col justify-center gap-3 sm:flex-row lg:justify-start"
             >
-              <Button href="#consultation" variant="primary" size="lg">
-                Launch My Store <ArrowRight className="h-4 w-4" />
+              <Button href="/#builder" variant="primary" size="lg">
+                Build My Business <ArrowRight className="h-4 w-4" />
               </Button>
-              <Button href="/store-gallery" variant="outline-light" size="lg">
-                <Images className="h-4 w-4" /> Browse the Gallery
+              <Button href="/#builder" variant="outline-light" size="lg">
+                <Images className="h-4 w-4" /> Watch AI build a business
               </Button>
             </motion.div>
 

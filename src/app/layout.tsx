@@ -2,9 +2,6 @@ import type { Metadata } from "next";
 import { Plus_Jakarta_Sans, Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { siteConfig } from "@/lib/site";
-import { Navbar } from "@/components/layout/navbar";
-import { Footer } from "@/components/layout/footer";
-import { AnnouncementBar } from "@/components/layout/announcement-bar";
 
 const display = Plus_Jakarta_Sans({
   variable: "--font-plus-jakarta",
@@ -27,13 +24,15 @@ const mono = JetBrains_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.url),
   title: {
-    default: `${siteConfig.name} — AI-Powered Commerce Platform`,
+    default: `${siteConfig.name} — The AI Ecommerce Co-Founder`,
     template: `%s — ${siteConfig.name}`,
   },
   description: siteConfig.description,
   keywords: [
+    "AI ecommerce co-founder",
     "AI ecommerce platform",
     "launch online store",
+    "AI store builder",
     "wholesale supplier platform",
     "AI website builder",
     "ecommerce automation",
@@ -61,10 +60,7 @@ export default function RootLayout({
       className={`${display.variable} ${sans.variable} ${mono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-white text-ink-950">
-        <AnnouncementBar />
-        <Navbar />
-        <main className="flex-1">{children}</main>
-        <Footer />
+        {children}
       </body>
     </html>
   );

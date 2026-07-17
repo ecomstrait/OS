@@ -5,12 +5,12 @@
 
 export const siteConfig = {
   name: "EcomStrait",
-  tagline: "Turn Supplier Inventory into Sales Instantly.",
+  tagline: "Your AI ecommerce co-founder — build, launch, and grow.",
   description:
-    "EcomStrait is an AI-powered Commerce Operating System that connects verified suppliers with entrepreneurs — launch a professional online store without inventory or technical expertise.",
+    "EcomStrait is your AI ecommerce co-founder. Describe your business and EcomAI builds your online store, finds verified suppliers, writes your SEO, and helps you grow — no inventory, no code, no agencies.",
   url: "https://ecomstrait.com",
-  email: "hello@ecomstrait.com",
-  whatsapp: "+1 (555) 000-0000",
+  email: "ecomstrait@gmail.com",
+  whatsapp: "+92 (309) 7418788",
   socials: {
     twitter: "https://twitter.com/ecomstrait",
     linkedin: "https://linkedin.com/company/ecomstrait",
@@ -22,11 +22,11 @@ export const siteConfig = {
 export type NavItem = { label: string; href: string };
 
 export const primaryNav: NavItem[] = [
+  { label: "The Problem", href: "/problem" },
   { label: "Services", href: "/services" },
   { label: "Suppliers", href: "/suppliers" },
-  { label: "Store Owners", href: "/store-owners" },
-  { label: "AI Platform", href: "/ai-platform" },
-  { label: "Store Gallery", href: "/store-gallery" },
+  { label: "Entrepreneur", href: "/store-owners" },
+  { label: "Ask EcomAI", href: "/faq" },
   { label: "Why EcomStrait", href: "/why-ecomstrait" },
 ];
 
@@ -42,8 +42,7 @@ export const footerNav: { title: string; links: NavItem[] }[] = [
     title: "Platform",
     links: [
       { label: "Services", href: "/services" },
-      { label: "AI Platform", href: "/ai-platform" },
-      { label: "Store Gallery", href: "/store-gallery" },
+      { label: "The Problem", href: "/problem" },
       { label: "How It Works", href: "/how-it-works" },
       { label: "Why EcomStrait", href: "/why-ecomstrait" },
     ],
@@ -52,7 +51,7 @@ export const footerNav: { title: string; links: NavItem[] }[] = [
     title: "For You",
     links: [
       { label: "Become a Supplier", href: "/suppliers" },
-      { label: "Launch a Store", href: "/store-owners" },
+      { label: "Build a Business", href: "/#builder" },
       { label: "Book a Demo", href: "/contact" },
       { label: "Pricing", href: "/store-owners#pricing" },
     ],
@@ -62,7 +61,7 @@ export const footerNav: { title: string; links: NavItem[] }[] = [
     links: [
       { label: "Blog", href: "/resources" },
       { label: "Help Center", href: "/resources" },
-      { label: "FAQs", href: "/resources#faqs" },
+      { label: "Ask EcomAI", href: "/faq" },
       { label: "Success Stories", href: "/why-ecomstrait#stories" },
     ],
   },

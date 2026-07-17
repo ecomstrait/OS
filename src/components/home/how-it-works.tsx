@@ -33,7 +33,8 @@ const KEYFRAMES = `
 }
 `;
 
-export function HowItWorks({ tone = "muted" }: { tone?: "light" | "muted" }) {
+export function HowItWorks({ tone = "muted" }: { tone?: "light" | "muted" | "dark" }) {
+  const dark = tone === "dark";
   const reduce = useReducedMotion();
   const ref = useRef<HTMLDivElement>(null);
   const inView = useInView(ref, { once: false, margin: "-80px" });
@@ -60,6 +61,7 @@ export function HowItWorks({ tone = "muted" }: { tone?: "light" | "muted" }) {
   return (
     <Section tone={tone}>
       <SectionHeading
+        invert={dark}
         eyebrow="How It Works"
         title="From supplier shelf to selling online in five steps"
         description="A single, guided journey — no developers, no agencies, no guesswork."
@@ -77,7 +79,7 @@ export function HowItWorks({ tone = "muted" }: { tone?: "light" | "muted" }) {
           aria-hidden
           className="pointer-events-none absolute left-[10%] right-[10%] top-7 hidden -translate-y-1/2 md:block"
         >
-          <div className="relative h-[3px] w-full rounded-full bg-ink-200/70">
+          <div className={cn("relative h-[3px] w-full rounded-full", dark ? "bg-white/15" : "bg-ink-200/70")}>
             <motion.div
               className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-brand-500 to-brand-400"
               initial={false}
@@ -98,7 +100,7 @@ export function HowItWorks({ tone = "muted" }: { tone?: "light" | "muted" }) {
           aria-hidden
           className="pointer-events-none absolute bottom-7 left-7 top-7 -translate-x-1/2 md:hidden"
         >
-          <div className="relative h-full w-[3px] rounded-full bg-ink-200/70">
+          <div className={cn("relative h-full w-[3px] rounded-full", dark ? "bg-white/15" : "bg-ink-200/70")}>
             <motion.div
               className="absolute inset-x-0 top-0 rounded-full bg-gradient-to-b from-brand-500 to-brand-400"
               initial={false}
@@ -137,8 +139,11 @@ export function HowItWorks({ tone = "muted" }: { tone?: "light" | "muted" }) {
                 >
                   <motion.span
                     className={cn(
-                      "relative grid h-14 w-14 place-items-center rounded-2xl bg-white ring-1 transition-colors duration-300",
-                      isActive ? "ring-brand-200" : "ring-ink-100 shadow-sm shadow-ink-950/5",
+                      "relative grid h-14 w-14 place-items-center rounded-2xl ring-1 transition-colors duration-300",
+                      dark ? "bg-white/10" : "bg-white",
+                      isActive
+                        ? (dark ? "ring-brand-400/50" : "ring-brand-200")
+                        : (dark ? "ring-white/15" : "ring-ink-100 shadow-sm shadow-ink-950/5"),
                     )}
                     animate={reduce ? undefined : { scale: isActive ? 1.08 : 1 }}
                     transition={{ duration: 0.4, ease: EASE }}
@@ -152,13 +157,13 @@ export function HowItWorks({ tone = "muted" }: { tone?: "light" | "muted" }) {
                       name={step.icon}
                       className={cn(
                         "h-6 w-6 transition-colors duration-300",
-                        isActive ? "text-brand-600" : "text-ink-400",
+                        isActive ? (dark ? "text-brand-400" : "text-brand-600") : (dark ? "text-white/50" : "text-ink-400"),
                       )}
                     />
                     <span
                       className={cn(
                         "absolute -right-2 -top-2 grid h-6 w-6 place-items-center rounded-full text-xs font-bold text-white transition-colors duration-300",
-                        isActive ? "bg-brand-500" : "bg-ink-900",
+                        isActive ? "bg-brand-500" : (dark ? "bg-white/25" : "bg-ink-900"),
                       )}
                       style={
                         isActive && !reduce
@@ -175,12 +180,12 @@ export function HowItWorks({ tone = "muted" }: { tone?: "light" | "muted" }) {
                   <h3
                     className={cn(
                       "text-base font-bold transition-colors duration-300",
-                      isActive ? "text-ink-950" : "text-ink-900",
+                      dark ? "text-white" : (isActive ? "text-ink-950" : "text-ink-900"),
                     )}
                   >
                     {step.title}
                   </h3>
-                  <p className="mt-2 text-sm leading-relaxed text-ink-500">
+                  <p className={cn("mt-2 text-sm leading-relaxed", dark ? "text-white/60" : "text-ink-500")}>
                     {step.description}
                   </p>
                 </div>

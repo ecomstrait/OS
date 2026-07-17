@@ -33,7 +33,7 @@ type Slide = {
 const SLIDES: Slide[] = [
   {
     id: "connect",
-    eyebrow: "One Strait. Endless Opportunities.",
+    eyebrow: "Tell EcomAI what to build — launch in minutes.",
     direction: "forward",
     accent: "ai",
     center: { sub: "Build · Manage · Automate" },
@@ -91,8 +91,8 @@ const SLIDES: Slide[] = [
 const HEADLINES: Record<string, React.ReactNode> = {
   connect: (
     <>
-      Connecting Suppliers to Online Stores with{" "}
-      <span className="text-gradient">EcomAI</span>
+      Build your online business.{" "}
+      <span className="text-gradient">AI handles everything.</span>
     </>
   ),
   deliver: (
@@ -161,7 +161,7 @@ export function Hero() {
             className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3.5 py-1.5 text-xs font-semibold text-white/80 backdrop-blur"
           >
             <Sparkles className="h-3.5 w-3.5 text-ai-400" />
-            AI-Powered Commerce Operating System
+            The world&apos;s first AI Ecommerce Co-Founder
           </motion.span>
 
           <div className="mt-6 min-h-[7.5rem] sm:min-h-[8.5rem]">
@@ -209,14 +209,14 @@ export function Hero() {
         {/* ---- CTAs ---- */}
         <div className="mt-10 flex flex-col items-center gap-4">
           <div className="flex flex-col flex-wrap justify-center gap-3 sm:flex-row">
-            <Button href="/store-owners" variant="primary" size="lg">
-              Launch My Store <ArrowRight className="h-4 w-4" />
+            <Button href="#builder" variant="primary" size="lg">
+              Build My Business <ArrowRight className="h-4 w-4" />
             </Button>
             <Button href="/suppliers" variant="ai" size="lg">
               <Search className="h-4 w-4" /> Find a Supplier
             </Button>
-            <Button href="/how-it-works" variant="outline-light" size="lg">
-              <Play className="h-4 w-4" /> Watch Demo
+            <Button href="#builder" variant="outline-light" size="lg">
+              <Play className="h-4 w-4" /> Watch AI build a business
             </Button>
           </div>
 

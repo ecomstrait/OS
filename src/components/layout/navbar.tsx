@@ -54,8 +54,8 @@ export function Navbar() {
         </div>
 
         <div className="hidden items-center gap-2 lg:flex">
-          <Button href="/store-owners" variant="ghost" size="sm">
-            Launch My Store
+          <Button href="/#builder" variant="ghost" size="sm">
+            Build My Business
           </Button>
           <Button href="/suppliers" variant="primary" size="sm">
             Become a Supplier
@@ -93,8 +93,8 @@ export function Navbar() {
                 </Link>
               ))}
               <div className="mt-3 flex flex-col gap-2">
-                <Button href="/store-owners" variant="outline" size="md" onClick={() => setOpen(false)}>
-                  Launch My Store
+                <Button href="/#builder" variant="outline" size="md" onClick={() => setOpen(false)}>
+                  Build My Business
                 </Button>
                 <Button href="/suppliers" variant="primary" size="md" onClick={() => setOpen(false)}>
                   Become a Supplier

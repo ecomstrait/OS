@@ -40,7 +40,7 @@ export function WhyEcomStrait() {
             align="left"
             eyebrow="Why EcomStrait"
             title={<>More than a marketplace. More than a website builder.</>}
-            description="Most platforms solve one problem. EcomStrait unifies suppliers, AI, automation, and commerce into a single operating system."
+            description="Most tools hand you one piece and leave the rest to you. EcomAI is a co-founder that builds your store, finds suppliers, writes your marketing, and grows your business — from a single prompt."
           />
           <ul className="mt-8 grid gap-3 sm:grid-cols-2">
             {highlights.map((h, i) => (

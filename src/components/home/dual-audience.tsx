@@ -53,7 +53,7 @@ const AUDIENCES: Record<
       "No inventory to hold",
       "Start selling in hours",
     ],
-    cta: { label: "Launch My Store", href: "/store-owners" },
+    cta: { label: "Build My Business", href: "/#builder" },
   },
 };
 

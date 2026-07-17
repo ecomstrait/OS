@@ -80,7 +80,7 @@ export function ServicesHero() {
               className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-3.5 py-1.5 text-xs font-bold uppercase tracking-[0.18em] text-white/80 backdrop-blur"
             >
               <Sparkles className="h-3.5 w-3.5 text-brand-400" />
-              Services
+              AI Business Services
             </motion.span>
 
             <motion.h1
@@ -88,7 +88,7 @@ export function ServicesHero() {
               transition={{ duration: 0.6, ease: EASE }}
               className="mt-6 text-balance text-4xl font-bold leading-[1.08] tracking-tight sm:text-5xl md:text-6xl"
             >
-              Everything you need to launch and grow
+              Your AI team of specialists
             </motion.h1>
 
             <motion.p
@@ -96,8 +96,8 @@ export function ServicesHero() {
               transition={{ duration: 0.6, ease: EASE }}
               className="mx-auto mt-5 max-w-2xl text-lg text-ink-200 sm:text-xl lg:mx-0"
             >
-              From your first prompt to a scaled, automated business — EcomStrait delivers the
-              services and AI to run your entire commerce operation.
+              EcomAI works like a full team of specialists — builder, marketer, SEO consultant,
+              analyst, and advisor — running your entire business from a single prompt.
             </motion.p>
 
             <motion.div
@@ -105,8 +105,8 @@ export function ServicesHero() {
               transition={{ duration: 0.6, ease: EASE }}
               className="mt-8 flex flex-col justify-center gap-3 sm:flex-row lg:justify-start"
             >
-              <Button href="/store-owners" variant="primary" size="lg">
-                Launch My Store <ArrowRight className="h-4 w-4" />
+              <Button href="/#builder" variant="primary" size="lg">
+                Build My Business <ArrowRight className="h-4 w-4" />
               </Button>
               <Button href="/contact" variant="outline-light" size="lg">Book a Demo</Button>
             </motion.div>
