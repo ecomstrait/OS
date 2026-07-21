@@ -5,6 +5,7 @@ import { animate, motion, useInView, useReducedMotion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Reveal } from "@/components/ui/reveal";
+import { WaitlistForm } from "@/components/shared/waitlist-form";
 
 type CtaBannerProps = {
   title?: string;
@@ -149,6 +150,14 @@ export function CtaBanner({
               <Button href="/suppliers" variant="outline-light" size="lg">
                 Become a Supplier
               </Button>
+            </div>
+
+            {/* Founders Waitlist capture */}
+            <div className="mt-2 flex w-full flex-col items-center gap-2">
+              <span className="text-xs font-medium uppercase tracking-wide text-ink-400">
+                Join the Founders Waitlist
+              </span>
+              <WaitlistForm invert source="cta-banner" />
             </div>
 
             {/* Live launch counter */}

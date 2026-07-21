@@ -9,7 +9,8 @@ import {
 import { SectionHeading } from "@/components/ui/section";
 import { Button } from "@/components/ui/button";
 import { AiAvatar } from "@/components/ecomai/ai-avatar";
-import { NewsletterForm } from "@/components/shared/newsletter-form";
+import { WaitlistForm } from "@/components/shared/waitlist-form";
+import { track } from "@/lib/analytics";
 import { availableNiches } from "@/content/niches";
 import type { BusinessPlan } from "@/lib/ecomai";
 import { cn } from "@/lib/utils";
@@ -74,6 +75,7 @@ export function AiBuilder() {
   const [swapping, setSwapping] = useState(false);
   const [launching, setLaunching] = useState(false);
   const [chatOpen, setChatOpen] = useState(true);
+  const [frameLoading, setFrameLoading] = useState(false);
 
   const available = availableNiches();
   const events = useMemo(() => (plan ? buildEvents(plan) : []), [plan]);
@@ -82,6 +84,7 @@ export function AiBuilder() {
   async function build(text: string) {
     const q = text.trim();
     if (q.length < 2 || busy) return;
+    track("idea_submitted", { idea: q, source: "ai-builder" });
     setIdea(q);
     setErr(null);
     setPlan(null);
@@ -115,6 +118,7 @@ export function AiBuilder() {
     if (reduce) {
       const t = setTimeout(() => {
         setStep(total);
+        setFrameLoading(true); // gate preview until the theme iframe loads
         setPhase("ready");
         setChatOpen(false);
       }, 0);
@@ -128,6 +132,7 @@ export function AiBuilder() {
   useEffect(() => {
     if (phase === "building" && events.length && step >= events.length) {
       const t = setTimeout(() => {
+        setFrameLoading(true); // gate preview until the theme iframe loads
         setPhase("ready");
         setChatOpen(false); // collapse chat → full-page store preview
       }, 450);
@@ -148,6 +153,7 @@ export function AiBuilder() {
   function changeConcept() {
     if (!plan || plan.themes.length < 2) return;
     setSwapping(true);
+    setFrameLoading(true); // new concept → new theme iframe; show loader until it paints
     setThemeIdx((i) => (i + 1) % plan.themes.length);
     window.setTimeout(() => setSwapping(false), 650);
   }
@@ -353,16 +359,40 @@ export function AiBuilder() {
                     key={currentTheme}
                     src={`/api/theme/${currentTheme}/index.html`}
                     title={`${plan?.niche} store preview`}
-                    loading="lazy"
+                    loading="eager"
+                    onLoad={() => setFrameLoading(false)}
                     className="h-full w-full"
                   />
-                  {swapping && (
-                    <div className="absolute inset-0 grid place-items-center bg-white/80 backdrop-blur-sm">
-                      <span className="inline-flex items-center gap-2 text-sm font-medium text-ink-600">
-                        <Loader2 className="h-4 w-4 animate-spin text-ai-500" /> New concept…
-                      </span>
-                    </div>
-                  )}
+
+                  {/* Loader over the preview until the theme finishes loading
+                      from Supabase (first paint) or a concept swap re-fetches. */}
+                  <AnimatePresence>
+                    {(frameLoading || swapping) && (
+                      <motion.div
+                        key="frame-loading"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.25 }}
+                        className="absolute inset-0 z-[2] grid place-items-center bg-white"
+                      >
+                        <div className="flex flex-col items-center gap-3 text-center">
+                          <span className="relative grid h-12 w-12 place-items-center">
+                            <span className="absolute inset-0 animate-ping rounded-full bg-ai-500/20" />
+                            <Loader2 className="h-6 w-6 animate-spin text-ai-500" />
+                          </span>
+                          <p className="text-sm font-medium text-ink-700">
+                            {swapping ? "Loading new concept…" : "Loading your store preview…"}
+                          </p>
+                          {plan?.niche && (
+                            <p className="text-[11px] text-ink-400">
+                              Fetching your {plan.niche.toLowerCase()} storefront
+                            </p>
+                          )}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
 
                   {/* Launch overlay (waitlist form) */}
                   <AnimatePresence>
@@ -390,7 +420,13 @@ export function AiBuilder() {
                             EcomAI is rolling out in beta. Join the Founders Waitlist and we&apos;ll launch this store with you.
                           </p>
                           <div className="mt-4 flex justify-center">
-                            <NewsletterForm invert source="ai-builder-launch" />
+                            <WaitlistForm
+                              invert
+                              source="ai-builder-launch"
+                              idea={idea}
+                              niche={plan?.niche}
+                              persona="entrepreneur"
+                            />
                           </div>
                         </div>
                       </motion.div>
@@ -436,7 +472,10 @@ export function AiBuilder() {
                   )}
                 </div>
                 <button
-                  onClick={() => setLaunching(true)}
+                  onClick={() => {
+                    track("build_clicked", { niche: plan?.niche ?? "", source: "ai-builder" });
+                    setLaunching(true);
+                  }}
                   className="inline-flex items-center gap-2 rounded-full bg-gradient-to-br from-brand-500 to-brand-600 px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-brand-500/25 transition hover:brightness-105"
                 >
                   <Rocket className="h-4 w-4" /> Launch this store

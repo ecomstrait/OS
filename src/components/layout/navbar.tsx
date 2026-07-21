@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Menu, X } from "lucide-react";
 import { Logo } from "@/components/ui/logo";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ const allNav = [...primaryNav, ...secondaryNav];
 export function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
+  const reduce = useReducedMotion();
   const pathname = usePathname();
 
   useEffect(() => {
@@ -78,7 +79,7 @@ export function Navbar() {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.25 }}
+            transition={reduce ? { duration: 0 } : { duration: 0.25 }}
             className="overflow-hidden border-t border-ink-100 bg-white lg:hidden"
           >
             <div className="container-px flex flex-col gap-1 py-4">

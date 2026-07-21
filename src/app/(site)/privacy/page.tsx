@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
 import { LegalPage } from "@/components/shared/legal-page";
 
-export const metadata: Metadata = { title: "Privacy Policy" };
+export const metadata: Metadata = {
+  title: "Privacy Policy",
+  description:
+    "How EcomStrait collects, uses, and protects your personal information across our platform and services.",
+};
 
 export default function PrivacyPage() {
   return (

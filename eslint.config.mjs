@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Third-party theme bundles (minified vendor JS) — not our source.
+    "public/themes/**",
   ]),
 ]);
 

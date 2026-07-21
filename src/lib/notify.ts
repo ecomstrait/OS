@@ -1,6 +1,43 @@
 import { Resend } from "resend";
 import { siteConfig } from "@/lib/site";
 
+/**
+ * Low-level send: one email to a real recipient (e.g. a waitlist welcome/drip),
+ * optionally scheduled for the future via Resend `scheduledAt` (ISO 8601).
+ * Tolerant — returns false instead of throwing on any failure/missing key.
+ */
+export async function sendEmail(opts: {
+  to: string;
+  subject: string;
+  html: string;
+  replyTo?: string;
+  /** ISO-8601 timestamp to schedule the send (Resend supports up to ~30 days). */
+  scheduledAt?: string;
+}): Promise<boolean> {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) return false;
+  const from = process.env.RESEND_FROM || `${siteConfig.name} <onboarding@resend.dev>`;
+  try {
+    const resend = new Resend(apiKey);
+    const { error } = await resend.emails.send({
+      from,
+      to: opts.to,
+      subject: opts.subject,
+      html: opts.html,
+      ...(opts.replyTo ? { replyTo: opts.replyTo } : {}),
+      ...(opts.scheduledAt ? { scheduledAt: opts.scheduledAt } : {}),
+    });
+    if (error) {
+      console.error("[resend] sendEmail error:", error);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("[resend] sendEmail threw:", err);
+    return false;
+  }
+}
+
 function escapeHtml(s: string) {
   return s
     .replace(/&/g, "&amp;")

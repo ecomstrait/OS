@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -15,6 +15,7 @@ export function Accordion({
   className?: string;
 }) {
   const [open, setOpen] = useState<number | null>(0);
+  const reduce = useReducedMotion();
 
   return (
     <div className={cn("divide-y divide-ink-100 rounded-2xl border border-ink-100 bg-white", className)}>
@@ -43,7 +44,7 @@ export function Accordion({
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: "auto", opacity: 1 }}
                   exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] as const }}
+                  transition={reduce ? { duration: 0 } : { duration: 0.3, ease: [0.22, 1, 0.36, 1] as const }}
                   className="overflow-hidden"
                 >
                   <p className="px-5 pb-5 text-[15px] leading-relaxed text-ink-500 sm:px-6">

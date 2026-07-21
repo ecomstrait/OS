@@ -9,7 +9,8 @@ import {
 } from "lucide-react";
 import { Section, SectionHeading } from "@/components/ui/section";
 import { Button } from "@/components/ui/button";
-import { NewsletterForm } from "@/components/shared/newsletter-form";
+import { WaitlistForm } from "@/components/shared/waitlist-form";
+import { track } from "@/lib/analytics";
 import { AiAvatar } from "@/components/ecomai/ai-avatar";
 import type { BusinessPlan } from "@/lib/ecomai";
 
@@ -55,6 +56,11 @@ export function AiSimulator() {
   const [err, setErr] = useState<string | null>(null);
 
   async function analyze(finalBudget: string) {
+    track("idea_submitted", {
+      idea: sell,
+      source: "ai-simulator",
+      persona: persona?.id ?? "",
+    });
     setStep("analyzing");
     setErr(null);
     try {
@@ -418,10 +424,23 @@ function Result({
           {isSupplier ? (
             <Button href="/suppliers" variant="primary" size="md">Become a Supplier <ArrowRight className="h-4 w-4" /></Button>
           ) : (
-            <Button href="/#builder" variant="ai" size="md">Build my business <ArrowRight className="h-4 w-4" /></Button>
+            <Button
+              href="/#builder"
+              variant="ai"
+              size="md"
+              onClick={() => track("build_clicked", { niche: plan.niche, source: "ai-simulator" })}
+            >
+              Build my business <ArrowRight className="h-4 w-4" />
+            </Button>
           )}
           <div className="flex-1">
-            <NewsletterForm invert source="ai-simulator" />
+            <WaitlistForm
+              invert
+              source="ai-simulator"
+              idea={plan.idea}
+              niche={plan.niche}
+              persona={persona?.id}
+            />
           </div>
         </div>
       </div>

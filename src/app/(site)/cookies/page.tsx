@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
 import { LegalPage } from "@/components/shared/legal-page";
 
-export const metadata: Metadata = { title: "Cookie Policy" };
+export const metadata: Metadata = {
+  title: "Cookie Policy",
+  description:
+    "How and why EcomStrait uses cookies and similar technologies, and how to manage your preferences.",
+};
 
 export default function CookiesPage() {
   return (

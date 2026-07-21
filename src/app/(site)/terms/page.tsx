@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
 import { LegalPage } from "@/components/shared/legal-page";
 
-export const metadata: Metadata = { title: "Terms of Service" };
+export const metadata: Metadata = {
+  title: "Terms of Service",
+  description:
+    "The terms that govern your access to and use of the EcomStrait platform and EcomAI services.",
+};
 
 export default function TermsPage() {
   return (

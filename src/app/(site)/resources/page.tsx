@@ -44,7 +44,7 @@ export default function ResourcesPage() {
                 <span className="grid h-11 w-11 place-items-center rounded-xl bg-brand-50 text-brand-600">
                   <c.icon className="h-5 w-5" />
                 </span>
-                <h3 className="text-base font-bold text-ink-950">{c.title}</h3>
+                <h2 className="text-base font-bold text-ink-950">{c.title}</h2>
                 <p className="text-sm text-ink-500">{c.body}</p>
               </div>
             </Reveal>

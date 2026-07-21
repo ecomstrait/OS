@@ -1,6 +1,6 @@
 "use client";
 
-import { motion, type Variants } from "framer-motion";
+import { motion, useReducedMotion, type Variants } from "framer-motion";
 import { cn } from "@/lib/utils";
 
 const variants: Variants = {
@@ -23,9 +23,16 @@ type RevealProps = {
   as?: "div" | "li" | "span";
 };
 
-/** Fades + slides content up as it scrolls into view. Respects reduced-motion via CSS. */
+/** Fades + slides content up as it scrolls into view. Static under reduced-motion. */
 export function Reveal({ children, className, delay = 0, as = "div" }: RevealProps) {
   const MotionTag = motion[as];
+  const reduce = useReducedMotion();
+
+  // Reduced-motion: render the final state with no JS-driven animation.
+  if (reduce) {
+    return <MotionTag className={cn(className)}>{children}</MotionTag>;
+  }
+
   return (
     <MotionTag
       className={cn(className)}
