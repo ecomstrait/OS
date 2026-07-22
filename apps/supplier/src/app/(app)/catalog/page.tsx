@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { Boxes, Plus, Upload } from "lucide-react";
 import { createClient } from "@ecomstrait/auth/server";
+import { getMySupplier } from "@/lib/supplier-context";
 import { EmptyState } from "@/components/app/empty-state";
 import { PendingGate } from "@/components/app/pending-gate";
 import { CatalogTable } from "@/components/catalog/catalog-table";
@@ -10,16 +11,7 @@ export const metadata: Metadata = { title: "Catalog" };
 
 export default async function CatalogPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const { data: supplier } = await supabase
-    .from("suppliers")
-    .select("id, status")
-    .eq("owner_user_id", user!.id)
-    .maybeSingle();
-
+  const supplier = await getMySupplier();
   const approved = supplier?.status === "approved";
 
   const { data: products } =
@@ -27,7 +19,7 @@ export default async function CatalogPage() {
       ? await supabase
           .from("products")
           .select("id, title, category, status, retail_price, stock, images")
-          .eq("supplier_id", supplier.id)
+          .eq("supplier_id", supplier.supplierId)
           .order("created_at", { ascending: false })
       : { data: [] };
 
