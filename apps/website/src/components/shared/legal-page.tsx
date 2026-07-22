@@ -1,5 +1,6 @@
 import { PageHeader } from "@/components/shared/page-header";
 import { Section } from "@/components/ui/section";
+import { siteConfig } from "@/lib/site";
 
 export type LegalSection = { heading: string; body: string[] };
 
@@ -30,8 +31,9 @@ export function LegalPage({
             </div>
           ))}
           <p className="rounded-2xl border border-ink-100 bg-ink-50 p-5 text-sm text-ink-500">
-            This is placeholder legal content for the showcase site. Replace it with
-            reviewed policy language before going live.
+            EcomAI is currently in beta. This policy describes how {siteConfig.name} operates
+            today and may be updated as the product evolves — we&apos;ll post changes on this
+            page with a new effective date.
           </p>
         </div>
       </Section>
