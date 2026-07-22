@@ -11,5 +11,14 @@ export type {
   ProductStatus,
   ProductVariant,
   InventoryAdjustment,
+  ProductRequest,
+  RequestItem,
+  RequestMessage,
+  RequestStatus,
+  MessageSender,
+  SupplierMember,
+  Order,
+  OrderItem,
+  OrderStatus,
 } from "./types";
 export { createAdminClient } from "./admin";

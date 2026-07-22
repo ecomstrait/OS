@@ -1,7 +1,10 @@
 import Link from "next/link";
 import type { Metadata } from "next";
+import type { SupplierMember } from "@ecomstrait/db/types";
 import { getProfile } from "@ecomstrait/auth/session";
 import { createClient } from "@ecomstrait/auth/server";
+import { getMySupplier } from "@/lib/supplier-context";
+import { TeamManager } from "@/components/settings/team-manager";
 
 export const metadata: Metadata = { title: "Settings" };
 
@@ -20,17 +23,25 @@ export default async function SettingsPage() {
     data: { user },
   } = await supabase.auth.getUser();
   const profile = await getProfile();
+  const my = await getMySupplier();
 
-  const { data: supplier } = await supabase
-    .from("suppliers")
-    .select("*")
-    .eq("owner_user_id", user!.id)
-    .maybeSingle();
+  const { data: supplier } = my
+    ? await supabase.from("suppliers").select("*").eq("id", my.supplierId).maybeSingle()
+    : { data: null };
+
+  const { data: members } =
+    my?.isOwner
+      ? await supabase
+          .from("supplier_members")
+          .select("*")
+          .eq("supplier_id", my.supplierId)
+          .order("created_at", { ascending: true })
+      : { data: [] };
 
   return (
     <div className="mx-auto max-w-2xl">
       <h1 className="text-2xl font-bold text-ink-950">Settings</h1>
-      <p className="mt-1 text-sm text-ink-500">Your account and business details.</p>
+      <p className="mt-1 text-sm text-ink-500">Your account, business details, and team.</p>
 
       <section className="mt-6 rounded-2xl border border-ink-100 bg-white p-5">
         <h2 className="text-sm font-semibold text-ink-950">Account</h2>
@@ -38,13 +49,14 @@ export default async function SettingsPage() {
           <Row label="Email" value={user?.email ?? ""} />
           <Row label="Name" value={(user?.user_metadata?.full_name as string) ?? ""} />
           <Row label="Role" value={(profile?.role ?? "supplier").replace("_", " ")} />
+          {my && !my.isOwner && <Row label="Access" value="Staff member" />}
         </dl>
       </section>
 
       <section className="mt-4 rounded-2xl border border-ink-100 bg-white p-5">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-ink-950">Business profile</h2>
-          {supplier?.status === "pending" && (
+          {my?.isOwner && supplier?.status === "pending" && (
             <Link href="/onboarding" className="text-sm font-semibold text-brand-600 hover:underline">
               Continue onboarding
             </Link>
@@ -68,6 +80,18 @@ export default async function SettingsPage() {
           </p>
         )}
       </section>
+
+      {/* Team — owner only */}
+      {my?.isOwner && (
+        <section className="mt-4 rounded-2xl border border-ink-100 bg-white p-5">
+          <h2 className="text-sm font-semibold text-ink-950">Team</h2>
+          <p className="mb-4 mt-1 text-xs text-ink-400">
+            Invite staff to help manage your catalog, inventory, and requests. They&apos;ll be added
+            automatically when they sign in with the invited email.
+          </p>
+          <TeamManager members={(members ?? []) as SupplierMember[]} />
+        </section>
+      )}
     </div>
   );
 }

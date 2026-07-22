@@ -8,6 +8,8 @@ import {
   Boxes,
   Warehouse,
   ClipboardList,
+  Package,
+  BarChart3,
   Settings,
   Menu,
   X,
@@ -16,12 +18,15 @@ import {
 } from "lucide-react";
 import { cn } from "@ecomstrait/ui";
 import { signOut } from "@/lib/actions";
+import type { Notification } from "@/lib/notifications";
 
 const NAV = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
   { href: "/catalog", label: "Catalog", icon: Boxes },
   { href: "/inventory", label: "Inventory", icon: Warehouse },
   { href: "/requests", label: "Requests", icon: ClipboardList },
+  { href: "/orders", label: "Orders", icon: Package },
+  { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -63,10 +68,12 @@ function Brand() {
 export function AppChrome({
   email,
   role,
+  notifications = [],
   children,
 }: {
   email: string;
   role: string;
+  notifications?: Notification[];
   children: React.ReactNode;
 }) {
   const [drawer, setDrawer] = useState(false);
@@ -118,16 +125,38 @@ export function AppChrome({
                   setBell((b) => !b);
                   setMenu(false);
                 }}
-                className="grid h-9 w-9 place-items-center rounded-lg text-ink-500 hover:bg-ink-100"
+                className="relative grid h-9 w-9 place-items-center rounded-lg text-ink-500 hover:bg-ink-100"
               >
                 <Bell className="h-5 w-5" />
+                {notifications.length > 0 && (
+                  <span className="absolute right-1.5 top-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                    {notifications.length}
+                  </span>
+                )}
               </button>
               {bell && (
-                <div className="absolute right-0 top-11 z-30 w-64 rounded-xl border border-ink-100 bg-white p-4 text-center shadow-lg">
-                  <p className="text-sm font-medium text-ink-900">You&apos;re all caught up</p>
-                  <p className="mt-1 text-xs text-ink-400">
-                    Requests and updates will show up here.
-                  </p>
+                <div className="absolute right-0 top-11 z-30 w-72 overflow-hidden rounded-xl border border-ink-100 bg-white shadow-lg">
+                  {notifications.length === 0 ? (
+                    <div className="p-4 text-center">
+                      <p className="text-sm font-medium text-ink-900">You&apos;re all caught up</p>
+                      <p className="mt-1 text-xs text-ink-400">Requests and updates will show up here.</p>
+                    </div>
+                  ) : (
+                    <ul className="divide-y divide-ink-50">
+                      {notifications.map((n) => (
+                        <li key={n.id}>
+                          <Link
+                            href={n.href}
+                            onClick={() => setBell(false)}
+                            className="block px-4 py-3 hover:bg-ink-50"
+                          >
+                            <p className="text-sm font-medium text-ink-900">{n.title}</p>
+                            <p className="text-xs text-ink-400">{n.body}</p>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               )}
             </div>
@@ -160,6 +189,13 @@ export function AppChrome({
                     className="block rounded-lg px-3 py-2 text-sm text-ink-700 hover:bg-ink-50"
                   >
                     Account settings
+                  </Link>
+                  <Link
+                    href="/help"
+                    onClick={() => setMenu(false)}
+                    className="block rounded-lg px-3 py-2 text-sm text-ink-700 hover:bg-ink-50"
+                  >
+                    Help &amp; support
                   </Link>
                   <form action={signOut}>
                     <button

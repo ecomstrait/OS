@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import {
   ArrowRight,
-  DollarSign,
+  ClipboardList,
   AlertTriangle,
   Boxes,
   ShieldCheck,
@@ -12,6 +12,7 @@ import {
   Circle,
 } from "lucide-react";
 import { createClient } from "@ecomstrait/auth/server";
+import { getMySupplier } from "@/lib/supplier-context";
 import type { SupplierVerification } from "@ecomstrait/db/types";
 
 export const metadata: Metadata = { title: "Dashboard" };
@@ -31,11 +32,14 @@ export default async function DashboardPage() {
   } = await supabase.auth.getUser();
   const name = user?.user_metadata?.full_name?.split(" ")[0];
 
-  const { data: supplier } = await supabase
-    .from("suppliers")
-    .select("id, status, business_name")
-    .eq("owner_user_id", user!.id)
-    .maybeSingle();
+  const my = await getMySupplier();
+  const { data: supplier } = my
+    ? await supabase
+        .from("suppliers")
+        .select("id, status, business_name, quality_score")
+        .eq("id", my.supplierId)
+        .maybeSingle()
+    : { data: null };
 
   const { data: verification } = supplier
     ? await supabase
@@ -58,16 +62,24 @@ export default async function DashboardPage() {
     (p) => p.stock - p.reserved <= p.low_stock_threshold,
   ).length;
 
+  const { count: openRequests } = supplier
+    ? await supabase
+        .from("product_requests")
+        .select("id", { count: "exact", head: true })
+        .eq("supplier_id", supplier.id)
+        .in("status", ["new", "proposed"])
+    : { count: 0 };
+
   const status = supplier?.status ?? "pending";
   const completed = verification
     ? LEVELS.filter((l) => verification[l.key]).length
     : 0;
 
   const widgets = [
-    { label: "Revenue (30d)", value: "—", icon: DollarSign },
+    { label: "Open requests", value: String(openRequests ?? 0), icon: ClipboardList },
     { label: "Published products", value: String(publishedCount), icon: Boxes },
     { label: "Low stock", value: String(lowStockCount), icon: AlertTriangle },
-    { label: "Quality score", value: "—", icon: ShieldCheck },
+    { label: "Quality score", value: supplier?.quality_score != null ? String(supplier.quality_score) : "—", icon: ShieldCheck },
   ];
 
   return (

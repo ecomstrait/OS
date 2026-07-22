@@ -5,7 +5,7 @@ export async function proxy(request: NextRequest) {
   return updateSession(request, {
     guards: [
       {
-        prefixes: ["/dashboard", "/onboarding", "/catalog", "/inventory", "/requests", "/settings"],
+        prefixes: ["/dashboard", "/onboarding", "/catalog", "/inventory", "/requests", "/orders", "/analytics", "/settings", "/help"],
         loginPath: "/login",
       },
       {

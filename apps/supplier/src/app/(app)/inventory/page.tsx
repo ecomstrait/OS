@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Boxes, PackageCheck, AlertTriangle, PackageX, History } from "lucide-react";
 import { createClient } from "@ecomstrait/auth/server";
+import { getMySupplier } from "@/lib/supplier-context";
 import { EmptyState } from "@/components/app/empty-state";
 import { PendingGate } from "@/components/app/pending-gate";
 import { InventoryTable, type InventoryRow } from "@/components/inventory/inventory-table";
@@ -18,16 +19,7 @@ type Adjustment = {
 
 export default async function InventoryPage() {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const { data: supplier } = await supabase
-    .from("suppliers")
-    .select("id, status")
-    .eq("owner_user_id", user!.id)
-    .maybeSingle();
-
+  const supplier = await getMySupplier();
   const approved = supplier?.status === "approved";
 
   const { data: products } =
@@ -35,7 +27,7 @@ export default async function InventoryPage() {
       ? await supabase
           .from("products")
           .select("id, title, stock, reserved, low_stock_threshold")
-          .eq("supplier_id", supplier.id)
+          .eq("supplier_id", supplier.supplierId)
           .order("title")
       : { data: [] };
 

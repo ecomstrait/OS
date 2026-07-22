@@ -1,12 +1,42 @@
 import { createClient } from "@ecomstrait/auth/server";
 import type { SupplierStatus } from "@ecomstrait/db/types";
 
+type Resolved = { supplierId: string; status: SupplierStatus; isOwner: boolean };
+
+async function resolve(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+): Promise<Resolved | null> {
+  const { data: owned } = await supabase
+    .from("suppliers")
+    .select("id, status")
+    .eq("owner_user_id", userId)
+    .maybeSingle();
+  if (owned) return { supplierId: owned.id, status: owned.status, isOwner: true };
+
+  const { data: member } = await supabase
+    .from("supplier_members")
+    .select("supplier_id")
+    .eq("user_id", userId)
+    .eq("status", "active")
+    .maybeSingle();
+  if (member) {
+    const { data: s } = await supabase
+      .from("suppliers")
+      .select("id, status")
+      .eq("id", member.supplier_id)
+      .maybeSingle();
+    if (s) return { supplierId: s.id, status: s.status, isOwner: false };
+  }
+  return null;
+}
+
 /**
- * Resolve the caller's Supabase client + their supplier (id + status), or an
- * error. Server-only helper shared by the data-mutating server actions.
+ * Resolve the caller's Supabase client + their supplier (via ownership OR
+ * active staff membership), or an error. Shared by the data-mutating actions.
  */
 export async function getSupplierContext(): Promise<
-  | { supabase: Awaited<ReturnType<typeof createClient>>; supplierId: string; status: SupplierStatus }
+  | { supabase: Awaited<ReturnType<typeof createClient>>; supplierId: string; status: SupplierStatus; isOwner: boolean }
   | { error: string }
 > {
   const supabase = await createClient();
@@ -14,19 +44,12 @@ export async function getSupplierContext(): Promise<
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "Not authenticated." };
-  const { data } = await supabase
-    .from("suppliers")
-    .select("id, status")
-    .eq("owner_user_id", user.id)
-    .maybeSingle();
-  if (!data) return { error: "Complete onboarding first." };
-  return { supabase, supplierId: data.id, status: data.status };
+  const r = await resolve(supabase, user.id);
+  if (!r) return { error: "Complete onboarding first." };
+  return { supabase, ...r };
 }
 
-/**
- * Like getSupplierContext, but requires the supplier to be approved. Used by
- * write actions (catalog, inventory) that are locked until verification.
- */
+/** Like getSupplierContext, but requires the supplier to be approved. */
 export async function requireApprovedSupplier() {
   const ctx = await getSupplierContext();
   if ("error" in ctx) return ctx;
@@ -36,17 +59,12 @@ export async function requireApprovedSupplier() {
   return ctx;
 }
 
-/** The current user's supplier row (id + status), or null. For gating pages. */
-export async function getMySupplier(): Promise<{ id: string; status: SupplierStatus } | null> {
+/** The current user's supplier (id + status + isOwner), or null. For gating pages. */
+export async function getMySupplier(): Promise<Resolved | null> {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return null;
-  const { data } = await supabase
-    .from("suppliers")
-    .select("id, status")
-    .eq("owner_user_id", user.id)
-    .maybeSingle();
-  return data ?? null;
+  return resolve(supabase, user.id);
 }

@@ -37,6 +37,49 @@ export async function setUserRole(
   return {};
 }
 
+/** Seed a sample store-owner request for a supplier (until the merchant app exists). */
+export async function createSampleRequest(supplierId: string): Promise<{ error?: string }> {
+  const a = await asAdmin();
+  if ("error" in a) return a;
+
+  const { data: product } = await a.client
+    .from("products")
+    .select("id, title")
+    .eq("supplier_id", supplierId)
+    .limit(1)
+    .maybeSingle();
+
+  const { data: req, error } = await a.client
+    .from("product_requests")
+    .insert({
+      supplier_id: supplierId,
+      store_name: "Nova Boutique",
+      store_owner_name: "Alex Rivera",
+      store_owner_email: "alex@example.com",
+      timeline: "Within 2 weeks",
+      note: "Trialling demand for a new collection — keen to place a starter order.",
+      status: "new",
+    })
+    .select("id")
+    .single();
+  if (error) return { error: error.message };
+
+  await a.client.from("request_items").insert({
+    request_id: req.id,
+    product_id: product?.id ?? null,
+    product_name: product?.title ?? "Sample product",
+    quantity: 25,
+  });
+  await a.client.from("request_messages").insert({
+    request_id: req.id,
+    sender: "store_owner",
+    body: "Hi! We'd love to stock this. What's your lead time for 25 units?",
+  });
+
+  revalidatePath(`/admin/suppliers/${supplierId}`);
+  return {};
+}
+
 export async function approveSupplier(id: string): Promise<{ error?: string }> {
   const a = await asAdmin();
   if ("error" in a) return a;

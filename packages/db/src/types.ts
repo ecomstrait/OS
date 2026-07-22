@@ -9,6 +9,9 @@ export type UserRole =
 export type SupplierStatus = "pending" | "in_review" | "approved" | "rejected";
 export type ProductStatus = "draft" | "published";
 export type ProductVariant = { name: string; options: string[] };
+export type RequestStatus = "new" | "accepted" | "declined" | "proposed" | "fulfilled";
+export type MessageSender = "supplier" | "store_owner" | "system";
+export type OrderStatus = "processing" | "shipped" | "delivered" | "cancelled";
 export type DocumentType =
   | "business_registration"
   | "tax_registration"
@@ -149,6 +152,116 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["inventory_adjustments"]["Row"]>;
         Relationships: [];
       };
+      product_requests: {
+        Row: {
+          id: string;
+          supplier_id: string;
+          store_name: string | null;
+          store_owner_name: string | null;
+          store_owner_email: string | null;
+          timeline: string | null;
+          note: string | null;
+          status: RequestStatus;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          supplier_id: string;
+        } & Partial<Omit<Database["public"]["Tables"]["product_requests"]["Row"], "supplier_id">>;
+        Update: Partial<Database["public"]["Tables"]["product_requests"]["Row"]>;
+        Relationships: [];
+      };
+      request_items: {
+        Row: {
+          id: string;
+          request_id: string;
+          product_id: string | null;
+          product_name: string;
+          quantity: number;
+        };
+        Insert: {
+          request_id: string;
+          product_name: string;
+          product_id?: string | null;
+          quantity?: number;
+        };
+        Update: Partial<Database["public"]["Tables"]["request_items"]["Row"]>;
+        Relationships: [];
+      };
+      request_messages: {
+        Row: {
+          id: string;
+          request_id: string;
+          sender: MessageSender;
+          body: string;
+          created_at: string;
+        };
+        Insert: {
+          request_id: string;
+          sender: MessageSender;
+          body: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["request_messages"]["Row"]>;
+        Relationships: [];
+      };
+      supplier_members: {
+        Row: {
+          id: string;
+          supplier_id: string;
+          user_id: string | null;
+          invited_email: string;
+          role: UserRole;
+          status: "invited" | "active" | "revoked";
+          created_at: string;
+        };
+        Insert: {
+          supplier_id: string;
+          invited_email: string;
+          user_id?: string | null;
+          role?: UserRole;
+          status?: "invited" | "active" | "revoked";
+        };
+        Update: Partial<Database["public"]["Tables"]["supplier_members"]["Row"]>;
+        Relationships: [];
+      };
+      orders: {
+        Row: {
+          id: string;
+          number: number;
+          supplier_id: string;
+          request_id: string | null;
+          store_name: string | null;
+          store_owner_name: string | null;
+          store_owner_email: string | null;
+          status: OrderStatus;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          supplier_id: string;
+        } & Partial<Omit<Database["public"]["Tables"]["orders"]["Row"], "supplier_id" | "number">>;
+        Update: Partial<Database["public"]["Tables"]["orders"]["Row"]>;
+        Relationships: [];
+      };
+      order_items: {
+        Row: {
+          id: string;
+          order_id: string;
+          product_id: string | null;
+          product_name: string;
+          quantity: number;
+          unit_price: number | null;
+        };
+        Insert: {
+          order_id: string;
+          product_name: string;
+          product_id?: string | null;
+          quantity?: number;
+          unit_price?: number | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["order_items"]["Row"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
@@ -166,3 +279,9 @@ export type SupplierDocument =
 export type Product = Database["public"]["Tables"]["products"]["Row"];
 export type InventoryAdjustment =
   Database["public"]["Tables"]["inventory_adjustments"]["Row"];
+export type ProductRequest = Database["public"]["Tables"]["product_requests"]["Row"];
+export type RequestItem = Database["public"]["Tables"]["request_items"]["Row"];
+export type RequestMessage = Database["public"]["Tables"]["request_messages"]["Row"];
+export type SupplierMember = Database["public"]["Tables"]["supplier_members"]["Row"];
+export type Order = Database["public"]["Tables"]["orders"]["Row"];
+export type OrderItem = Database["public"]["Tables"]["order_items"]["Row"];

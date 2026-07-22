@@ -29,7 +29,7 @@ export default async function AdminSuppliersPage() {
 
   const { data } = await client
     .from("suppliers")
-    .select("id, business_name, contact_person, country, status, created_at")
+    .select("id, business_name, contact_person, country, status, quality_score, created_at")
     .order("created_at", { ascending: false });
 
   const suppliers = (data ?? []).sort((a, b) => ORDER[a.status] - ORDER[b.status]);
@@ -54,6 +54,7 @@ export default async function AdminSuppliersPage() {
                 <th className="px-4 py-3 font-medium">Business</th>
                 <th className="hidden px-4 py-3 font-medium sm:table-cell">Contact</th>
                 <th className="hidden px-4 py-3 font-medium md:table-cell">Country</th>
+                <th className="hidden px-4 py-3 font-medium sm:table-cell">Quality</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3" />
               </tr>
@@ -68,6 +69,9 @@ export default async function AdminSuppliersPage() {
                     {s.contact_person ?? "—"}
                   </td>
                   <td className="hidden px-4 py-3 text-ink-500 md:table-cell">{s.country ?? "—"}</td>
+                  <td className="hidden px-4 py-3 font-medium text-ink-700 sm:table-cell">
+                    {s.quality_score != null ? s.quality_score : "—"}
+                  </td>
                   <td className="px-4 py-3">
                     <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_STYLE[s.status]}`}>
                       {s.status.replace("_", " ")}
