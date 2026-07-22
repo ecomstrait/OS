@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OceanBackdrop } from "@/components/ui/ocean-backdrop";
+import { supplierSignupUrl } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -100,7 +101,7 @@ export function SuppliersHero() {
               transition={{ duration: 0.6, delay: 0.24, ease: EASE }}
               className="flex flex-col gap-3 sm:flex-row"
             >
-              <Button href="#register" variant="primary" size="lg">Become a Supplier</Button>
+              <Button href={supplierSignupUrl} variant="primary" size="lg">Become a Supplier</Button>
               <Button href="/contact" variant="outline-light" size="lg">Talk to Sales</Button>
             </motion.div>
           </div>

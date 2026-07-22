@@ -7,7 +7,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Menu, X } from "lucide-react";
 import { Logo } from "@/components/ui/logo";
 import { Button } from "@/components/ui/button";
-import { primaryNav, secondaryNav } from "@/lib/site";
+import { primaryNav, secondaryNav, supplierSignupUrl } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 const allNav = [...primaryNav, ...secondaryNav];
@@ -58,7 +58,7 @@ export function Navbar() {
           <Button href="/#builder" variant="ghost" size="sm">
             Build My Business
           </Button>
-          <Button href="/suppliers" variant="primary" size="sm">
+          <Button href={supplierSignupUrl} variant="primary" size="sm">
             Become a Supplier
           </Button>
         </div>
@@ -97,7 +97,7 @@ export function Navbar() {
                 <Button href="/#builder" variant="outline" size="md" onClick={() => setOpen(false)}>
                   Build My Business
                 </Button>
-                <Button href="/suppliers" variant="primary" size="md" onClick={() => setOpen(false)}>
+                <Button href={supplierSignupUrl} variant="primary" size="md" onClick={() => setOpen(false)}>
                   Become a Supplier
                 </Button>
               </div>

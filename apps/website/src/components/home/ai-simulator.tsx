@@ -10,6 +10,7 @@ import {
 import { Section, SectionHeading } from "@/components/ui/section";
 import { Button } from "@/components/ui/button";
 import { WaitlistForm } from "@/components/shared/waitlist-form";
+import { supplierSignupUrl } from "@/lib/site";
 import { track } from "@/lib/analytics";
 import { AiAvatar } from "@/components/ecomai/ai-avatar";
 import type { BusinessPlan } from "@/lib/ecomai";
@@ -422,7 +423,7 @@ function Result({
         </p>
         <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
           {isSupplier ? (
-            <Button href="/suppliers" variant="primary" size="md">Become a Supplier <ArrowRight className="h-4 w-4" /></Button>
+            <Button href={supplierSignupUrl} variant="primary" size="md">Become a Supplier <ArrowRight className="h-4 w-4" /></Button>
           ) : (
             <Button
               href="/#builder"

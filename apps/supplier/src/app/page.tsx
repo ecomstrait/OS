@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { cn } from "@ecomstrait/ui";
 
 const steps = [
@@ -27,11 +28,25 @@ export default function SupplierHome() {
           <span className="text-gradient">on one AI platform.</span>
         </h1>
         <p className="mt-4 text-lg text-ink-200">
-          The supplier portal is being built. Publish your catalog once and reach
-          thousands of AI-generated stores.
+          Publish your catalog once and reach thousands of AI-generated stores.
         </p>
 
-        <ul className="mx-auto mt-8 grid max-w-md gap-2 text-left">
+        <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+          <Link
+            href="/signup"
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-brand-500 px-6 text-sm font-semibold text-white shadow-lg shadow-brand-500/25 transition hover:bg-brand-600"
+          >
+            Become a supplier
+          </Link>
+          <Link
+            href="/login"
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/5 px-6 text-sm font-semibold text-white transition hover:bg-white/10"
+          >
+            Log in
+          </Link>
+        </div>
+
+        <ul className="mx-auto mt-10 grid max-w-md gap-2 text-left">
           {steps.map((s, i) => (
             <li
               key={s}
