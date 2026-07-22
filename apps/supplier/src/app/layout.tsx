@@ -21,7 +21,10 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "EcomStrait — Supplier Portal",
+  title: {
+    default: "EcomStrait Suppliers",
+    template: "%s · EcomStrait Suppliers",
+  },
   description:
     "The EcomStrait supplier portal — publish your catalog, manage inventory and orders, and reach thousands of AI-built stores.",
   robots: { index: false, follow: false },

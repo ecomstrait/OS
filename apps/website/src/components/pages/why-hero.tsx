@@ -9,6 +9,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { OceanBackdrop } from "@/components/ui/ocean-backdrop";
 import { Button } from "@/components/ui/button";
+import { supplierSignupUrl } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 type IconType = React.ComponentType<{ className?: string }>;
@@ -104,7 +105,7 @@ export function WhyHero() {
               <Button href="/#builder" variant="primary" size="lg">
                 Build My Business <ArrowRight className="h-4 w-4" />
               </Button>
-              <Button href="/suppliers" variant="outline-light" size="lg">
+              <Button href={supplierSignupUrl} variant="outline-light" size="lg">
                 Become a Supplier
               </Button>
             </div>

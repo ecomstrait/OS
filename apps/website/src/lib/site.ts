@@ -19,6 +19,14 @@ export const siteConfig = {
   },
 } as const;
 
+/**
+ * The Supplier Portal is a separate app/deployment. Configurable per
+ * environment via NEXT_PUBLIC_SUPPLIER_APP_URL (falls back to local dev).
+ */
+export const supplierAppUrl =
+  process.env.NEXT_PUBLIC_SUPPLIER_APP_URL || "http://localhost:3001";
+export const supplierSignupUrl = `${supplierAppUrl}/signup`;
+
 export type NavItem = { label: string; href: string };
 
 export const primaryNav: NavItem[] = [
@@ -50,7 +58,7 @@ export const footerNav: { title: string; links: NavItem[] }[] = [
   {
     title: "For You",
     links: [
-      { label: "Become a Supplier", href: "/suppliers" },
+      { label: "Become a Supplier", href: supplierSignupUrl },
       { label: "Build a Business", href: "/#builder" },
       { label: "Book a Demo", href: "/contact" },
       { label: "Pricing", href: "/store-owners#pricing" },

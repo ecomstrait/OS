@@ -6,6 +6,7 @@ import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Reveal } from "@/components/ui/reveal";
 import { WaitlistForm } from "@/components/shared/waitlist-form";
+import { supplierSignupUrl } from "@/lib/site";
 
 type CtaBannerProps = {
   title?: string;
@@ -147,7 +148,7 @@ export function CtaBanner({
               <Button href="/#builder" variant="primary" size="lg">
                 Watch AI build a business <ArrowRight className="h-4 w-4" />
               </Button>
-              <Button href="/suppliers" variant="outline-light" size="lg">
+              <Button href={supplierSignupUrl} variant="outline-light" size="lg">
                 Become a Supplier
               </Button>
             </div>
