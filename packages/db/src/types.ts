@@ -280,6 +280,7 @@ export type Database = {
           transferred_at: string | null;
           theme_id: string | null;
           sync_status: string | null;
+          storefront_password: string | null;
           notes: string | null;
           created_at: string;
           updated_at: string;

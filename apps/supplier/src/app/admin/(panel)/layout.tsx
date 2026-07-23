@@ -18,6 +18,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <Link href="/admin/suppliers" className="font-medium text-ink-600 hover:text-ink-950">
               Suppliers
             </Link>
+            <Link href="/admin/shopify-stores" className="font-medium text-ink-600 hover:text-ink-950">
+              Shopify stores
+            </Link>
             <Link href="/admin/users" className="font-medium text-ink-600 hover:text-ink-950">
               Users
             </Link>
