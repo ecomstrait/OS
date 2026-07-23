@@ -131,6 +131,26 @@ export async function setPhoneVerified(
   return {};
 }
 
+/**
+ * Store (or clear) the storefront password for a Shopify dev store. Dev stores
+ * are password-locked; the assigned merchant reads this to preview their store.
+ */
+export async function setStorefrontPassword(
+  shopifyStoreId: string,
+  password: string,
+): Promise<{ error?: string }> {
+  const a = await asAdmin();
+  if ("error" in a) return a;
+  const value = password.trim();
+  const { error } = await a.client
+    .from("shopify_stores")
+    .update({ storefront_password: value || null })
+    .eq("id", shopifyStoreId);
+  if (error) return { error: error.message };
+  revalidatePath("/admin/shopify-stores");
+  return {};
+}
+
 /** Send an application back for edits (e.g. request more info). */
 export async function returnToPending(id: string): Promise<{ error?: string }> {
   const a = await asAdmin();

@@ -4,6 +4,7 @@ import { Store, Sparkles, Globe } from "lucide-react";
 import { createClient } from "@ecomstrait/auth/server";
 import type { StoreStatus, StoreType } from "@ecomstrait/db";
 import { ProvisionButton } from "@/components/stores/provision-button";
+import { StorePreview } from "@/components/stores/store-preview";
 
 export const metadata: Metadata = { title: "Stores" };
 
@@ -34,6 +35,27 @@ export default async function StoresPage() {
 
   const list = stores ?? [];
 
+  // For provisioned Shopify stores, pull the linked dev store's domain +
+  // storefront password (dev stores are password-locked). Owner RLS lets the
+  // merchant read only their own assigned rows.
+  const shopifyIds = list.map((s) => s.shopify_store_id).filter(Boolean) as string[];
+  const shopById = new Map<
+    string,
+    { shop_domain: string; storefront_password: string | null }
+  >();
+  if (shopifyIds.length) {
+    const { data: shops } = await supabase
+      .from("shopify_stores")
+      .select("id, shop_domain, storefront_password")
+      .in("id", shopifyIds);
+    (shops ?? []).forEach((sh) =>
+      shopById.set(sh.id, {
+        shop_domain: sh.shop_domain,
+        storefront_password: sh.storefront_password,
+      }),
+    );
+  }
+
   return (
     <div className="mx-auto max-w-5xl">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -59,7 +81,9 @@ export default async function StoresPage() {
           </div>
         ) : (
           <div className="overflow-hidden rounded-2xl border border-ink-100 bg-white">
-            {list.map((s) => (
+            {list.map((s) => {
+              const shop = s.shopify_store_id ? shopById.get(s.shopify_store_id) : undefined;
+              return (
               <div key={s.id} className="flex items-center justify-between gap-4 border-b border-ink-50 px-4 py-4 last:border-0">
                 <div className="flex items-center gap-3">
                   <span className="grid h-10 w-10 place-items-center rounded-lg bg-ink-100 text-ink-500">
@@ -74,22 +98,30 @@ export default async function StoresPage() {
                   {s.type.startsWith("shopify") && !s.shopify_store_id && (
                     <ProvisionButton storeId={s.id} />
                   )}
-                  {s.live_url && (
-                    <a
-                      href={s.live_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm font-semibold text-brand-600 hover:underline"
-                    >
-                      View store ↗
-                    </a>
+                  {shop ? (
+                    <StorePreview
+                      url={`https://${shop.shop_domain}`}
+                      password={shop.storefront_password}
+                    />
+                  ) : (
+                    s.live_url && (
+                      <a
+                        href={s.live_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm font-semibold text-brand-600 hover:underline"
+                      >
+                        View store ↗
+                      </a>
+                    )
                   )}
                   <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_STYLE[s.status]}`}>
                     {s.status.replace(/_/g, " ")}
                   </span>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
