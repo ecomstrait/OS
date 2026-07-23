@@ -10,8 +10,10 @@
     "start": "turbo run start",
     "dev:website": "pnpm --filter @ecomstrait/website dev",
     "dev:supplier": "pnpm --filter @ecomstrait/supplier dev",
+    "dev:merchant": "pnpm --filter @ecomstrait/merchant dev",
     "build:website": "pnpm --filter @ecomstrait/website build",
-    "build:supplier": "pnpm --filter @ecomstrait/supplier build"
+    "build:supplier": "pnpm --filter @ecomstrait/supplier build",
+    "build:merchant": "pnpm --filter @ecomstrait/merchant build"
   },
   "devDependencies": {
     "turbo": "^2.5.8"

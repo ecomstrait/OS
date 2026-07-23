@@ -1,0 +1,98 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { Store, Sparkles, Globe } from "lucide-react";
+import { createClient } from "@ecomstrait/auth/server";
+import type { StoreStatus, StoreType } from "@ecomstrait/db";
+import { ProvisionButton } from "@/components/stores/provision-button";
+
+export const metadata: Metadata = { title: "Stores" };
+
+const TYPE_LABEL: Record<StoreType, string> = {
+  own_platform: "Own website",
+  shopify_liquid_theme: "Shopify · EcomStrait theme",
+  shopify_shopify_theme: "Shopify · Shopify theme",
+};
+
+const STATUS_STYLE: Record<StoreStatus, string> = {
+  draft: "bg-ink-100 text-ink-500",
+  building: "bg-ai-50 text-ai-700",
+  ready_for_review: "bg-amber-50 text-amber-700",
+  live: "bg-brand-50 text-brand-700",
+  archived: "bg-ink-100 text-ink-400",
+};
+
+export default async function StoresPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const { data: stores } = await supabase
+    .from("stores")
+    .select("id, name, type, status, theme, live_url, shopify_store_id, created_at")
+    .eq("user_id", user!.id)
+    .order("created_at", { ascending: false });
+
+  const list = stores ?? [];
+
+  return (
+    <div className="mx-auto max-w-5xl">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-ink-950">Stores</h1>
+          <p className="mt-1 text-sm text-ink-500">Your stores and their status.</p>
+        </div>
+        <Link href="/builder" className="inline-flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-600">
+          <Sparkles className="h-4 w-4" /> Build a store
+        </Link>
+      </div>
+
+      <div className="mt-6">
+        {list.length === 0 ? (
+          <div className="grid place-items-center rounded-2xl border border-dashed border-ink-200 bg-white p-12 text-center">
+            <span className="grid h-14 w-14 place-items-center rounded-2xl bg-ink-100 text-ink-400">
+              <Store className="h-7 w-7" />
+            </span>
+            <p className="mt-4 max-w-sm text-sm text-ink-500">No stores yet. Build your first with EcomAI.</p>
+            <Link href="/builder" className="mt-5 inline-flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-600">
+              <Sparkles className="h-4 w-4" /> Open Store Builder
+            </Link>
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-2xl border border-ink-100 bg-white">
+            {list.map((s) => (
+              <div key={s.id} className="flex items-center justify-between gap-4 border-b border-ink-50 px-4 py-4 last:border-0">
+                <div className="flex items-center gap-3">
+                  <span className="grid h-10 w-10 place-items-center rounded-lg bg-ink-100 text-ink-500">
+                    {s.type === "own_platform" ? <Globe className="h-5 w-5" /> : <Store className="h-5 w-5" />}
+                  </span>
+                  <div>
+                    <p className="font-medium text-ink-900">{s.name}</p>
+                    <p className="text-xs text-ink-400">{TYPE_LABEL[s.type]}{s.theme ? ` · ${s.theme}` : ""}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  {s.type.startsWith("shopify") && !s.shopify_store_id && (
+                    <ProvisionButton storeId={s.id} />
+                  )}
+                  {s.live_url && (
+                    <a
+                      href={s.live_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm font-semibold text-brand-600 hover:underline"
+                    >
+                      View store ↗
+                    </a>
+                  )}
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_STYLE[s.status]}`}>
+                    {s.status.replace(/_/g, " ")}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
