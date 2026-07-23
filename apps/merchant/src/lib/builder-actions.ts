@@ -3,9 +3,11 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@ecomstrait/auth/server";
 import type { StoreType } from "@ecomstrait/db";
+import { revalidatePath } from "next/cache";
 import { assertTokenBudget, recordTokenUsage, assertCanCreateStore } from "@/lib/entitlements";
 import { autoSelectProducts, productImage } from "@/lib/catalog";
 import { merchantUrl } from "@/lib/stripe";
+import { resyncShopifyTheme } from "@/lib/shopify-actions";
 import { generateStorePlan, refineStorePlan, themeForStyle, type StorePlan } from "@/lib/ecomai";
 
 export type BuilderAnswers = {
@@ -69,6 +71,63 @@ export async function refineStore(
   const { plan: updated, tokensUsed } = await refineStorePlan(plan, instruction);
   await recordTokenUsage(tokensUsed);
   return { plan: updated };
+}
+
+export type EditResult = {
+  plan?: StorePlan;
+  synced?: "live" | "shopify" | "draft";
+  note?: string;
+  error?: string;
+};
+
+/**
+ * Post-launch EcomAI edit: refine the persisted plan, save it, and auto-propagate
+ * to the live surface — own-platform storefronts read `content` live; Shopify
+ * Liquid stores get a themeFilesUpsert re-sync. Cosmetic (colors/text/logo) only.
+ */
+export async function editStore(storeId: string, instruction: string): Promise<EditResult> {
+  if (instruction.trim().length < 2) return { error: "Tell me what to change." };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated." };
+
+  const { data: store } = await supabase
+    .from("stores")
+    .select("id, type, content, shopify_store_id")
+    .eq("id", storeId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!store) return { error: "Store not found." };
+
+  const budget = await assertTokenBudget(500);
+  if (!budget.ok) return { error: budget.error };
+
+  const current = store.content as unknown as StorePlan;
+  const { plan, tokensUsed } = await refineStorePlan(current, instruction);
+  await recordTokenUsage(tokensUsed);
+
+  const { error: upErr } = await supabase
+    .from("stores")
+    .update({ content: plan as unknown as Record<string, unknown> })
+    .eq("id", storeId);
+  if (upErr) return { error: upErr.message };
+
+  revalidatePath(`/store/${storeId}`);
+  revalidatePath("/stores");
+
+  // Auto-propagate to wherever the store is live.
+  if (store.type === "own_platform") {
+    return { plan, synced: "live", note: "Your live storefront is updated." };
+  }
+  if (store.type === "shopify_liquid_theme" && store.shopify_store_id) {
+    const res = await resyncShopifyTheme(storeId);
+    if (res.error) return { plan, synced: "draft", note: `Saved, but Shopify sync failed: ${res.error}` };
+    return { plan, synced: "shopify", note: "Pushed to your live Shopify store." };
+  }
+  return { plan, synced: "draft", note: "Saved. Provision the store to publish these changes." };
 }
 
 /** Launch the store: persist plan + products; own-platform stores go live. */

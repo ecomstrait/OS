@@ -1,0 +1,20 @@
+{
+  "current": {
+    "logo": "",
+    "logo_asset": "",
+    "favicon": "",
+    "logo_width": 140,
+    "color_brand": "#10b981",
+    "color_accent": "#3b82f6",
+    "color_text": "#0f172a",
+    "color_bg": "#ffffff",
+    "heading_font": "assistant_n7",
+    "body_font": "assistant_n4",
+    "corner_radius": 12,
+    "hero_heading": "Your brand, beautifully built",
+    "hero_subheading": "Curated products, fast shipping, and a store designed to convert.",
+    "hero_cta": "Shop now",
+    "hero_image": "",
+    "footer_text": "Powered by EcomStrait"
+  }
+}
