@@ -4,6 +4,7 @@ import { Store, Sparkles, Globe } from "lucide-react";
 import { createClient } from "@ecomstrait/auth/server";
 import type { StoreStatus, StoreType } from "@ecomstrait/db";
 import { ProvisionButton } from "@/components/stores/provision-button";
+import { ResyncButton } from "@/components/stores/resync-button";
 import { StorePreview } from "@/components/stores/store-preview";
 
 export const metadata: Metadata = { title: "Stores" };
@@ -98,6 +99,15 @@ export default async function StoresPage() {
                   {s.type.startsWith("shopify") && !s.shopify_store_id && (
                     <ProvisionButton storeId={s.id} />
                   )}
+                  {s.type === "shopify_liquid_theme" && s.shopify_store_id && (
+                    <ResyncButton storeId={s.id} />
+                  )}
+                  <Link
+                    href={`/stores/${s.id}/edit`}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-2.5 py-1 text-xs font-semibold text-ink-700 transition hover:bg-ink-50"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" /> Edit with EcomAI
+                  </Link>
                   {shop ? (
                     <StorePreview
                       url={`https://${shop.shop_domain}`}

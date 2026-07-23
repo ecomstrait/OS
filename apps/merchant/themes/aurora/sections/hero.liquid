@@ -1,0 +1,16 @@
+<section class="hero{% if settings.hero_image != blank %} hero--image{% endif %}"
+  {%- if settings.hero_image != blank %} style="background-image:linear-gradient(120deg, rgba(15,23,42,.55), rgba(15,23,42,.25)), url('{{ settings.hero_image | image_url: width: 2000 }}')"{% endif %}>
+  <div class="container hero__inner">
+    <h1 class="hero__heading">{{ settings.hero_heading }}</h1>
+    <p class="hero__subheading">{{ settings.hero_subheading }}</p>
+    <a href="/collections/all" class="btn btn-primary btn-lg">{{ settings.hero_cta }}</a>
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "Hero",
+  "settings": [],
+  "presets": [{ "name": "Hero" }]
+}
+{% endschema %}
