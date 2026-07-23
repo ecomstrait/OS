@@ -1,0 +1,106 @@
+import { createClient } from "@ecomstrait/auth/server";
+import { PLAN_ENTITLEMENTS } from "@ecomstrait/db";
+import type { PlanTier } from "@ecomstrait/db";
+import { ensureSubscription, effectivePlan } from "@/lib/subscription";
+
+export type Entitlements = {
+  plan: PlanTier;
+  tokensPerDay: number;
+  storeLimit: number;
+  tokensUsed: number;
+  tokensRemaining: number;
+  storesUsed: number;
+  canCreateStore: boolean;
+};
+
+function today(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** The caller's plan + live usage (tokens today, stores used) and derived limits. */
+export async function getEntitlements(): Promise<Entitlements> {
+  const sub = await ensureSubscription();
+  const plan = effectivePlan(sub);
+  const ent = PLAN_ENTITLEMENTS[plan];
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  let tokensUsed = 0;
+  let storesUsed = 0;
+  if (user) {
+    const { data: usage } = await supabase
+      .from("usage_daily")
+      .select("tokens_used")
+      .eq("user_id", user.id)
+      .eq("day", today())
+      .maybeSingle();
+    tokensUsed = usage?.tokens_used ?? 0;
+
+    const { count } = await supabase
+      .from("stores")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id);
+    storesUsed = count ?? 0;
+  }
+
+  return {
+    plan,
+    tokensPerDay: ent.tokensPerDay,
+    storeLimit: ent.storeLimit,
+    tokensUsed,
+    tokensRemaining: Math.max(0, ent.tokensPerDay - tokensUsed),
+    storesUsed,
+    canCreateStore: storesUsed < ent.storeLimit,
+  };
+}
+
+/** Gate an AI action: fail if today's budget can't cover `estimated` tokens. */
+export async function assertTokenBudget(
+  estimated = 1,
+): Promise<{ ok: true; remaining: number } | { ok: false; error: string }> {
+  const e = await getEntitlements();
+  if (e.tokensRemaining <= 0 || e.tokensRemaining < estimated) {
+    return {
+      ok: false,
+      error: `Daily AI limit reached (${e.tokensPerDay.toLocaleString()} tokens/day on ${PLAN_ENTITLEMENTS[e.plan].label}). Upgrade for more.`,
+    };
+  }
+  return { ok: true, remaining: e.tokensRemaining };
+}
+
+/** Record token usage against today's counter (call after an AI action). */
+export async function recordTokenUsage(tokens: number): Promise<void> {
+  if (tokens <= 0) return;
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+
+  const day = today();
+  const { data } = await supabase
+    .from("usage_daily")
+    .select("tokens_used")
+    .eq("user_id", user.id)
+    .eq("day", day)
+    .maybeSingle();
+  const next = (data?.tokens_used ?? 0) + Math.round(tokens);
+  await supabase
+    .from("usage_daily")
+    .upsert({ user_id: user.id, day, tokens_used: next }, { onConflict: "user_id,day" });
+}
+
+/** Gate store creation against the plan's store limit. */
+export async function assertCanCreateStore(): Promise<{ ok: true } | { ok: false; error: string }> {
+  const e = await getEntitlements();
+  if (!e.canCreateStore) {
+    return {
+      ok: false,
+      error: `You've reached your plan's store limit (${e.storeLimit}). Upgrade to add more.`,
+    };
+  }
+  return { ok: true };
+}

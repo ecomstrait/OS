@@ -12,6 +12,24 @@ export type ProductVariant = { name: string; options: string[] };
 export type RequestStatus = "new" | "accepted" | "declined" | "proposed" | "fulfilled";
 export type MessageSender = "supplier" | "store_owner" | "system";
 export type OrderStatus = "processing" | "shipped" | "delivered" | "cancelled";
+export type PlanTier = "free" | "basic" | "premium" | "full";
+export type SubscriptionStatus =
+  | "trialing"
+  | "active"
+  | "past_due"
+  | "canceled"
+  | "incomplete";
+export type StoreType = "shopify_shopify_theme" | "shopify_liquid_theme" | "own_platform";
+export type StoreStatus = "draft" | "building" | "ready_for_review" | "live" | "archived";
+export type ShopifyStoreStatus =
+  | "available"
+  | "assigned"
+  | "building"
+  | "ready_for_review"
+  | "client_approved"
+  | "waiting_for_transfer"
+  | "transferred"
+  | "archived";
 export type DocumentType =
   | "business_registration"
   | "tax_registration"
@@ -224,6 +242,77 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["supplier_members"]["Row"]>;
         Relationships: [];
       };
+      subscriptions: {
+        Row: {
+          user_id: string;
+          plan: PlanTier;
+          status: SubscriptionStatus;
+          stripe_customer_id: string | null;
+          stripe_subscription_id: string | null;
+          current_period_end: string | null;
+          trial_ends_at: string | null;
+          promo_eligible: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: { user_id: string } & Partial<
+          Omit<Database["public"]["Tables"]["subscriptions"]["Row"], "user_id">
+        >;
+        Update: Partial<Database["public"]["Tables"]["subscriptions"]["Row"]>;
+        Relationships: [];
+      };
+      usage_daily: {
+        Row: { user_id: string; day: string; tokens_used: number };
+        Insert: { user_id: string; day?: string; tokens_used?: number };
+        Update: Partial<Database["public"]["Tables"]["usage_daily"]["Row"]>;
+        Relationships: [];
+      };
+      shopify_stores: {
+        Row: {
+          id: string;
+          shop_domain: string;
+          shopify_shop_id: string | null;
+          access_token: string | null;
+          scopes: string | null;
+          status: ShopifyStoreStatus;
+          owner_user_id: string | null;
+          assigned_at: string | null;
+          transferred_at: string | null;
+          theme_id: string | null;
+          sync_status: string | null;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: { shop_domain: string } & Partial<
+          Omit<Database["public"]["Tables"]["shopify_stores"]["Row"], "shop_domain">
+        >;
+        Update: Partial<Database["public"]["Tables"]["shopify_stores"]["Row"]>;
+        Relationships: [];
+      };
+      stores: {
+        Row: {
+          id: string;
+          user_id: string;
+          type: StoreType;
+          name: string | null;
+          status: StoreStatus;
+          domain: string | null;
+          subdomain: string | null;
+          theme: string | null;
+          shopify_store_id: string | null;
+          live_url: string | null;
+          logo_url: string | null;
+          content: Record<string, unknown>;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: { user_id: string; type: StoreType } & Partial<
+          Omit<Database["public"]["Tables"]["stores"]["Row"], "user_id" | "type">
+        >;
+        Update: Partial<Database["public"]["Tables"]["stores"]["Row"]>;
+        Relationships: [];
+      };
       orders: {
         Row: {
           id: string;
@@ -233,6 +322,7 @@ export type Database = {
           store_name: string | null;
           store_owner_name: string | null;
           store_owner_email: string | null;
+          shipping: string | null;
           status: OrderStatus;
           created_at: string;
           updated_at: string;
@@ -262,6 +352,37 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["order_items"]["Row"]>;
         Relationships: [];
       };
+      selected_products: {
+        Row: { user_id: string; product_id: string; created_at: string };
+        Insert: { user_id: string; product_id: string };
+        Update: Partial<Database["public"]["Tables"]["selected_products"]["Row"]>;
+        Relationships: [];
+      };
+      store_products: {
+        Row: { store_id: string; product_id: string; price: number | null; created_at: string };
+        Insert: { store_id: string; product_id: string; price?: number | null };
+        Update: Partial<Database["public"]["Tables"]["store_products"]["Row"]>;
+        Relationships: [];
+      };
+      store_orders: {
+        Row: {
+          id: string;
+          store_id: string;
+          customer_name: string | null;
+          customer_email: string | null;
+          shipping: string | null;
+          subtotal: number | null;
+          items: { product_id: string | null; supplier_id: string | null; name: string; quantity: number; unit_price: number | null }[];
+          status: string;
+          stripe_session_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          store_id: string;
+        } & Partial<Omit<Database["public"]["Tables"]["store_orders"]["Row"], "id" | "store_id" | "created_at">>;
+        Update: Partial<Database["public"]["Tables"]["store_orders"]["Row"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
@@ -285,3 +406,7 @@ export type RequestMessage = Database["public"]["Tables"]["request_messages"]["R
 export type SupplierMember = Database["public"]["Tables"]["supplier_members"]["Row"];
 export type Order = Database["public"]["Tables"]["orders"]["Row"];
 export type OrderItem = Database["public"]["Tables"]["order_items"]["Row"];
+export type Subscription = Database["public"]["Tables"]["subscriptions"]["Row"];
+export type UsageDaily = Database["public"]["Tables"]["usage_daily"]["Row"];
+export type ShopifyStore = Database["public"]["Tables"]["shopify_stores"]["Row"];
+export type Store = Database["public"]["Tables"]["stores"]["Row"];

@@ -1,5 +1,8 @@
 packages:
   - "apps/*"
+  # The Shopify app is developed independently via the Shopify CLI
+  # (React Router 7 + Prisma + npm), not through our pnpm/turbo workspace.
+  - "!apps/ecom-strait-ai"
   - "packages/*"
 
 ignoredBuiltDependencies:

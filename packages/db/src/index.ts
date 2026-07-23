@@ -20,5 +20,20 @@ export type {
   Order,
   OrderItem,
   OrderStatus,
+  Subscription,
+  UsageDaily,
+  ShopifyStore,
+  Store,
+  PlanTier,
+  SubscriptionStatus,
+  StoreType,
+  StoreStatus,
+  ShopifyStoreStatus,
 } from "./types";
 export { createAdminClient } from "./admin";
+export {
+  PLAN_ENTITLEMENTS,
+  PLAN_ORDER,
+  PROMO_USER_LIMIT,
+  type PlanEntitlement,
+} from "./plans";
