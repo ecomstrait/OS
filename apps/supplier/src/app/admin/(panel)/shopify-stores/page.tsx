@@ -48,6 +48,20 @@ export default async function AdminShopifyStoresPage() {
     });
   }
 
+  // Map pool store → the merchant's brand name (stores.name) — the value to set
+  // as the Shopify shop display name (Settings → Store details) at transfer.
+  const brandById = new Map<string, string>();
+  const poolIds = list.map((s) => s.id);
+  if (poolIds.length) {
+    const { data: linked } = await client
+      .from("stores")
+      .select("name, shopify_store_id")
+      .in("shopify_store_id", poolIds);
+    (linked ?? []).forEach((s) => {
+      if (s.shopify_store_id && s.name) brandById.set(s.shopify_store_id, s.name);
+    });
+  }
+
   return (
     <div>
       <h1 className="text-2xl font-bold text-ink-950">Shopify stores</h1>
@@ -105,7 +119,14 @@ export default async function AdminShopifyStoresPage() {
                 <tr key={s.id} className="border-b border-ink-50 last:border-0">
                   <td className="px-4 py-3">
                     <p className="font-medium text-ink-900">{s.shop_domain}</p>
-                    <p className="text-xs text-ink-400">{s.sync_status ?? "—"}</p>
+                    {brandById.get(s.id) ? (
+                      <p className="text-xs text-ai-600">
+                        Brand: <span className="font-medium">{brandById.get(s.id)}</span>
+                        <span className="text-ink-300"> · set as store name in Shopify</span>
+                      </p>
+                    ) : (
+                      <p className="text-xs text-ink-400">{s.sync_status ?? "—"}</p>
+                    )}
                   </td>
                   <td className="hidden px-4 py-3 text-ink-500 md:table-cell">
                     {s.owner_user_id ? emailById.get(s.owner_user_id) ?? "—" : "unassigned"}

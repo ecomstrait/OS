@@ -41,10 +41,10 @@ export default async function SettingsPage() {
       </section>
 
       <section className="mt-6">
-        <h2 className="text-sm font-semibold text-ink-950">Custom domains</h2>
+        <h2 className="text-sm font-semibold text-ink-950">Stores</h2>
         <p className="mt-1 text-sm text-ink-500">
-          Connect your own domain to a store. Add the DNS records at your registrar, then check the
-          connection.
+          Rename a store, or connect your own domain — add the DNS records at your registrar, then
+          check the connection.
         </p>
         <div className="mt-4 space-y-4">
           {(stores ?? []).length === 0 ? (
