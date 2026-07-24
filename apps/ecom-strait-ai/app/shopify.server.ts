@@ -20,40 +20,10 @@ const shopify = shopifyApp({
     expiringOfflineAccessTokens: true,
   },
   hooks: {
-    // On install: hand the shop + access token to the EcomStrait platform and
-    // register the orders webhook so purchases route to our suppliers.
-    afterAuth: async ({ session, admin }) => {
-      const merchant = process.env.ECOMSTRAIT_MERCHANT_URL;
-      const secret = process.env.ECOMSTRAIT_SHARED_SECRET;
-      if (!merchant || !secret) return;
-
-      try {
-        await fetch(`${merchant}/api/shopify/connect`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-ecomstrait-secret": secret },
-          body: JSON.stringify({
-            shop: session.shop,
-            accessToken: session.accessToken,
-            scopes: session.scope,
-          }),
-        });
-      } catch (e) {
-        console.error("[ecomstrait] connect push failed", e);
-      }
-
-      try {
-        await admin.graphql(
-          `#graphql
-          mutation createWebhook($topic: WebhookSubscriptionTopic!, $url: URL!) {
-            webhookSubscriptionCreate(topic: $topic, webhookSubscription: { callbackUrl: $url, format: JSON }) {
-              userErrors { message }
-            }
-          }`,
-          { variables: { topic: "ORDERS_CREATE", url: `${merchant}/api/shopify/webhooks` } },
-        );
-      } catch (e) {
-        console.error("[ecomstrait] webhook register failed", e);
-      }
+    // On install: hand the shop + access token to the EcomStrait platform. The
+    // orders/create webhook is declared in shopify.app.toml (registered on deploy).
+    afterAuth: async ({ session }) => {
+      await pushConnection(session);
     },
   },
   ...(process.env.SHOP_CUSTOM_DOMAIN

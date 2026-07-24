@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Globe, Loader2, CheckCircle2, Clock, Copy, Check } from "lucide-react";
 import type { DnsRecord, DomainTarget } from "@/lib/domain";
 import { setStoreDomain, checkStoreDomain, type DomainCheck } from "@/lib/domain-actions";
+import { StoreNameField } from "@/components/settings/store-name-field";
 
 const PATH_LABEL: Record<string, string> = {
   own_platform: "Own website",
@@ -80,8 +81,8 @@ export function DomainCard({
     <div className="rounded-2xl border border-ink-100 bg-white p-5">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Globe className="h-4 w-4 text-ink-400" />
-          <span className="text-sm font-semibold text-ink-950">{storeName}</span>
+          <Globe className="h-4 w-4 shrink-0 text-ink-400" />
+          <StoreNameField storeId={storeId} initial={storeName} />
         </div>
         <span className="rounded-full bg-ink-100 px-2.5 py-1 text-xs font-medium text-ink-500">
           {PATH_LABEL[storeType] ?? storeType}
