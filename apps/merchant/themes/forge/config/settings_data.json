@@ -1,0 +1,20 @@
+{
+  "current": {
+    "logo": "",
+    "logo_asset": "",
+    "favicon": "",
+    "logo_width": 140,
+    "color_brand": "#F59E0B",
+    "color_accent": "#EF4444",
+    "color_text": "#17181A",
+    "color_bg": "#F4F4F2",
+    "heading_font": "oswald_n7",
+    "body_font": "assistant_n4",
+    "corner_radius": 0,
+    "hero_heading": "Gear that earns its keep",
+    "hero_subheading": "Hard-wearing kit, specced properly and shipped the day you order it.",
+    "hero_cta": "Shop the range",
+    "hero_image": "",
+    "footer_text": "Powered by EcomStrait"
+  }
+}

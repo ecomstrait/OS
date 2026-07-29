@@ -1,0 +1,36 @@
+<div class="container section">
+  <h1 class="section-title">Your cart</h1>
+  <span class="rule-center" aria-hidden="true"></span>
+  {%- if cart.item_count == 0 -%}
+    <p class="muted" style="text-align:center">Your cart is empty.</p>
+    <p style="text-align:center"><a href="/collections/all" class="btn btn-primary">Continue shopping</a></p>
+  {%- else -%}
+    <form action="{{ routes.cart_url }}" method="post" novalidate>
+      <div class="cart-lines">
+        {%- for item in cart.items -%}
+          <div class="cart-line">
+            {%- if item.image -%}
+              <img src="{{ item.image | image_url: width: 120 }}" alt="{{ item.title | escape }}" width="80" height="80" loading="lazy">
+            {%- endif -%}
+            <div class="cart-line__info">
+              <a href="{{ item.url }}" class="cart-line__title">{{ item.product.title }}</a>
+              <p class="muted">{{ item.price | money }}</p>
+            </div>
+            <input type="number" name="updates[]" value="{{ item.quantity }}" min="0" aria-label="Quantity" class="cart-line__qty">
+            <span class="cart-line__total">{{ item.final_line_price | money }}</span>
+          </div>
+        {%- endfor -%}
+      </div>
+      <div class="cart-footer">
+        <div class="cart-subtotal">
+          <span>Subtotal</span>
+          <strong>{{ cart.total_price | money }}</strong>
+        </div>
+        <div class="cart-actions">
+          <button type="submit" name="update" class="btn btn-ghost">Update</button>
+          <button type="submit" name="checkout" class="btn btn-primary">Checkout</button>
+        </div>
+      </div>
+    </form>
+  {%- endif -%}
+</div>

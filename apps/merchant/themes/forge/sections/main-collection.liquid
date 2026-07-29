@@ -1,0 +1,40 @@
+<section class="section">
+  <div class="container">
+    <div class="collection-head">
+      <h1 class="section-title">{{ collection.title }}</h1>
+      {%- if collection.description != blank -%}
+        <div class="rte muted">{{ collection.description }}</div>
+      {%- endif -%}
+      <p class="collection-head__count muted">{{ collection.products_count }} item{% if collection.products_count != 1 %}s{% endif %}</p>
+    </div>
+
+    {%- paginate collection.products by 15 -%}
+      <div class="grid grid-products">
+        {%- for product in collection.products -%}
+          {% render 'product-card', product: product %}
+        {%- else -%}
+          <p class="muted">No products yet.</p>
+        {%- endfor -%}
+      </div>
+
+      {%- if paginate.pages > 1 -%}
+        <nav class="pagination" aria-label="Pagination">
+          {%- for part in paginate.parts -%}
+            {%- if part.is_link -%}
+              <a href="{{ part.url }}">{{ part.title }}</a>
+            {%- else -%}
+              <span class="is-current">{{ part.title }}</span>
+            {%- endif -%}
+          {%- endfor -%}
+        </nav>
+      {%- endif -%}
+    {%- endpaginate -%}
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "Collection",
+  "settings": []
+}
+{% endschema %}

@@ -1,0 +1,20 @@
+{
+  "current": {
+    "logo": "",
+    "logo_asset": "",
+    "favicon": "",
+    "logo_width": 140,
+    "color_brand": "#9DAED0",
+    "color_accent": "#E5E9F2",
+    "color_text": "#2A2E35",
+    "color_bg": "#F7F7F5",
+    "heading_font": "montserrat_n4",
+    "body_font": "assistant_n4",
+    "corner_radius": 4,
+    "hero_heading": "Refined essentials",
+    "hero_subheading": "Quiet design and honest materials, made to outlast the season.",
+    "hero_cta": "Discover",
+    "hero_image": "",
+    "footer_text": "Powered by EcomStrait"
+  }
+}

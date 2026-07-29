@@ -1,0 +1,19 @@
+<div class="container section">
+  <h1 class="section-title">Search</h1>
+  <span class="rule-center" aria-hidden="true"></span>
+  <form action="{{ routes.search_url }}" method="get" role="search" class="search-form">
+    <input type="search" name="q" value="{{ search.terms | escape }}" placeholder="Search products" aria-label="Search">
+    <button type="submit" class="btn btn-primary">Search</button>
+  </form>
+
+  {%- if search.performed -%}
+    <p class="muted" style="text-align:center">{{ search.results_count }} result{% if search.results_count != 1 %}s{% endif %}</p>
+    <div class="grid grid-products">
+      {%- for item in search.results -%}
+        {%- if item.object_type == 'product' -%}
+          {% render 'product-card', product: item %}
+        {%- endif -%}
+      {%- endfor -%}
+    </div>
+  {%- endif -%}
+</div>

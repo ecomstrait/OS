@@ -1,0 +1,20 @@
+{
+  "current": {
+    "logo": "",
+    "logo_asset": "",
+    "favicon": "",
+    "logo_width": 140,
+    "color_brand": "#38BDF8",
+    "color_accent": "#6366F1",
+    "color_text": "#16233A",
+    "color_bg": "#FBFCFD",
+    "heading_font": "lora_n4",
+    "body_font": "assistant_n4",
+    "corner_radius": 6,
+    "hero_heading": "Fewer things, chosen well",
+    "hero_subheading": "A slow, considered edit — with the story behind every piece we carry.",
+    "hero_cta": "Read the edit",
+    "hero_image": "",
+    "footer_text": "Powered by EcomStrait"
+  }
+}
