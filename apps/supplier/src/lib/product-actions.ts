@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import type { ProductStatus } from "@ecomstrait/db/types";
 import { requireApprovedSupplier } from "@/lib/supplier-context";
 import { enrichProduct, type EnrichInput, type Enrichment } from "@/lib/ai";
+import { chunk, cleanIds, type BulkResult } from "@/lib/bulk";
 
 /** Raw form values (strings from inputs); parsed here into typed columns. */
 export type ProductInput = {
@@ -97,6 +98,63 @@ export async function setProductStatus(
   if (error) return { error: error.message };
   revalidatePath("/catalog");
   return {};
+}
+
+/**
+ * Publish or unpublish many products at once. Every query is scoped to the
+ * caller's supplier, so ids belonging to another supplier are silently skipped
+ * rather than trusted — `affected` reflects what actually changed.
+ */
+export async function bulkSetProductStatus(
+  ids: string[],
+  status: ProductStatus,
+): Promise<BulkResult> {
+  const ctx = await requireApprovedSupplier();
+  if ("error" in ctx) return { affected: 0, error: ctx.error };
+
+  const targets = cleanIds(ids);
+  if (!targets.length) return { affected: 0, error: "Nothing selected." };
+
+  let affected = 0;
+  for (const part of chunk(targets)) {
+    const { data, error } = await ctx.supabase
+      .from("products")
+      .update({ status })
+      .eq("supplier_id", ctx.supplierId)
+      .in("id", part)
+      .select("id");
+    if (error) return { affected, error: error.message };
+    affected += data?.length ?? 0;
+  }
+
+  revalidatePath("/catalog");
+  revalidatePath("/inventory");
+  return { affected };
+}
+
+/** Delete many products at once. Scoped to the caller's supplier. */
+export async function bulkDeleteProducts(ids: string[]): Promise<BulkResult> {
+  const ctx = await requireApprovedSupplier();
+  if ("error" in ctx) return { affected: 0, error: ctx.error };
+
+  const targets = cleanIds(ids);
+  if (!targets.length) return { affected: 0, error: "Nothing selected." };
+
+  let affected = 0;
+  for (const part of chunk(targets)) {
+    const { data, error } = await ctx.supabase
+      .from("products")
+      .delete()
+      .eq("supplier_id", ctx.supplierId)
+      .in("id", part)
+      .select("id");
+    if (error) return { affected, error: error.message };
+    affected += data?.length ?? 0;
+  }
+
+  revalidatePath("/catalog");
+  revalidatePath("/inventory");
+  return { affected };
 }
 
 export async function bulkImportProducts(
