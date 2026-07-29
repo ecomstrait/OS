@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="{{ request.locale.iso_code }}">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0B0B0C">
+    <link rel="canonical" href="{{ canonical_url }}">
+    {%- if settings.favicon != blank -%}
+      <link rel="icon" type="image/png" href="{{ settings.favicon | image_url: width: 32, height: 32 }}">
+    {%- endif -%}
+
+    <title>
+      {{ page_title }}
+      {%- if current_tags %} &ndash; tagged "{{ current_tags | join: ', ' }}"{% endif -%}
+      {%- if current_page != 1 %} &ndash; Page {{ current_page }}{% endif -%}
+      {%- unless page_title contains shop.name %} &ndash; {{ shop.name }}{% endunless -%}
+    </title>
+
+    {%- if page_description -%}
+      <meta name="description" content="{{ page_description | escape }}">
+    {%- endif -%}
+
+    {{ content_for_header }}
+
+    {%- style -%}
+      :root{
+        --brand: {{ settings.color_brand }};
+        --accent: {{ settings.color_accent }};
+        --radius: {{ settings.corner_radius }}px;
+        --font-heading: {{ settings.heading_font.family }}, {{ settings.heading_font.fallback_families }};
+        --font-body: {{ settings.body_font.family }}, {{ settings.body_font.fallback_families }};
+
+        /* Noir owns its canvas. A luxury theme is defined by the dark surface,
+           so these are fixed rather than plan-driven — `color_bg`/`color_text`
+           are deliberately absent from settings_schema.json. Brand and accent
+           still come from the merchant's plan. */
+        --bg:#0B0B0C;
+        --surface:#141416;
+        --surface-2:#1C1C20;
+        --ink:#F4F1EC;
+        --muted:#9C968C;
+        --line:rgba(255,255,255,.12);
+      }
+      {{ settings.heading_font | font_face: font_display: 'swap' }}
+      {{ settings.body_font | font_face: font_display: 'swap' }}
+    {%- endstyle -%}
+
+    {{ 'theme.css' | asset_url | stylesheet_tag }}
+  </head>
+
+  <body class="template-{{ template.name }}">
+    {% section 'header' %}
+    <main id="main" role="main">
+      {{ content_for_layout }}
+    </main>
+    {% section 'footer' %}
+  </body>
+</html>

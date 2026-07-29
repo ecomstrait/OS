@@ -1,0 +1,50 @@
+<section class="section">
+  <div class="container product">
+    <div class="product__media">
+      {%- if product.featured_image -%}
+        <img src="{{ product.featured_image | image_url: width: 1200 }}" alt="{{ product.featured_image.alt | escape }}" width="1200" height="1200" loading="eager" style="border-radius:var(--radius)">
+      {%- else -%}
+        <div class="product__media-placeholder" style="border-radius:var(--radius)"></div>
+      {%- endif -%}
+    </div>
+
+    <div class="product__info">
+      <p class="eyebrow">{{ product.type | default: shop.name }}</p>
+      <h1 class="product__title">{{ product.title }}</h1>
+      <p class="product__price">{% render 'price', product: product %}</p>
+
+      {%- form 'product', product -%}
+        {%- unless product.has_only_default_variant -%}
+          <div class="product__options">
+            {%- for option in product.options_with_values -%}
+              <label class="product__option">
+                <span>{{ option.name }}</span>
+                <select name="options[{{ option.name | escape }}]">
+                  {%- for value in option.values -%}
+                    <option value="{{ value | escape }}"{% if option.selected_value == value %} selected{% endif %}>{{ value }}</option>
+                  {%- endfor -%}
+                </select>
+              </label>
+            {%- endfor -%}
+          </div>
+        {%- endunless -%}
+
+        <input type="hidden" name="id" value="{{ product.selected_or_first_available_variant.id }}">
+        <button type="submit" name="add" class="btn btn-primary btn-lg" {% unless product.available %}disabled{% endunless %}>
+          {%- if product.available -%}Add to cart{%- else -%}Sold out{%- endif -%}
+        </button>
+      {%- endform -%}
+
+      {%- if product.description != blank -%}
+        <div class="rte product__description">{{ product.description }}</div>
+      {%- endif -%}
+    </div>
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "Product",
+  "settings": []
+}
+{% endschema %}

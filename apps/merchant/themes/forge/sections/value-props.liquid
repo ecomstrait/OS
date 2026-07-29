@@ -1,0 +1,36 @@
+<section class="section value-props">
+  <div class="container grid grid-3">
+    {%- for block in section.blocks -%}
+      <div class="value-prop" {{ block.shopify_attributes }}>
+        <h3 class="value-prop__title">{{ block.settings.title }}</h3>
+        <p class="muted">{{ block.settings.text }}</p>
+      </div>
+    {%- endfor -%}
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "Value props",
+  "blocks": [
+    {
+      "type": "item",
+      "name": "Item",
+      "settings": [
+        { "type": "text", "id": "title", "label": "Title", "default": "Fast dispatch" },
+        { "type": "textarea", "id": "text", "label": "Text", "default": "Out the door same day, tracked end to end." }
+      ]
+    }
+  ],
+  "presets": [
+    {
+      "name": "Value props",
+      "blocks": [
+        { "type": "item", "settings": { "title": "Fast dispatch", "text": "Out the door same day, tracked end to end." } },
+        { "type": "item", "settings": { "title": "Secure checkout", "text": "Encrypted payments you can trust." } },
+        { "type": "item", "settings": { "title": "30-day returns", "text": "Wrong spec? Send it back, no argument." } }
+      ]
+    }
+  ]
+}
+{% endschema %}

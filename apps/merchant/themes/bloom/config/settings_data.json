@@ -1,0 +1,20 @@
+{
+  "current": {
+    "logo": "",
+    "logo_asset": "",
+    "favicon": "",
+    "logo_width": 140,
+    "color_brand": "#F472B6",
+    "color_accent": "#8B5CF6",
+    "color_text": "#2E1A47",
+    "color_bg": "#FFFCFD",
+    "heading_font": "poppins_n7",
+    "body_font": "poppins_n4",
+    "corner_radius": 20,
+    "hero_heading": "Good things, picked with love",
+    "hero_subheading": "Colourful everyday finds, chosen by hand and shipped with care.",
+    "hero_cta": "Start shopping",
+    "hero_image": "",
+    "footer_text": "Powered by EcomStrait"
+  }
+}

@@ -1,0 +1,14 @@
+<div class="container section">
+  <p class="eyebrow">Browse</p>
+  <h1 class="section-title">Collections</h1>
+  <div class="grid grid-collections">
+    {%- for collection in collections -%}
+      <a href="{{ collection.url }}" class="collection-card" style="border-radius:var(--radius)">
+        {%- if collection.featured_image -%}
+          <img src="{{ collection.featured_image | image_url: width: 800 }}" alt="{{ collection.title | escape }}" loading="lazy" width="800" height="560">
+        {%- endif -%}
+        <span class="collection-card__title">{{ collection.title }}</span>
+      </a>
+    {%- endfor -%}
+  </div>
+</div>

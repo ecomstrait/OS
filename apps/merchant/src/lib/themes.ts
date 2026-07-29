@@ -1,4 +1,9 @@
 import auroraFiles from "@/themes/generated/aurora.json";
+import noirFiles from "@/themes/generated/noir.json";
+import bloomFiles from "@/themes/generated/bloom.json";
+import coveFiles from "@/themes/generated/cove.json";
+import forgeFiles from "@/themes/generated/forge.json";
+import marbleFiles from "@/themes/generated/marble.json";
 
 /**
  * Registry of Liquid themes we upload to Shopify (Path 2 · shopify_liquid_theme).
@@ -20,6 +25,41 @@ export const LIQUID_THEMES: Record<string, LiquidTheme> = {
     niche: "General / Fashion",
     styleId: "aurora",
     files: auroraFiles as Record<string, string>,
+  },
+  noir: {
+    id: "noir",
+    name: "Noir — EcomStrait",
+    niche: "Luxury / Jewellery / Apparel",
+    styleId: "noir",
+    files: noirFiles as Record<string, string>,
+  },
+  bloom: {
+    id: "bloom",
+    name: "Bloom — EcomStrait",
+    niche: "Lifestyle / Kids / Beauty",
+    styleId: "bloom",
+    files: bloomFiles as Record<string, string>,
+  },
+  cove: {
+    id: "cove",
+    name: "Cove — EcomStrait",
+    niche: "Home / Wellness / Editorial",
+    styleId: "cove",
+    files: coveFiles as Record<string, string>,
+  },
+  forge: {
+    id: "forge",
+    name: "Forge — EcomStrait",
+    niche: "Tools / Outdoor / Auto",
+    styleId: "forge",
+    files: forgeFiles as Record<string, string>,
+  },
+  marble: {
+    id: "marble",
+    name: "Marble — EcomStrait",
+    niche: "Premium / Homeware / Accessories",
+    styleId: "marble",
+    files: marbleFiles as Record<string, string>,
   },
 };
 

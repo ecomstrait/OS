@@ -1,0 +1,10 @@
+{
+  "general": {
+    "search": { "placeholder": "Search products", "submit": "Search" },
+    "cart": { "title": "Your cart", "empty": "Your cart is empty", "subtotal": "Subtotal", "checkout": "Checkout", "update": "Update" },
+    "404": { "title": "Page not found" }
+  },
+  "products": {
+    "product": { "add_to_cart": "Add to cart", "sold_out": "Sold out", "from_price": "From" }
+  }
+}
