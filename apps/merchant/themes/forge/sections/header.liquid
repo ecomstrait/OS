@@ -1,6 +1,6 @@
 <header class="site-header">
   <div class="container site-header__inner">
-    <a href="/" class="site-header__logo">
+    <a href="{{ routes.root_url }}" class="site-header__logo">
       {%- if settings.logo_asset != blank -%}
         <img src="{{ settings.logo_asset | asset_url }}" alt="{{ shop.name | escape }}" style="width:{{ settings.logo_width }}px" width="{{ settings.logo_width }}" height="40" loading="eager">
       {%- elsif settings.logo != blank -%}
@@ -14,7 +14,7 @@
       {%- for link in linklists.main-menu.links -%}
         <a href="{{ link.url }}" class="site-nav__link{% if link.active %} is-active{% endif %}">{{ link.title }}</a>
       {%- else -%}
-        <a href="/collections/all" class="site-nav__link">Shop</a>
+        <a href="{{ routes.all_products_collection_url }}" class="site-nav__link">Shop</a>
       {%- endfor -%}
     </nav>
 

@@ -3,7 +3,7 @@
   <span class="rule-center" aria-hidden="true"></span>
   {%- if cart.item_count == 0 -%}
     <p class="muted" style="text-align:center">Your cart is empty.</p>
-    <p style="text-align:center"><a href="/collections/all" class="btn btn-primary">Continue shopping</a></p>
+    <p style="text-align:center"><a href="{{ routes.all_products_collection_url }}" class="btn btn-primary">Continue shopping</a></p>
   {%- else -%}
     <form action="{{ routes.cart_url }}" method="post" novalidate>
       <div class="cart-lines">
