@@ -2,15 +2,22 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // "native" for local dev, the RHEL target for Vercel's Node runtime.
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 // Note that some adapters may set a maximum length for the String type by default, please ensure your strings are long
 // enough when changing adapters.
 // See https://www.prisma.io/docs/orm/reference/prisma-schema-reference#string for more information
+// Sessions live in Postgres (Supabase) — Vercel's filesystem is ephemeral, so a
+// SQLite file would lose every offline access token on each deploy/cold start.
+// DATABASE_URL  → pooled connection (pgBouncer, port 6543) used at runtime.
+// DIRECT_URL    → direct connection (port 5432) used by `prisma migrate`.
 datasource db {
-  provider = "sqlite"
-  url      = "file:dev.sqlite"
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model Session {
