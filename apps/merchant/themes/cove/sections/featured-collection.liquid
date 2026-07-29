@@ -5,7 +5,7 @@
         <p class="eyebrow">Selected</p>
         <h2 class="section-title">{{ section.settings.heading }}</h2>
       </div>
-      <a href="/collections/all" class="link-more">View all &rarr;</a>
+      <a href="{{ routes.all_products_collection_url }}" class="link-more">View all &rarr;</a>
     </div>
 
     {%- assign collection = collections[section.settings.collection] -%}
