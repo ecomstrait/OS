@@ -1,48 +1,33 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { ShoppingBag, Plus, Minus, Loader2, ImageOff, X } from "lucide-react";
+import { useState } from "react";
+import { ShoppingBag, Plus, Minus, Loader2, ImageOff, X, Search, Trash2 } from "lucide-react";
 import type { Storefront } from "@/lib/storefront";
-import { checkoutStore } from "@/lib/storefront-actions";
+import type { ApiProduct } from "@/lib/storefront-api";
+import { useStorefrontCart, useStorefrontProducts } from "@/components/storefront/use-storefront";
 
-export function StorefrontView({ store }: { store: Storefront }) {
-  const [cart, setCart] = useState<Record<string, number>>({});
+export function StorefrontView({
+  store,
+  initialProducts,
+  initialTotal,
+}: {
+  store: Storefront;
+  initialProducts: ApiProduct[];
+  initialTotal: number;
+}) {
   const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { cart, busy, error, add, setQuantity, remove, checkout } = useStorefrontCart(store.id);
+  const { products, total, loading, search, loadMore, hasMore } = useStorefrontProducts(
+    store.id,
+    initialProducts,
+    initialTotal,
+  );
+  const [term, setTerm] = useState("");
 
   const grad = `linear-gradient(135deg, ${store.plan.brandColors?.[0] ?? "#0f172a"}, ${store.plan.brandColors?.[1] ?? "#10b981"})`;
 
-  const lines = useMemo(
-    () => Object.entries(cart).filter(([, q]) => q > 0).map(([productId, quantity]) => ({ productId, quantity })),
-    [cart],
-  );
-  const count = lines.reduce((s, l) => s + l.quantity, 0);
-  const total = useMemo(
-    () => lines.reduce((s, l) => s + (store.products.find((p) => p.id === l.productId)?.price ?? 0) * l.quantity, 0),
-    [lines, store.products],
-  );
-
-  function add(id: string, d: number) {
-    setCart((c) => ({ ...c, [id]: Math.max(0, (c[id] ?? 0) + d) }));
-  }
-
-  async function checkout() {
-    if (!lines.length) return;
-    setLoading(true);
-    setError(null);
-    const res = await checkoutStore(store.id, lines);
-    if (res.error) {
-      setError(res.error);
-      setLoading(false);
-    } else if (res.url) {
-      window.location.href = res.url;
-    }
-  }
-
   return (
     <div className="min-h-screen bg-white">
-      {/* Header */}
       <header className="sticky top-0 z-20 flex items-center justify-between border-b border-ink-100 bg-white/90 px-5 py-3 backdrop-blur">
         <div className="flex items-center gap-2">
           {store.logoUrl ? (
@@ -52,54 +37,120 @@ export function StorefrontView({ store }: { store: Storefront }) {
             <span className="text-lg font-bold text-ink-950">{store.name}</span>
           )}
         </div>
-        <button onClick={() => setOpen(true)} className="relative grid h-9 w-9 place-items-center rounded-lg hover:bg-ink-100">
+        <button
+          onClick={() => setOpen(true)}
+          className="relative grid h-9 w-9 place-items-center rounded-lg hover:bg-ink-100"
+          aria-label={`Cart, ${cart.itemCount} item${cart.itemCount === 1 ? "" : "s"}`}
+        >
           <ShoppingBag className="h-5 w-5 text-ink-700" />
-          {count > 0 && (
-            <span className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-brand-500 px-1 text-[10px] font-bold text-white">{count}</span>
+          {cart.itemCount > 0 && (
+            <span className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-brand-500 px-1 text-[10px] font-bold text-white">
+              {cart.itemCount}
+            </span>
           )}
         </button>
       </header>
 
-      {/* Hero */}
       <section className="px-6 py-16 text-center text-white" style={{ background: grad }}>
         <h1 className="text-3xl font-bold sm:text-4xl">{store.plan.heroHeadline}</h1>
         <p className="mx-auto mt-3 max-w-xl text-white/85">{store.plan.heroSub}</p>
       </section>
 
-      {/* Products */}
       <section className="mx-auto max-w-5xl px-5 py-10">
         {store.plan.collections?.length ? (
           <div className="mb-6 flex flex-wrap justify-center gap-2">
             {store.plan.collections.map((c) => (
-              <span key={c} className="rounded-full bg-ink-100 px-3 py-1 text-xs font-medium text-ink-600">{c}</span>
+              <span key={c} className="rounded-full bg-ink-100 px-3 py-1 text-xs font-medium text-ink-600">
+                {c}
+              </span>
             ))}
           </div>
         ) : null}
 
-        {store.products.length === 0 ? (
-          <p className="py-10 text-center text-sm text-ink-400">This store has no products yet.</p>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            search(term);
+          }}
+          className="mx-auto mb-8 flex max-w-md items-center gap-2 rounded-full border border-ink-200 px-4 py-1.5"
+        >
+          <Search className="h-4 w-4 shrink-0 text-ink-400" />
+          <input
+            value={term}
+            onChange={(e) => setTerm(e.target.value)}
+            placeholder="Search products…"
+            aria-label="Search products"
+            className="min-w-0 flex-1 bg-transparent py-1.5 text-sm outline-none placeholder:text-ink-400"
+          />
+          {term && (
+            <button
+              type="button"
+              onClick={() => {
+                setTerm("");
+                search("");
+              }}
+              aria-label="Clear search"
+              className="text-ink-400 hover:text-ink-700"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </form>
+
+        {products.length === 0 ? (
+          <p className="py-10 text-center text-sm text-ink-400">
+            {loading ? "Loading…" : "No products found."}
+          </p>
         ) : (
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {store.products.map((p) => (
-              <div key={p.id} className="flex flex-col overflow-hidden rounded-2xl border border-ink-100">
-                <div className="aspect-square bg-ink-50">
-                  {p.image ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={p.image} alt={p.title} className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="grid h-full w-full place-items-center text-ink-300"><ImageOff className="h-8 w-8" /></div>
-                  )}
+          <>
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {products.map((p) => (
+                <div key={p.id} className="flex flex-col overflow-hidden rounded-2xl border border-ink-100">
+                  <div className="relative aspect-square shrink-0 overflow-hidden bg-ink-50">
+                    {p.image ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={p.image} alt={p.title} className="absolute inset-0 h-full w-full object-cover" />
+                    ) : (
+                      <div className="grid h-full w-full place-items-center text-ink-300">
+                        <ImageOff className="h-8 w-8" />
+                      </div>
+                    )}
+                    {!p.inStock && (
+                      <span className="absolute left-3 top-3 rounded-full bg-ink-950/85 px-2.5 py-1 text-[11px] font-semibold text-white">
+                        Sold out
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-1 flex-col gap-1 p-4">
+                    <p className="line-clamp-2 text-sm font-semibold text-ink-950">{p.title}</p>
+                    <p className="text-sm font-bold text-ink-900">
+                      {p.price != null ? `$${p.price}` : "—"}
+                    </p>
+                    <button
+                      onClick={() => add(p.id, 1)}
+                      disabled={busy || !p.inStock}
+                      className="mt-auto inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-brand-500 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-50"
+                    >
+                      <Plus className="h-4 w-4" /> {p.inStock ? "Add to cart" : "Sold out"}
+                    </button>
+                  </div>
                 </div>
-                <div className="flex flex-1 flex-col gap-1 p-4">
-                  <p className="line-clamp-1 text-sm font-semibold text-ink-950">{p.title}</p>
-                  <p className="text-sm font-bold text-ink-900">{p.price != null ? `$${p.price}` : "—"}</p>
-                  <button onClick={() => add(p.id, 1)} className="mt-2 inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-brand-500 text-sm font-semibold text-white hover:bg-brand-600">
-                    <Plus className="h-4 w-4" /> Add to cart
-                  </button>
-                </div>
+              ))}
+            </div>
+
+            {hasMore && (
+              <div className="mt-8 text-center">
+                <button
+                  onClick={loadMore}
+                  disabled={loading}
+                  className="inline-flex h-10 items-center gap-2 rounded-xl border border-ink-200 px-5 text-sm font-semibold text-ink-700 hover:bg-ink-50 disabled:opacity-50"
+                >
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                  Load more ({products.length} of {total})
+                </button>
               </div>
-            ))}
-          </div>
+            )}
+          </>
         )}
 
         <div className="mt-12 border-t border-ink-100 pt-8 text-center">
@@ -111,57 +162,93 @@ export function StorefrontView({ store }: { store: Storefront }) {
         {store.name} · Powered by EcomStrait
       </footer>
 
-      {/* Cart drawer */}
       {open && (
         <div className="fixed inset-0 z-40">
           <div className="absolute inset-0 bg-ink-950/40" onClick={() => setOpen(false)} />
           <div className="absolute right-0 top-0 flex h-full w-full max-w-sm flex-col bg-white shadow-2xl">
             <div className="flex items-center justify-between border-b border-ink-100 px-5 py-4">
               <p className="text-base font-bold text-ink-950">Your cart</p>
-              <button onClick={() => setOpen(false)} aria-label="Close"><X className="h-5 w-5 text-ink-500" /></button>
+              <button onClick={() => setOpen(false)} aria-label="Close">
+                <X className="h-5 w-5 text-ink-500" />
+              </button>
             </div>
+
             <div className="flex-1 overflow-y-auto p-5">
-              {lines.length === 0 ? (
+              {/* The server drops lines that went unavailable — say so rather
+                  than letting them vanish silently. */}
+              {cart.removed.length > 0 && (
+                <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  {cart.removed.length} item{cart.removed.length === 1 ? " was" : "s were"} removed —
+                  no longer available.
+                </p>
+              )}
+              {cart.adjusted.length > 0 && (
+                <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  Quantities reduced to the stock on hand.
+                </p>
+              )}
+
+              {cart.lines.length === 0 ? (
                 <p className="text-sm text-ink-400">Your cart is empty.</p>
               ) : (
                 <ul className="flex flex-col gap-4">
-                  {lines.map((l) => {
-                    const p = store.products.find((x) => x.id === l.productId)!;
-                    return (
-                      <li key={l.productId} className="flex items-center gap-3">
-                        <span className="h-12 w-12 overflow-hidden rounded-lg bg-ink-50">
-                          {p.image ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={p.image} alt="" className="h-full w-full object-cover" />
-                          ) : null}
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <p className="line-clamp-1 text-sm font-medium text-ink-900">{p.title}</p>
-                          <p className="text-xs text-ink-500">${p.price ?? 0}</p>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <button onClick={() => add(l.productId, -1)} className="grid h-7 w-7 place-items-center rounded-md border border-ink-200 text-ink-500"><Minus className="h-3.5 w-3.5" /></button>
-                          <span className="w-6 text-center text-sm">{l.quantity}</span>
-                          <button onClick={() => add(l.productId, 1)} className="grid h-7 w-7 place-items-center rounded-md border border-ink-200 text-ink-500"><Plus className="h-3.5 w-3.5" /></button>
-                        </div>
-                      </li>
-                    );
-                  })}
+                  {cart.lines.map((l) => (
+                    <li key={l.productId} className="flex items-center gap-3">
+                      <span className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-ink-50">
+                        {l.image ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={l.image} alt="" className="h-full w-full object-cover" />
+                        ) : null}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="line-clamp-1 text-sm font-medium text-ink-900">{l.title}</p>
+                        <p className="text-xs text-ink-500">${l.unitPrice.toFixed(2)}</p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => setQuantity(l.productId, l.quantity - 1)}
+                          disabled={busy}
+                          aria-label="Decrease quantity"
+                          className="grid h-7 w-7 place-items-center rounded-md border border-ink-200 text-ink-500 disabled:opacity-50"
+                        >
+                          <Minus className="h-3.5 w-3.5" />
+                        </button>
+                        <span className="w-6 text-center text-sm">{l.quantity}</span>
+                        <button
+                          onClick={() => setQuantity(l.productId, l.quantity + 1)}
+                          disabled={busy || l.quantity >= l.available}
+                          aria-label="Increase quantity"
+                          className="grid h-7 w-7 place-items-center rounded-md border border-ink-200 text-ink-500 disabled:opacity-40"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={() => remove(l.productId)}
+                          disabled={busy}
+                          aria-label={`Remove ${l.title}`}
+                          className="ml-1 grid h-7 w-7 place-items-center rounded-md text-ink-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </li>
+                  ))}
                 </ul>
               )}
             </div>
+
             <div className="border-t border-ink-100 p-5">
               <div className="mb-3 flex items-center justify-between text-sm">
                 <span className="text-ink-500">Subtotal</span>
-                <span className="font-bold text-ink-950">${total.toFixed(2)}</span>
+                <span className="font-bold text-ink-950">${cart.subtotal.toFixed(2)}</span>
               </div>
               {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
               <button
                 onClick={checkout}
-                disabled={loading || lines.length === 0}
+                disabled={busy || cart.lines.length === 0}
                 className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-brand-500 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-50"
               >
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Checkout"}
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Checkout"}
               </button>
             </div>
           </div>
