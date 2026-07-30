@@ -1,15 +1,40 @@
-import { shopifyGraphql } from "@/lib/shopify";
+import { shopifyGraphql, SHOPIFY_API_VERSION } from "@/lib/shopify";
 
 /** Theme settings we override per store (written to config/settings_data.json). */
 export type ThemeSettings = Record<string, string | number>;
 
-const THEME_CREATE = `
-mutation themeCreate($name: String!, $source: URL!) {
-  themeCreate(name: $name, source: $source) {
-    theme { id name }
-    userErrors { field message }
+/**
+ * Create an EMPTY theme, then push the files in.
+ *
+ * The obvious route — `themeCreate(source: <zip url>)` — is a dead end: Shopify
+ * refuses external theme sources with "Src is empty", and does so even for its
+ * own Dawn zip, so it isn't about our URL being unreachable. Creating the theme
+ * empty over REST and upserting the files has the happy side effect of removing
+ * the public-URL dependency entirely, so provisioning also works from localhost.
+ */
+async function createEmptyTheme(
+  shop: string,
+  token: string,
+  name: string,
+): Promise<{ gid: string } | { error: string }> {
+  const res = await fetch(`https://${shop}/admin/api/${SHOPIFY_API_VERSION}/themes.json`, {
+    method: "POST",
+    headers: { "X-Shopify-Access-Token": token, "Content-Type": "application/json" },
+    body: JSON.stringify({ theme: { name, role: "unpublished" } }),
+  });
+  const body = (await res.json().catch(() => ({}))) as {
+    theme?: { id?: number };
+    errors?: unknown;
+  };
+  const id = body.theme?.id;
+  if (!id) {
+    return { error: `couldn't create the theme (HTTP ${res.status}): ${JSON.stringify(body.errors ?? body).slice(0, 200)}` };
   }
-}`;
+  return { gid: `gid://shopify/OnlineStoreTheme/${id}` };
+}
+
+/** themeFilesUpsert accepts a batch; keep batches modest for bigger themes. */
+const FILE_BATCH = 20;
 
 const THEME_STATUS = `
 query themeStatus($id: ID!) {
@@ -64,24 +89,25 @@ export async function pushThemeSettings(
   return { ok: true };
 }
 
-type CreateResp = {
-  data?: { themeCreate?: { theme?: { id: string } | null; userErrors?: { message: string }[] } };
-};
+type GraphqlError = { message: string };
 type StatusResp = { data?: { theme?: { processing?: boolean } | null } };
 type UpsertResp = { data?: { themeFilesUpsert?: { userErrors?: { message: string }[] } } };
 type PublishResp = { data?: { themePublish?: { userErrors?: { message: string }[] } } };
 
 /**
- * Upload our Liquid theme to a Shopify store, apply the store's brand settings,
- * and publish it. `sourceUrl` must be a publicly reachable zip (our /api/themes
- * endpoint). Best-effort processing wait before publish. Requires write_themes.
+ * Install our Liquid theme on a Shopify store, apply the store's brand
+ * settings, and publish it.
+ *
+ * Takes the theme's files directly rather than a zip URL — see
+ * createEmptyTheme for why the hosted-zip route doesn't work.
  */
 export async function uploadAndPublishTheme(
   shop: string,
   token: string,
   opts: {
     themeName: string;
-    sourceUrl: string;
+    /** filename -> contents, from the bundled theme package. */
+    files: Record<string, string>;
     settings: ThemeSettings;
     /** Merchant logo — uploaded into the theme's assets/ and shown in the header. */
     logo?: { url: string; filename: string };
@@ -90,22 +116,38 @@ export async function uploadAndPublishTheme(
 ): Promise<{ ok: true; themeGid: string } | { ok: false; error: string }> {
   const gql = shopifyGraphql(shop, token);
 
-  // 1. Create the theme from the hosted zip.
-  const created = await gql<CreateResp>(THEME_CREATE, { name: opts.themeName, source: opts.sourceUrl });
-  const createErrs = created.data?.themeCreate?.userErrors ?? [];
-  const gid = created.data?.themeCreate?.theme?.id;
-  if (!gid) {
-    return { ok: false, error: createErrs.map((e) => e.message).join("; ") || "themeCreate failed" };
+  const entries = Object.entries(opts.files);
+  if (!entries.length) return { ok: false, error: "that theme package has no files" };
+
+  // 1. Create an empty theme to push into.
+  const created = await createEmptyTheme(shop, token, opts.themeName);
+  if ("error" in created) return { ok: false, error: created.error };
+  const gid = created.gid;
+
+  // 2. Push the theme files in batches.
+  for (let i = 0; i < entries.length; i += FILE_BATCH) {
+    const batch = entries.slice(i, i + FILE_BATCH).map(([filename, value]) => ({
+      filename,
+      body: { type: "TEXT", value },
+    }));
+    const res = await gql<UpsertResp & { errors?: GraphqlError[] }>(THEME_FILES_UPSERT, {
+      themeId: gid,
+      files: batch,
+    });
+    const errs = [
+      ...(res.data?.themeFilesUpsert?.userErrors ?? []).map((e) => e.message),
+      ...(res.errors ?? []).map((e) => e.message),
+    ];
+    if (errs.length) return { ok: false, error: `theme files rejected: ${errs.join("; ")}` };
   }
 
-  // 2. Wait for Shopify to finish unpacking (best-effort).
+  // 3. Wait for Shopify to finish processing, then apply brand settings + logo.
   for (let i = 0; i < 8; i++) {
     const st = await gql<StatusResp>(THEME_STATUS, { id: gid });
     if (st.data?.theme && !st.data.theme.processing) break;
     await sleep(1500);
   }
 
-  // 3. Push the brand settings + logo asset onto the freshly-created theme.
   const applied = await pushThemeSettings(shop, token, gid, opts.settings, opts.logo);
   if (!applied.ok) return applied;
 

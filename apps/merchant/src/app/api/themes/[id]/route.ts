@@ -9,7 +9,10 @@ export const runtime = "nodejs";
  * public host in dev — a tunnel — not localhost).
  */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+  const { id: raw } = await params;
+  // Shopify's themeCreate rejects a source URL that doesn't look like a zip
+  // ("Src is empty"), so the path is served as /api/themes/<id>.zip too.
+  const id = raw.replace(/\.zip$/i, "");
   const files = getThemeFiles(id);
   if (!files) return new Response("Theme not found", { status: 404 });
 
