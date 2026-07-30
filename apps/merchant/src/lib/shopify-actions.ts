@@ -11,7 +11,6 @@ import {
   logoAssetFrom,
 } from "@/lib/shopify-theme";
 import { liquidThemeForStyle } from "@/lib/themes";
-import { merchantUrl } from "@/lib/stripe";
 
 /**
  * Provision a Shopify-path store: claim an available store from the pool,
@@ -118,7 +117,7 @@ export async function provisionShopifyStore(storeId: string): Promise<{ error?: 
     try {
       themeRes = await uploadAndPublishTheme(shopRow.shop_domain, shopRow.access_token, {
         themeName: liquid.name,
-        sourceUrl: `${merchantUrl()}/api/themes/${liquid.id}`,
+        files: liquid.files,
         settings: settingsFromPlan(plan),
         logo: logoAssetFrom(store.logo_url),
       });
