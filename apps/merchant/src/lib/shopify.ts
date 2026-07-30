@@ -59,12 +59,49 @@ mutation productVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsB
   }
 }`;
 
+const PUBLICATIONS = `{ publications(first: 25) { nodes { id name } } }`;
+
+const PUBLISHABLE_PUBLISH = `
+mutation publishablePublish($id: ID!, $input: [PublicationInput!]!) {
+  publishablePublish(id: $id, input: $input) {
+    userErrors { field message }
+  }
+}`;
+
+/**
+ * The Online Store publication id, or null when read_publications isn't granted.
+ *
+ * A product created through the API is NOT on any sales channel by default —
+ * `publishedAt` stays null and the storefront never shows it, even though it
+ * looks fine in admin. Publishing to this channel is what makes it visible.
+ */
+export async function fetchOnlineStorePublicationId(
+  shop: string,
+  token: string,
+): Promise<string | null> {
+  try {
+    const res = await shopifyGraphql(shop, token)<{
+      data?: { publications?: { nodes?: { id: string; name: string }[] } };
+    }>(PUBLICATIONS);
+    const nodes = res.data?.publications?.nodes ?? [];
+    return nodes.find((n) => /online store/i.test(n.name))?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** Seeding a quantity needs a location, which needs the read_locations scope. */
 const PRIMARY_LOCATION = `{ locations(first: 1, includeInactive: false) { nodes { id } } }`;
 
-const INVENTORY_SET = `
+/**
+ * Shopify requires a field-level `@idempotent` directive on this mutation (it
+ * rejects the call outright without one), and the key has to be unique per
+ * call — so the document is built per invocation rather than being a constant.
+ * The directive is only valid on the field, not the operation.
+ */
+const inventorySetDoc = () => `
 mutation inventorySetQuantities($input: InventorySetQuantitiesInput!) {
-  inventorySetQuantities(input: $input) {
+  inventorySetQuantities(input: $input) @idempotent(key: "${crypto.randomUUID()}") {
     inventoryAdjustmentGroup { createdAt }
     userErrors { field message }
   }
@@ -105,6 +142,10 @@ type VariantsResp = {
   };
   errors?: GraphqlError[];
 };
+type PublishResp = {
+  data?: { publishablePublish?: { userErrors?: { message: string }[] } };
+  errors?: GraphqlError[];
+};
 type InventoryResp = {
   data?: { inventorySetQuantities?: { userErrors?: { message: string }[] } };
   errors?: GraphqlError[];
@@ -129,12 +170,19 @@ export async function pushProductsToShopify(
   products: PushProduct[],
 ): Promise<{ created: number; errors: string[]; ids: Map<string, string> }> {
   const gql = shopifyGraphql(shop, token);
-  // One lookup for the whole batch. Null when read_locations isn't granted.
-  const locationId = await fetchPrimaryLocation(shop, token);
   let created = 0;
   const errors: string[] = [];
   /** our product id (sent as the SKU) -> the Shopify product gid it became. */
   const ids = new Map<string, string>();
+
+  // One lookup each for the whole batch. Null when the scope isn't granted.
+  const locationId = await fetchPrimaryLocation(shop, token);
+  const publicationId = await fetchOnlineStorePublicationId(shop, token);
+  if (!publicationId) {
+    errors.push(
+      "Created, but not published to the Online Store — the app needs the read_publications/write_publications scopes (reinstall it). Products stay hidden from the storefront until then.",
+    );
+  }
 
   for (const p of products) {
     try {
@@ -154,6 +202,16 @@ export async function pushProductsToShopify(
       }
       created += 1;
       if (p.sku) ids.set(p.sku, product.id);
+
+      // Without this the product exists in admin but never reaches the storefront.
+      if (publicationId) {
+        const pub = await gql<PublishResp>(PUBLISHABLE_PUBLISH, {
+          id: product.id,
+          input: [{ publicationId }],
+        });
+        const pErrs = collectErrors(pub.data?.publishablePublish?.userErrors, pub.errors);
+        if (pErrs.length) errors.push(`${p.title} (publish): ${pErrs.join("; ")}`);
+      }
 
       // A product with no price is still a product — record the problem but
       // don't discard the product we just created.
@@ -181,7 +239,7 @@ export async function pushProductsToShopify(
         const inventoryItemId =
           vr.data?.productVariantsBulkUpdate?.productVariants?.[0]?.inventoryItem?.id;
         if (track && locationId && inventoryItemId) {
-          const iv = await gql<InventoryResp>(INVENTORY_SET, {
+          const iv = await gql<InventoryResp>(inventorySetDoc(), {
             input: {
               name: "available",
               reason: "correction",
@@ -190,6 +248,10 @@ export async function pushProductsToShopify(
                   inventoryItemId,
                   locationId,
                   quantity: Math.max(0, Math.trunc(p.inventory ?? 0)),
+                  // Optimistic-concurrency baseline. Schema marks it optional
+                  // but Shopify rejects `available` without it. This runs
+                  // immediately after productCreate, so the current value is 0.
+                  changeFromQuantity: 0,
                 },
               ],
             },

@@ -1,4 +1,6 @@
 import { createClient } from "@ecomstrait/auth/server";
+import { createAdminClient } from "@ecomstrait/db";
+import { productImage } from "@/lib/catalog";
 import type { ListingStatus } from "@ecomstrait/db/types";
 
 export type StoreOption = { id: string; name: string };
@@ -50,4 +52,86 @@ export async function getListingsFor(productIds: string[]): Promise<ListingMap> 
     (map[row.product_id] ??= {})[row.store_id] = row.status;
   }
   return map;
+}
+
+export type MerchantListing = {
+  productId: string;
+  title: string;
+  image: string | null;
+  price: number | null;
+  supplierName: string;
+  storeId: string;
+  storeName: string;
+  status: ListingStatus;
+  declineReason: string | null;
+};
+
+/**
+ * Everything this merchant has listed, optionally narrowed to one store.
+ *
+ * Products and supplier names live across tenants, so those reads go through
+ * the admin client — but the set of store ids comes from the caller's own
+ * stores first, which is what scopes the result.
+ */
+export async function getMerchantListings(storeId?: string): Promise<MerchantListing[]> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data: stores } = await supabase
+    .from("stores")
+    .select("id, name")
+    .eq("user_id", user.id);
+  const mine = (stores ?? []).filter((s) => !storeId || s.id === storeId);
+  if (!mine.length) return [];
+  const storeNames = new Map(mine.map((s) => [s.id, s.name ?? "Untitled store"]));
+
+  const { data: rows } = await supabase
+    .from("store_products")
+    .select("store_id, product_id, price, status, decline_reason, created_at")
+    .in(
+      "store_id",
+      mine.map((s) => s.id),
+    )
+    .order("created_at", { ascending: false });
+  if (!rows?.length) return [];
+
+  const admin = createAdminClient();
+  if (!admin) return [];
+  const productIds = [...new Set(rows.map((r) => r.product_id))];
+  const { data: products } = await admin
+    .from("products")
+    .select("id, title, images, retail_price, supplier_id")
+    .in("id", productIds);
+  const byId = new Map((products ?? []).map((p) => [p.id, p]));
+
+  const supplierIds = [...new Set((products ?? []).map((p) => p.supplier_id))];
+  const supplierNames = new Map<string, string>();
+  if (supplierIds.length) {
+    const { data: sups } = await admin
+      .from("suppliers")
+      .select("id, business_name")
+      .in("id", supplierIds);
+    (sups ?? []).forEach((s) => supplierNames.set(s.id, s.business_name ?? "Supplier"));
+  }
+
+  return rows.flatMap((r) => {
+    const p = byId.get(r.product_id);
+    if (!p) return [];
+    return [
+      {
+        productId: r.product_id,
+        title: p.title,
+        image: productImage(p.images?.[0]),
+        price: r.price ?? p.retail_price,
+        supplierName: supplierNames.get(p.supplier_id) ?? "Supplier",
+        storeId: r.store_id,
+        storeName: storeNames.get(r.store_id) ?? "Untitled store",
+        status: r.status,
+        declineReason: r.decline_reason,
+      },
+    ];
+  });
 }
