@@ -10,9 +10,35 @@ export type CatalogProduct = {
   wholesale_price: number | null;
   supplier_id: string;
   supplier_name: string;
+  /** Units a merchant could actually sell today. */
+  available: number;
+  /** Supplier's platform quality score, 0-100, when scored. */
+  supplier_score: number | null;
 };
 
-const SELECT = "id, title, category, images, retail_price, wholesale_price, supplier_id";
+/** Per-unit economics a merchant judges a product on. */
+export type ProductEconomics = {
+  cost: number | null;
+  retail: number | null;
+  profit: number | null;
+  marginPct: number | null;
+};
+
+export function economicsFor(p: {
+  retail_price: number | null;
+  wholesale_price: number | null;
+}): ProductEconomics {
+  const retail = p.retail_price;
+  const cost = p.wholesale_price;
+  if (retail == null || cost == null || retail <= 0) {
+    return { cost, retail, profit: null, marginPct: null };
+  }
+  const profit = Math.round((retail - cost) * 100) / 100;
+  return { cost, retail, profit, marginPct: Math.round((profit / retail) * 100) };
+}
+
+const SELECT =
+  "id, title, category, images, retail_price, wholesale_price, supplier_id, stock, reserved";
 
 export function productImage(path?: string | null): string | null {
   if (!path) return null;
@@ -20,17 +46,34 @@ export function productImage(path?: string | null): string | null {
   return base ? `${base}/storage/v1/object/public/product-images/${path}` : null;
 }
 
+type RawProduct = Omit<CatalogProduct, "supplier_name" | "available" | "supplier_score"> & {
+  stock?: number | null;
+  reserved?: number | null;
+};
+
 async function withSupplierNames(
   admin: NonNullable<ReturnType<typeof createAdminClient>>,
-  rows: Omit<CatalogProduct, "supplier_name">[],
+  rows: RawProduct[],
 ): Promise<CatalogProduct[]> {
   const supIds = [...new Set(rows.map((p) => p.supplier_id))];
   const names = new Map<string, string>();
+  const scores = new Map<string, number | null>();
   if (supIds.length) {
-    const { data } = await admin.from("suppliers").select("id, business_name").in("id", supIds);
-    (data ?? []).forEach((s) => names.set(s.id, s.business_name ?? "Supplier"));
+    const { data } = await admin
+      .from("suppliers")
+      .select("id, business_name, quality_score")
+      .in("id", supIds);
+    (data ?? []).forEach((s) => {
+      names.set(s.id, s.business_name ?? "Supplier");
+      scores.set(s.id, s.quality_score);
+    });
   }
-  return rows.map((p) => ({ ...p, supplier_name: names.get(p.supplier_id) ?? "Supplier" }));
+  return rows.map((p) => ({
+    ...p,
+    supplier_name: names.get(p.supplier_id) ?? "Supplier",
+    supplier_score: scores.get(p.supplier_id) ?? null,
+    available: Math.max(0, (p.stock ?? 0) - (p.reserved ?? 0)),
+  }));
 }
 
 export type CatalogFilters = {
@@ -136,7 +179,7 @@ export async function autoSelectProducts(niche: string, limit = 8): Promise<Cata
     .split(/\s+/)
     .find((w) => w.length > 2);
 
-  let rows: Omit<CatalogProduct, "supplier_name">[] = [];
+  let rows: RawProduct[] = [];
   if (term) {
     const { data } = await admin
       .from("products")

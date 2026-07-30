@@ -3,12 +3,9 @@ import Link from "next/link";
 import { Store, Sparkles, Globe } from "lucide-react";
 import { createClient } from "@ecomstrait/auth/server";
 import type { StoreStatus, StoreType } from "@ecomstrait/db";
-import { ProvisionButton } from "@/components/stores/provision-button";
-import { ResyncButton } from "@/components/stores/resync-button";
-import { SyncProductsButton } from "@/components/stores/sync-products-button";
 import { StorePreview } from "@/components/stores/store-preview";
-import { DeleteStoreButton } from "@/components/stores/delete-store-button";
 import { MakeItYoursButton } from "@/components/stores/make-it-yours-button";
+import { StoreActions } from "@/components/stores/store-actions";
 
 export const metadata: Metadata = { title: "Stores" };
 
@@ -119,24 +116,6 @@ export default async function StoresPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  {s.type.startsWith("shopify") &&
-                    (!s.shopify_store_id ||
-                      (s.type === "shopify_liquid_theme" && !shop?.theme_id)) && (
-                      <ProvisionButton
-                        storeId={s.id}
-                        label={s.shopify_store_id ? "Retry provisioning" : undefined}
-                      />
-                    )}
-                  {s.shopify_store_id && <SyncProductsButton storeId={s.id} />}
-                  {s.type === "shopify_liquid_theme" && s.shopify_store_id && (
-                    <ResyncButton storeId={s.id} />
-                  )}
-                  <Link
-                    href={`/stores/${s.id}/edit`}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-2.5 py-1 text-xs font-semibold text-ink-700 transition hover:bg-ink-50"
-                  >
-                    <Sparkles className="h-3.5 w-3.5" /> Edit with EcomAI
-                  </Link>
                   {shop ? (
                     <StorePreview
                       url={`https://${shop.shop_domain}`}
@@ -154,7 +133,8 @@ export default async function StoresPage() {
                       </a>
                     )
                   )}
-                  {shop && (
+                  {/* Transfer state is a status, not an action — it stays on the row. */}
+                  {shop && (shop.status === "transferred" || shop.status === "waiting_for_transfer") && (
                     <MakeItYoursButton
                       storeId={s.id}
                       referralUrl={referralUrl}
@@ -165,10 +145,21 @@ export default async function StoresPage() {
                   <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_STYLE[s.status]}`}>
                     {s.status.replace(/_/g, " ")}
                   </span>
-                  <DeleteStoreButton
+                  <StoreActions
                     storeId={s.id}
                     storeName={s.name ?? "Untitled store"}
+                    needsProvision={
+                      s.type.startsWith("shopify") &&
+                      (!s.shopify_store_id ||
+                        (s.type === "shopify_liquid_theme" && !shop?.theme_id))
+                    }
+                    isLinked={Boolean(s.shopify_store_id)}
+                    hasShopify={Boolean(s.shopify_store_id)}
+                    isLiquidTheme={s.type === "shopify_liquid_theme"}
                     hasOrders={withOrders.has(s.id)}
+                    referralUrl={referralUrl}
+                    transferEmail={shop?.status === "waiting_for_transfer" ? shop.transfer_email : null}
+                    transferred={shop?.status === "transferred"}
                   />
                 </div>
               </div>
