@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@ecomstrait/auth/server";
 import { createAdminClient } from "@ecomstrait/db";
-import { pushProductsToShopify, fetchShopCatalog } from "@/lib/shopify";
+import { productImage } from "@/lib/catalog";
+import { pushProductsToShopify, fetchShopCatalog, backfillProductMedia } from "@/lib/shopify";
 import {
   uploadAndPublishTheme,
   pushThemeSettings,
@@ -71,7 +72,7 @@ export async function provisionShopifyStore(storeId: string): Promise<{ error?: 
     .eq("status", "approved");
   const ids = (sp ?? []).map((r) => r.product_id);
   const { data: prods } = ids.length
-    ? await admin.from("products").select("id, title, description, stock, reserved").in("id", ids)
+    ? await admin.from("products").select("id, title, description, stock, reserved, images").in("id", ids)
     : { data: [] };
   const priceMap = new Map((sp ?? []).map((r) => [r.product_id, r.price]));
   const pushList = (prods ?? []).map((p) => ({
@@ -80,6 +81,7 @@ export async function provisionShopifyStore(storeId: string): Promise<{ error?: 
     description: p.description ?? null,
     sku: p.id, // lets the order webhook map back to our product
     inventory: Math.max(0, (p.stock ?? 0) - (p.reserved ?? 0)),
+    images: (p.images ?? []).map((i: string) => productImage(i)).filter((u): u is string => Boolean(u)),
   }));
 
   /** Put a freshly-claimed shop back in the pool so a failure doesn't strand it. */
@@ -282,7 +284,7 @@ export async function syncProductsToShopify(
 
   const { data: prods } = await admin
     .from("products")
-    .select("id, title, description, stock, reserved")
+    .select("id, title, description, stock, reserved, images")
     .in("id", ids);
   const priceMap = new Map((sp ?? []).map((r) => [r.product_id, r.price]));
   const linkedMap = new Map((sp ?? []).map((r) => [r.product_id, r.shopify_product_id]));
@@ -316,9 +318,31 @@ export async function syncProductsToShopify(
       .eq("store_id", storeId)
       .eq("product_id", b.product_id);
   }
+  // Products pushed before media existed have none — add it rather than
+  // making the merchant delete and re-sync everything.
+  const needMedia = (prods ?? [])
+    .filter((p) => {
+      const linked = linkedMap.get(p.id) ?? catalog.skuToProductId.get(p.id);
+      return linked && catalog.withoutMedia.has(linked) && (p.images ?? []).length > 0;
+    })
+    .map((p) => ({
+      productId: (linkedMap.get(p.id) ?? catalog.skuToProductId.get(p.id)) as string,
+      title: p.title,
+      images: (p.images ?? []).map((i: string) => productImage(i)).filter((u): u is string => Boolean(u)),
+    }));
+  const media = needMedia.length
+    ? await backfillProductMedia(shopRow.shop_domain, shopRow.access_token, needMedia)
+    : { updated: 0, errors: [] };
+
   const skipped = (prods ?? []).length - pending.length;
   if (!pending.length) {
-    return { created: 0, skipped, note: `All ${skipped} approved product${skipped === 1 ? " is" : "s are"} already in Shopify.` };
+    return {
+      created: 0,
+      skipped,
+      note: media.updated
+        ? `All ${skipped} already in Shopify — added images to ${media.updated}.`
+        : `All ${skipped} approved product${skipped === 1 ? " is" : "s are"} already in Shopify.`,
+    };
   }
 
   const result = await pushProductsToShopify(
@@ -330,6 +354,7 @@ export async function syncProductsToShopify(
       description: p.description ?? null,
       sku: p.id,
       inventory: Math.max(0, (p.stock ?? 0) - (p.reserved ?? 0)),
+      images: (p.images ?? []).map((i: string) => productImage(i)).filter((u): u is string => Boolean(u)),
     })),
   );
 
@@ -358,6 +383,6 @@ export async function syncProductsToShopify(
   return {
     created: result.created,
     skipped,
-    note: `Added ${result.created} product${result.created === 1 ? "" : "s"}${skipped ? `, skipped ${skipped} already there` : ""}.`,
+    note: `Added ${result.created} product${result.created === 1 ? "" : "s"}${skipped ? `, skipped ${skipped} already there` : ""}${media.updated ? `, added images to ${media.updated}` : ""}.`,
   };
 }

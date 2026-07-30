@@ -32,7 +32,20 @@ type PushProduct = {
   sku?: string | null;
   /** Units the supplier has available; enables tracking and seeds the quantity. */
   inventory?: number | null;
+  /** Public image URLs. Shopify fetches these itself, asynchronously. */
+  images?: string[];
 };
+
+/** Shopify caps product media; more than this is noise on a storefront anyway. */
+const MAX_MEDIA = 10;
+
+function mediaInput(p: PushProduct) {
+  return (p.images ?? []).slice(0, MAX_MEDIA).map((url) => ({
+    originalSource: url,
+    mediaContentType: "IMAGE",
+    alt: p.title,
+  }));
+}
 
 /**
  * `productCreate` no longer accepts variants inline — `ProductInput.variants`
@@ -43,12 +56,53 @@ type PushProduct = {
  * products" into a shop that received none.
  */
 const PRODUCT_CREATE = `
-mutation productCreate($product: ProductCreateInput!) {
-  productCreate(product: $product) {
+mutation productCreate($product: ProductCreateInput!, $media: [CreateMediaInput!]) {
+  productCreate(product: $product, media: $media) {
     product { id variants(first: 1) { nodes { id } } }
     userErrors { field message }
   }
 }`;
+
+/** Attach images to a product that already exists (backfill path). */
+const PRODUCT_CREATE_MEDIA = `
+mutation productCreateMedia($productId: ID!, $media: [CreateMediaInput!]!) {
+  productCreateMedia(productId: $productId, media: $media) {
+    mediaUserErrors { field message }
+  }
+}`;
+
+type MediaResp = {
+  data?: { productCreateMedia?: { mediaUserErrors?: { message: string }[] } };
+  errors?: { message: string }[];
+};
+
+/**
+ * Add images to products that were pushed before media was wired up.
+ *
+ * Without this the only fix would be deleting every product and re-syncing.
+ */
+export async function backfillProductMedia(
+  shop: string,
+  token: string,
+  items: { productId: string; title: string; images: string[] }[],
+): Promise<{ updated: number; errors: string[] }> {
+  const gql = shopifyGraphql(shop, token);
+  let updated = 0;
+  const errors: string[] = [];
+  for (const it of items) {
+    const media = mediaInput({ title: it.title, price: null, images: it.images });
+    if (!media.length) continue;
+    try {
+      const res = await gql<MediaResp>(PRODUCT_CREATE_MEDIA, { productId: it.productId, media });
+      const errs = collectErrors(res.data?.productCreateMedia?.mediaUserErrors, res.errors);
+      if (errs.length) errors.push(`${it.title}: ${errs.join("; ")}`);
+      else updated += 1;
+    } catch (e) {
+      errors.push(`${it.title}: ${e instanceof Error ? e.message : "media push failed"}`);
+    }
+  }
+  return { updated, errors };
+}
 
 /** Price, SKU and inventory tracking land on the auto-created default variant. */
 const VARIANTS_UPDATE = `
@@ -192,6 +246,7 @@ export async function pushProductsToShopify(
           descriptionHtml: p.description ? `<p>${p.description}</p>` : undefined,
           status: "ACTIVE",
         },
+        media: mediaInput(p),
       });
 
       const createErrs = collectErrors(res.data?.productCreate?.userErrors, res.errors);
@@ -277,37 +332,52 @@ export async function pushProductsToShopify(
 export async function fetchShopCatalog(
   shop: string,
   token: string,
-): Promise<{ productIds: Set<string>; skuToProductId: Map<string, string> }> {
+): Promise<{
+  productIds: Set<string>;
+  skuToProductId: Map<string, string>;
+  /** Products in the shop with no images yet. */
+  withoutMedia: Set<string>;
+}> {
   const gql = shopifyGraphql(shop, token);
   const productIds = new Set<string>();
   const skuToProductId = new Map<string, string>();
+  const withoutMedia = new Set<string>();
   let cursor: string | null = null;
 
   // 250 is the page maximum; the loop is bounded so a pagination bug can't spin.
   for (let page = 0; page < 40; page++) {
     const res: {
       data?: {
-        productVariants?: {
-          nodes?: { sku: string | null; product?: { id: string } | null }[];
+        products?: {
+          nodes?: {
+            id: string;
+            mediaCount?: { count: number } | null;
+            variants?: { nodes?: { sku: string | null }[] };
+          }[];
           pageInfo?: { hasNextPage: boolean; endCursor: string | null };
         };
       };
     } = await gql(
       `query shopCatalog($cursor: String) {
-        productVariants(first: 250, after: $cursor) {
-          nodes { sku product { id } }
+        products(first: 100, after: $cursor) {
+          nodes {
+            id
+            mediaCount { count }
+            variants(first: 5) { nodes { sku } }
+          }
           pageInfo { hasNextPage endCursor }
         }
       }`,
       { cursor },
     );
-    const conn = res.data?.productVariants;
-    for (const v of conn?.nodes ?? []) {
-      if (v.product?.id) productIds.add(v.product.id);
-      if (v.sku && v.product?.id) skuToProductId.set(v.sku, v.product.id);
+    const conn = res.data?.products;
+    for (const p of conn?.nodes ?? []) {
+      productIds.add(p.id);
+      if ((p.mediaCount?.count ?? 0) === 0) withoutMedia.add(p.id);
+      for (const v of p.variants?.nodes ?? []) if (v.sku) skuToProductId.set(v.sku, p.id);
     }
     if (!conn?.pageInfo?.hasNextPage) break;
     cursor = conn.pageInfo.endCursor;
   }
-  return { productIds, skuToProductId };
+  return { productIds, skuToProductId, withoutMedia };
 }
