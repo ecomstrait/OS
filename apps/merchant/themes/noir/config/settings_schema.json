@@ -10,46 +10,130 @@
   {
     "name": "Brand",
     "settings": [
-      { "type": "image_picker", "id": "logo", "label": "Logo" },
-      { "type": "text", "id": "logo_asset", "label": "Logo asset filename", "info": "Uploaded by EcomStrait; leave blank to use the logo picker above." },
-      { "type": "image_picker", "id": "favicon", "label": "Favicon" },
-      { "type": "range", "id": "logo_width", "min": 80, "max": 240, "step": 10, "unit": "px", "label": "Logo width", "default": 140 }
+      {
+        "type": "text",
+        "id": "store_name",
+        "label": "Store name",
+        "info": "Shown in the header and footer. Set by EcomStrait; overrides the Shopify shop name."
+      },
+      {
+        "type": "image_picker",
+        "id": "logo",
+        "label": "Logo"
+      },
+      {
+        "type": "text",
+        "id": "logo_asset",
+        "label": "Logo asset filename",
+        "info": "Uploaded by EcomStrait; leave blank to use the logo picker above."
+      },
+      {
+        "type": "image_picker",
+        "id": "favicon",
+        "label": "Favicon"
+      },
+      {
+        "type": "range",
+        "id": "logo_width",
+        "min": 80,
+        "max": 240,
+        "step": 10,
+        "unit": "px",
+        "label": "Logo width",
+        "default": 140
+      }
     ]
   },
   {
     "name": "Colors",
     "settings": [
-      { "type": "paragraph", "content": "Noir is a dark theme — the near-black canvas and off-white text are fixed. Brand and accent tint the highlights: prices, buttons, rules and links." },
-      { "type": "color", "id": "color_brand", "label": "Brand", "default": "#C8A96A" },
-      { "type": "color", "id": "color_accent", "label": "Accent", "default": "#E8E2D6" }
+      {
+        "type": "paragraph",
+        "content": "Noir is a dark theme — the near-black canvas and off-white text are fixed. Brand and accent tint the highlights: prices, buttons, rules and links."
+      },
+      {
+        "type": "color",
+        "id": "color_brand",
+        "label": "Brand",
+        "default": "#C8A96A"
+      },
+      {
+        "type": "color",
+        "id": "color_accent",
+        "label": "Accent",
+        "default": "#E8E2D6"
+      }
     ]
   },
   {
     "name": "Typography",
     "settings": [
-      { "type": "font_picker", "id": "heading_font", "label": "Headings", "default": "playfair_display_n4" },
-      { "type": "font_picker", "id": "body_font", "label": "Body", "default": "assistant_n4" }
+      {
+        "type": "font_picker",
+        "id": "heading_font",
+        "label": "Headings",
+        "default": "playfair_display_n4"
+      },
+      {
+        "type": "font_picker",
+        "id": "body_font",
+        "label": "Body",
+        "default": "assistant_n4"
+      }
     ]
   },
   {
     "name": "Layout",
     "settings": [
-      { "type": "range", "id": "corner_radius", "min": 0, "max": 24, "step": 2, "unit": "px", "label": "Corner radius", "default": 2 }
+      {
+        "type": "range",
+        "id": "corner_radius",
+        "min": 0,
+        "max": 24,
+        "step": 2,
+        "unit": "px",
+        "label": "Corner radius",
+        "default": 2
+      }
     ]
   },
   {
     "name": "Hero",
     "settings": [
-      { "type": "text", "id": "hero_heading", "label": "Heading", "default": "Considered pieces, made to last" },
-      { "type": "textarea", "id": "hero_subheading", "label": "Subheading", "default": "A tightly edited collection. Quietly premium, delivered worldwide." },
-      { "type": "text", "id": "hero_cta", "label": "Button label", "default": "Explore the collection" },
-      { "type": "image_picker", "id": "hero_image", "label": "Background image" }
+      {
+        "type": "text",
+        "id": "hero_heading",
+        "label": "Heading",
+        "default": "Considered pieces, made to last"
+      },
+      {
+        "type": "textarea",
+        "id": "hero_subheading",
+        "label": "Subheading",
+        "default": "A tightly edited collection. Quietly premium, delivered worldwide."
+      },
+      {
+        "type": "text",
+        "id": "hero_cta",
+        "label": "Button label",
+        "default": "Explore the collection"
+      },
+      {
+        "type": "image_picker",
+        "id": "hero_image",
+        "label": "Background image"
+      }
     ]
   },
   {
     "name": "Footer",
     "settings": [
-      { "type": "text", "id": "footer_text", "label": "Footer note", "default": "Powered by EcomStrait" }
+      {
+        "type": "text",
+        "id": "footer_text",
+        "label": "Footer note",
+        "default": "Powered by EcomStrait"
+      }
     ]
   }
 ]

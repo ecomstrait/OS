@@ -6,7 +6,7 @@
       {%- elsif settings.logo != blank -%}
         <img src="{{ settings.logo | image_url: width: 480 }}" alt="{{ shop.name | escape }}" style="width:{{ settings.logo_width }}px" width="{{ settings.logo_width }}" height="40" loading="eager">
       {%- else -%}
-        <span class="site-header__name">{{ shop.name }}</span>
+        <span class="site-header__name">{{ settings.store_name | default: shop.name }}</span>
       {%- endif -%}
     </a>
 

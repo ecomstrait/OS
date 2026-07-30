@@ -173,10 +173,23 @@ export function logoAssetFrom(logoUrl: string | null | undefined): { url: string
 
 /** Map a store's saved plan (stores.content) to Liquid theme settings. */
 export function settingsFromPlan(
-  plan: { brandColors?: string[]; heroHeadline?: string; heroSub?: string; tagline?: string } | null,
+  plan: {
+    brandColors?: string[];
+    heroHeadline?: string;
+    heroSub?: string;
+    tagline?: string;
+    storeName?: string;
+  } | null,
+  /** The merchant's store name — beats the Shopify shop handle in the header. */
+  storeName?: string | null,
 ): ThemeSettings {
   const colors = plan?.brandColors ?? [];
+  const brand = (storeName ?? plan?.storeName ?? "").trim();
   return {
+    // Without these the header fell back to `shop.name` (the dev-store handle)
+    // and rendered the logo with an invalid `width:px`.
+    ...(brand ? { store_name: brand } : {}),
+    logo_width: 140,
     color_brand: colors[0] || "#10b981",
     color_accent: colors[1] || colors[0] || "#3b82f6",
     color_text: colors[2] || "#0f172a",

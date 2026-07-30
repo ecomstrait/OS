@@ -27,14 +27,58 @@ export function verifyShopifyHmac(rawBody: string, hmacHeader: string | null, se
 
 type PushProduct = { title: string; price: number | null; description?: string | null; sku?: string | null };
 
+/**
+ * `productCreate` no longer accepts variants inline — `ProductInput.variants`
+ * was removed, and the argument is now `product: ProductCreateInput!`. The old
+ * call failed at the GraphQL layer, which put the message in the top-level
+ * `errors` array rather than `userErrors`; because the code only inspected
+ * `userErrors` it counted every failure as a success and reported "pushed N
+ * products" into a shop that received none.
+ */
 const PRODUCT_CREATE = `
-mutation productCreate($input: ProductInput!) {
-  productCreate(input: $input) { product { id } userErrors { message } }
+mutation productCreate($product: ProductCreateInput!) {
+  productCreate(product: $product) {
+    product { id variants(first: 1) { nodes { id } } }
+    userErrors { field message }
+  }
 }`;
 
+/** Price and SKU land on the auto-created default variant. */
+const VARIANTS_UPDATE = `
+mutation productVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+  productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+    productVariants { id }
+    userErrors { field message }
+  }
+}`;
+
+type GraphqlError = { message: string };
+type ProductCreateResp = {
+  data?: {
+    productCreate?: {
+      product?: { id: string; variants?: { nodes?: { id: string }[] } } | null;
+      userErrors?: { message: string }[];
+    };
+  };
+  errors?: GraphqlError[];
+};
+type VariantsResp = {
+  data?: { productVariantsBulkUpdate?: { userErrors?: { message: string }[] } };
+  errors?: GraphqlError[];
+};
+
+/** Collect both userErrors and top-level GraphQL errors — either can be fatal. */
+function collectErrors(
+  userErrors: { message: string }[] | undefined,
+  topLevel: GraphqlError[] | undefined,
+): string[] {
+  return [...(userErrors ?? []).map((e) => e.message), ...(topLevel ?? []).map((e) => e.message)];
+}
+
 /**
- * Push the AI-built catalog into a Shopify store. Creates a product per item
- * (title + description + a default variant price). Returns created product ids.
+ * Push the AI-built catalog into a Shopify store: one product each, then the
+ * price/SKU onto its default variant. `created` counts products Shopify
+ * confirmed, never attempts.
  */
 export async function pushProductsToShopify(
   shop: string,
@@ -47,23 +91,41 @@ export async function pushProductsToShopify(
 
   for (const p of products) {
     try {
-      const input: Record<string, unknown> = {
-        title: p.title,
-        descriptionHtml: p.description ? `<p>${p.description}</p>` : undefined,
-        status: "ACTIVE",
-      };
-      if (p.price != null) {
-        input.variants = [{ price: String(p.price), sku: p.sku ?? undefined }];
+      const res = await gql<ProductCreateResp>(PRODUCT_CREATE, {
+        product: {
+          title: p.title,
+          descriptionHtml: p.description ? `<p>${p.description}</p>` : undefined,
+          status: "ACTIVE",
+        },
+      });
+
+      const createErrs = collectErrors(res.data?.productCreate?.userErrors, res.errors);
+      const product = res.data?.productCreate?.product;
+      if (!product?.id) {
+        errors.push(`${p.title}: ${createErrs.join("; ") || "productCreate returned no product"}`);
+        continue;
       }
-      const r = await gql<{ data?: { productCreate?: { userErrors?: { message: string }[] } } }>(
-        PRODUCT_CREATE,
-        { input },
-      );
-      const errs = r.data?.productCreate?.userErrors ?? [];
-      if (errs.length) errors.push(errs.map((e) => e.message).join("; "));
-      else created += 1;
+      created += 1;
+
+      // A product with no price is still a product — record the problem but
+      // don't discard the product we just created.
+      const variantId = product.variants?.nodes?.[0]?.id;
+      if (variantId && (p.price != null || p.sku)) {
+        const vr = await gql<VariantsResp>(VARIANTS_UPDATE, {
+          productId: product.id,
+          variants: [
+            {
+              id: variantId,
+              ...(p.price != null ? { price: String(p.price) } : {}),
+              ...(p.sku ? { inventoryItem: { sku: p.sku } } : {}),
+            },
+          ],
+        });
+        const vErrs = collectErrors(vr.data?.productVariantsBulkUpdate?.userErrors, vr.errors);
+        if (vErrs.length) errors.push(`${p.title} (price): ${vErrs.join("; ")}`);
+      }
     } catch (e) {
-      errors.push(e instanceof Error ? e.message : "product push failed");
+      errors.push(`${p.title}: ${e instanceof Error ? e.message : "product push failed"}`);
     }
   }
   return { created, errors };
