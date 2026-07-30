@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@ecomstrait/auth/server";
 import { createAdminClient } from "@ecomstrait/db";
-import { pushProductsToShopify } from "@/lib/shopify";
+import { pushProductsToShopify, fetchExistingSkus } from "@/lib/shopify";
 import {
   uploadAndPublishTheme,
   pushThemeSettings,
@@ -222,4 +222,101 @@ export async function resyncShopifyTheme(storeId: string): Promise<{ error?: str
 
   revalidatePath("/stores");
   return { ok: true };
+}
+
+/**
+ * Push approved listings that aren't in the Shopify store yet.
+ *
+ * Provisioning only runs once, and re-syncing the theme doesn't touch products,
+ * so a store that gains listings later (or whose first push failed) had no way
+ * to catch up. Existing products are matched on SKU — which holds our product
+ * id — so running this repeatedly is safe.
+ */
+export async function syncProductsToShopify(
+  storeId: string,
+): Promise<{ error?: string; created?: number; skipped?: number; note?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated." };
+
+  const { data: store } = await supabase
+    .from("stores")
+    .select("id, type, shopify_store_id")
+    .eq("id", storeId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!store) return { error: "Store not found." };
+  if (!store.type.startsWith("shopify")) return { error: "Not a Shopify store." };
+  if (!store.shopify_store_id) return { error: "Provision this store on Shopify first." };
+
+  const admin = createAdminClient();
+  if (!admin) return { error: "Server not configured." };
+
+  const { data: shopRow } = await admin
+    .from("shopify_stores")
+    .select("shop_domain, access_token")
+    .eq("id", store.shopify_store_id)
+    .maybeSingle();
+  if (!shopRow?.access_token) return { error: "That Shopify store has no access token." };
+
+  const { data: sp } = await admin
+    .from("store_products")
+    .select("product_id, price")
+    .eq("store_id", storeId)
+    .eq("status", "approved");
+  const ids = (sp ?? []).map((r) => r.product_id);
+  if (!ids.length) {
+    return { created: 0, skipped: 0, note: "Nothing approved to sync yet — check your listing requests." };
+  }
+
+  const { data: prods } = await admin
+    .from("products")
+    .select("id, title, description")
+    .in("id", ids);
+  const priceMap = new Map((sp ?? []).map((r) => [r.product_id, r.price]));
+
+  let existing: Set<string>;
+  try {
+    existing = await fetchExistingSkus(shopRow.shop_domain, shopRow.access_token);
+  } catch (e) {
+    return { error: `Couldn't read the Shopify catalog: ${e instanceof Error ? e.message : "unknown error"}` };
+  }
+
+  const pending = (prods ?? []).filter((p) => !existing.has(p.id));
+  const skipped = (prods ?? []).length - pending.length;
+  if (!pending.length) {
+    return { created: 0, skipped, note: `All ${skipped} approved product${skipped === 1 ? " is" : "s are"} already in Shopify.` };
+  }
+
+  const result = await pushProductsToShopify(
+    shopRow.shop_domain,
+    shopRow.access_token,
+    pending.map((p) => ({
+      title: p.title,
+      price: priceMap.get(p.id) ?? null,
+      description: p.description ?? null,
+      sku: p.id,
+    })),
+  );
+
+  await admin
+    .from("shopify_stores")
+    .update({ sync_status: `synced ${result.created} products` })
+    .eq("id", store.shopify_store_id);
+  revalidatePath("/stores");
+
+  if (result.errors.length) {
+    return {
+      created: result.created,
+      skipped,
+      error: `${result.created} added, but some failed: ${result.errors.slice(0, 2).join("; ")}`,
+    };
+  }
+  return {
+    created: result.created,
+    skipped,
+    note: `Added ${result.created} product${result.created === 1 ? "" : "s"}${skipped ? `, skipped ${skipped} already there` : ""}.`,
+  };
 }

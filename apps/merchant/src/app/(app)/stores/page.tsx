@@ -5,6 +5,7 @@ import { createClient } from "@ecomstrait/auth/server";
 import type { StoreStatus, StoreType } from "@ecomstrait/db";
 import { ProvisionButton } from "@/components/stores/provision-button";
 import { ResyncButton } from "@/components/stores/resync-button";
+import { SyncProductsButton } from "@/components/stores/sync-products-button";
 import { StorePreview } from "@/components/stores/store-preview";
 import { DeleteStoreButton } from "@/components/stores/delete-store-button";
 import { MakeItYoursButton } from "@/components/stores/make-it-yours-button";
@@ -126,6 +127,7 @@ export default async function StoresPage() {
                         label={s.shopify_store_id ? "Retry provisioning" : undefined}
                       />
                     )}
+                  {s.shopify_store_id && <SyncProductsButton storeId={s.id} />}
                   {s.type === "shopify_liquid_theme" && s.shopify_store_id && (
                     <ResyncButton storeId={s.id} />
                   )}
