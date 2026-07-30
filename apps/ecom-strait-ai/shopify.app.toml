@@ -28,7 +28,8 @@ api_version = "2026-10"
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
 # read_orders → orders/create webhook (Protected Customer Data).
 # read_themes/write_themes → Liquid theme upload.
-scopes = "write_products,write_metaobjects,write_metaobject_definitions,read_orders,read_themes,write_themes"
+# read_locations/write_inventory → sync supplier stock levels onto variants.
+scopes = "write_products,write_metaobjects,write_metaobject_definitions,read_orders,read_themes,write_themes,read_locations,write_inventory"
 
 [auth]
 redirect_urls = [ "https://shopify-ten-jet.vercel.app/api/auth" ]

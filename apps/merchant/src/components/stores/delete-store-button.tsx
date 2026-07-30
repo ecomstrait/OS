@@ -14,10 +14,15 @@ export function DeleteStoreButton({
   storeId,
   storeName,
   hasOrders,
+  asMenuItem,
+  onDone,
 }: {
   storeId: string;
   storeName: string;
   hasOrders: boolean;
+  /** Render the trigger as a row inside the Actions menu. */
+  asMenuItem?: boolean;
+  onDone?: () => void;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -35,20 +40,30 @@ export function DeleteStoreButton({
       }
       setOpen(false);
       setValue("");
+      onDone?.();
       router.refresh();
     });
   }
 
   return (
     <>
-      <button
-        onClick={() => setOpen(true)}
-        aria-label={`Delete ${storeName}`}
-        title="Delete store"
-        className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 transition hover:bg-red-50 hover:text-red-600"
-      >
-        <Trash2 className="h-4 w-4" />
-      </button>
+      {asMenuItem ? (
+        <button
+          onClick={() => setOpen(true)}
+          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-red-600 hover:bg-red-50"
+        >
+          <Trash2 className="h-4 w-4" /> {hasOrders ? "Archive store" : "Delete store"}
+        </button>
+      ) : (
+        <button
+          onClick={() => setOpen(true)}
+          aria-label={`Delete ${storeName}`}
+          title="Delete store"
+          className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 transition hover:bg-red-50 hover:text-red-600"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      )}
 
       {open && (
         <div className="fixed inset-0 z-50 grid place-items-center p-4">

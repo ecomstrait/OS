@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@ecomstrait/auth/server";
 import { createAdminClient } from "@ecomstrait/db";
-import { pushProductsToShopify, fetchExistingSkus } from "@/lib/shopify";
+import { pushProductsToShopify, fetchShopCatalog } from "@/lib/shopify";
 import {
   uploadAndPublishTheme,
   pushThemeSettings,
@@ -71,7 +71,7 @@ export async function provisionShopifyStore(storeId: string): Promise<{ error?: 
     .eq("status", "approved");
   const ids = (sp ?? []).map((r) => r.product_id);
   const { data: prods } = ids.length
-    ? await admin.from("products").select("id, title, description").in("id", ids)
+    ? await admin.from("products").select("id, title, description, stock, reserved").in("id", ids)
     : { data: [] };
   const priceMap = new Map((sp ?? []).map((r) => [r.product_id, r.price]));
   const pushList = (prods ?? []).map((p) => ({
@@ -79,6 +79,7 @@ export async function provisionShopifyStore(storeId: string): Promise<{ error?: 
     price: priceMap.get(p.id) ?? null,
     description: p.description ?? null,
     sku: p.id, // lets the order webhook map back to our product
+    inventory: Math.max(0, (p.stock ?? 0) - (p.reserved ?? 0)),
   }));
 
   /** Put a freshly-claimed shop back in the pool so a failure doesn't strand it. */
@@ -92,12 +93,20 @@ export async function provisionShopifyStore(storeId: string): Promise<{ error?: 
     await supabase.from("stores").update({ shopify_store_id: null }).eq("id", storeId);
   }
 
-  let result: { created: number; errors: string[] };
+  let result: Awaited<ReturnType<typeof pushProductsToShopify>>;
   try {
     result = await pushProductsToShopify(shopRow.shop_domain, shopRow.access_token, pushList);
   } catch (e) {
     await releaseClaim();
     return { error: `Couldn't reach Shopify: ${e instanceof Error ? e.message : "unknown error"}` };
+  }
+
+  for (const [ourId, shopifyId] of result.ids) {
+    await admin
+      .from("store_products")
+      .update({ shopify_product_id: shopifyId, shopify_synced_at: new Date().toISOString() })
+      .eq("store_id", storeId)
+      .eq("product_id", ourId);
   }
 
   // Path 2 (shopify_liquid_theme): upload + publish our Liquid theme with the
@@ -263,7 +272,7 @@ export async function syncProductsToShopify(
 
   const { data: sp } = await admin
     .from("store_products")
-    .select("product_id, price")
+    .select("product_id, price, shopify_product_id")
     .eq("store_id", storeId)
     .eq("status", "approved");
   const ids = (sp ?? []).map((r) => r.product_id);
@@ -273,18 +282,40 @@ export async function syncProductsToShopify(
 
   const { data: prods } = await admin
     .from("products")
-    .select("id, title, description")
+    .select("id, title, description, stock, reserved")
     .in("id", ids);
   const priceMap = new Map((sp ?? []).map((r) => [r.product_id, r.price]));
+  const linkedMap = new Map((sp ?? []).map((r) => [r.product_id, r.shopify_product_id]));
 
-  let existing: Set<string>;
+  let catalog: Awaited<ReturnType<typeof fetchShopCatalog>>;
   try {
-    existing = await fetchExistingSkus(shopRow.shop_domain, shopRow.access_token);
+    catalog = await fetchShopCatalog(shopRow.shop_domain, shopRow.access_token);
   } catch (e) {
     return { error: `Couldn't read the Shopify catalog: ${e instanceof Error ? e.message : "unknown error"}` };
   }
 
-  const pending = (prods ?? []).filter((p) => !existing.has(p.id));
+  // Already synced if we recorded a Shopify product that still exists. Listings
+  // from before that column existed fall back to a SKU match, and get their id
+  // backfilled so the next sync doesn't need the fallback.
+  const pending: typeof prods = [];
+  const backfill: { product_id: string; shopify_product_id: string }[] = [];
+  for (const p of prods ?? []) {
+    const linked = linkedMap.get(p.id);
+    if (linked && catalog.productIds.has(linked)) continue;
+    const bySku = catalog.skuToProductId.get(p.id);
+    if (bySku) {
+      backfill.push({ product_id: p.id, shopify_product_id: bySku });
+      continue;
+    }
+    pending.push(p);
+  }
+  for (const b of backfill) {
+    await admin
+      .from("store_products")
+      .update({ shopify_product_id: b.shopify_product_id, shopify_synced_at: new Date().toISOString() })
+      .eq("store_id", storeId)
+      .eq("product_id", b.product_id);
+  }
   const skipped = (prods ?? []).length - pending.length;
   if (!pending.length) {
     return { created: 0, skipped, note: `All ${skipped} approved product${skipped === 1 ? " is" : "s are"} already in Shopify.` };
@@ -298,8 +329,18 @@ export async function syncProductsToShopify(
       price: priceMap.get(p.id) ?? null,
       description: p.description ?? null,
       sku: p.id,
+      inventory: Math.max(0, (p.stock ?? 0) - (p.reserved ?? 0)),
     })),
   );
+
+  // Record which Shopify product each listing became.
+  for (const [ourId, shopifyId] of result.ids) {
+    await admin
+      .from("store_products")
+      .update({ shopify_product_id: shopifyId, shopify_synced_at: new Date().toISOString() })
+      .eq("store_id", storeId)
+      .eq("product_id", ourId);
+  }
 
   await admin
     .from("shopify_stores")

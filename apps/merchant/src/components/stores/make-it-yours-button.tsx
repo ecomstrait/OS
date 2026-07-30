@@ -17,12 +17,17 @@ export function MakeItYoursButton({
   referralUrl,
   requestedEmail,
   transferred,
+  asMenuItem,
+  onDone,
 }: {
   storeId: string;
   referralUrl: string;
   /** Set once a transfer has already been requested. */
   requestedEmail: string | null;
   transferred: boolean;
+  /** Render the trigger as a row inside the Actions menu. */
+  asMenuItem?: boolean;
+  onDone?: () => void;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -30,16 +35,14 @@ export function MakeItYoursButton({
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
-  if (transferred) {
-    return (
+  // Both states are informational — the badge belongs on the row, not the menu.
+  if (transferred || requestedEmail) {
+    if (asMenuItem) return null;
+    return transferred ? (
       <span className="inline-flex items-center gap-1.5 rounded-lg bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700">
         <Check className="h-3.5 w-3.5" /> Yours
       </span>
-    );
-  }
-
-  if (requestedEmail) {
-    return (
+    ) : (
       <span
         title={`Transferring to ${requestedEmail}`}
         className="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700"
@@ -58,18 +61,28 @@ export function MakeItYoursButton({
         return;
       }
       setOpen(false);
+      onDone?.();
       router.refresh();
     });
   }
 
   return (
     <>
-      <button
-        onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-1.5 rounded-lg bg-ink-950 px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-ink-800"
-      >
-        <KeyRound className="h-3.5 w-3.5" /> Make it yours
-      </button>
+      {asMenuItem ? (
+        <button
+          onClick={() => setOpen(true)}
+          className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-ink-700 hover:bg-ink-50"
+        >
+          <KeyRound className="h-4 w-4" /> Make it yours
+        </button>
+      ) : (
+        <button
+          onClick={() => setOpen(true)}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-ink-950 px-2.5 py-1 text-xs font-semibold text-white transition hover:bg-ink-800"
+        >
+          <KeyRound className="h-3.5 w-3.5" /> Make it yours
+        </button>
+      )}
 
       {open && (
         <div className="fixed inset-0 z-50 grid place-items-center p-4">
