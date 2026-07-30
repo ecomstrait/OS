@@ -21,7 +21,14 @@ export async function checkoutStore(
   if (!ids.length) return { error: "Your cart is empty." };
 
   const [{ data: sp }, { data: prods }] = await Promise.all([
-    admin.from("store_products").select("product_id, price").eq("store_id", storeId).in("product_id", ids),
+    // Approved-only: a pending or declined line must never be purchasable,
+    // even if a stale page still has its Add to cart button.
+    admin
+      .from("store_products")
+      .select("product_id, price")
+      .eq("store_id", storeId)
+      .eq("status", "approved")
+      .in("product_id", ids),
     admin.from("products").select("id, title").in("id", ids),
   ]);
   const priceMap = new Map((sp ?? []).map((r) => [r.product_id, r.price]));

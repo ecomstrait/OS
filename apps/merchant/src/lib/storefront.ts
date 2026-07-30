@@ -1,6 +1,7 @@
 import { createAdminClient } from "@ecomstrait/db";
 import { productImage } from "@/lib/catalog";
 import type { StorePlan } from "@/lib/ecomai";
+import { normalizePlan } from "@/lib/store-plan";
 
 export type StorefrontProduct = {
   id: string;
@@ -32,10 +33,12 @@ export async function getStorefront(id: string): Promise<Storefront | null> {
     .maybeSingle();
   if (!store || store.type !== "own_platform") return null;
 
+  // Only supplier-approved listings reach the public storefront.
   const { data: sp } = await admin
     .from("store_products")
     .select("product_id, price")
-    .eq("store_id", id);
+    .eq("store_id", id)
+    .eq("status", "approved");
   const ids = (sp ?? []).map((r) => r.product_id);
 
   let products: StorefrontProduct[] = [];
@@ -60,7 +63,7 @@ export async function getStorefront(id: string): Promise<Storefront | null> {
     logoUrl: store.logo_url,
     theme: store.theme,
     status: store.status,
-    plan: store.content as unknown as StorePlan,
+    plan: normalizePlan(store.content, store.name ?? "Store"),
     products,
   };
 }

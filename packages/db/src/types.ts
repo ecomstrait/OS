@@ -8,6 +8,8 @@ export type UserRole =
 
 export type SupplierStatus = "pending" | "in_review" | "approved" | "rejected";
 export type ProductStatus = "draft" | "published";
+/** A merchant's request to list one supplier product on one of their stores. */
+export type ListingStatus = "pending" | "approved" | "declined";
 export type ProductVariant = { name: string; options: string[] };
 export type RequestStatus = "new" | "accepted" | "declined" | "proposed" | "fulfilled";
 export type MessageSender = "supplier" | "store_owner" | "system";
@@ -360,9 +362,44 @@ export type Database = {
         Relationships: [];
       };
       store_products: {
-        Row: { store_id: string; product_id: string; price: number | null; created_at: string };
-        Insert: { store_id: string; product_id: string; price?: number | null };
+        Row: {
+          store_id: string;
+          product_id: string;
+          price: number | null;
+          supplier_id: string | null;
+          status: ListingStatus;
+          decided_at: string | null;
+          decline_reason: string | null;
+          created_at: string;
+        };
+        Insert: {
+          store_id: string;
+          product_id: string;
+          price?: number | null;
+          supplier_id?: string | null;
+          status?: ListingStatus;
+        };
         Update: Partial<Database["public"]["Tables"]["store_products"]["Row"]>;
+        Relationships: [];
+      };
+      store_theme_versions: {
+        Row: {
+          id: string;
+          store_id: string;
+          content: Record<string, unknown>;
+          theme: string | null;
+          logo_url: string | null;
+          label: string | null;
+          created_at: string;
+        };
+        Insert: {
+          store_id: string;
+          content?: Record<string, unknown>;
+          theme?: string | null;
+          logo_url?: string | null;
+          label?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["store_theme_versions"]["Row"]>;
         Relationships: [];
       };
       store_orders: {
