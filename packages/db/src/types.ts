@@ -372,6 +372,8 @@ export type Database = {
           status: ListingStatus;
           decided_at: string | null;
           decline_reason: string | null;
+          shopify_product_id: string | null;
+          shopify_synced_at: string | null;
           created_at: string;
         };
         Insert: {
