@@ -130,3 +130,40 @@ export async function pushProductsToShopify(
   }
   return { created, errors };
 }
+
+/**
+ * SKUs already present in the shop.
+ *
+ * We write our product id into the variant SKU on push, so this is what makes
+ * syncing idempotent — without it, re-running a sync duplicates every product.
+ */
+export async function fetchExistingSkus(shop: string, token: string): Promise<Set<string>> {
+  const gql = shopifyGraphql(shop, token);
+  const skus = new Set<string>();
+  let cursor: string | null = null;
+
+  // 250 is the page maximum; the loop is bounded so a pagination bug can't spin.
+  for (let page = 0; page < 40; page++) {
+    const res: {
+      data?: {
+        productVariants?: {
+          nodes?: { sku: string | null }[];
+          pageInfo?: { hasNextPage: boolean; endCursor: string | null };
+        };
+      };
+    } = await gql(
+      `query variantSkus($cursor: String) {
+        productVariants(first: 250, after: $cursor) {
+          nodes { sku }
+          pageInfo { hasNextPage endCursor }
+        }
+      }`,
+      { cursor },
+    );
+    const conn = res.data?.productVariants;
+    for (const v of conn?.nodes ?? []) if (v.sku) skus.add(v.sku);
+    if (!conn?.pageInfo?.hasNextPage) break;
+    cursor = conn.pageInfo.endCursor;
+  }
+  return skus;
+}
