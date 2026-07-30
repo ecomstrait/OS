@@ -113,7 +113,11 @@ export function CatalogTable({ products }: { products: Row[] }) {
                   type="checkbox"
                   checked={allSelected}
                   onChange={toggleAll}
-                  aria-label={allSelected ? "Deselect all products" : "Select all products"}
+                  aria-label={
+                    allSelected
+                      ? "Deselect all products on this page"
+                      : "Select all products on this page"
+                  }
                   className="h-4 w-4 rounded border-ink-300 text-brand-500 focus:ring-brand-400"
                 />
               </th>

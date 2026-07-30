@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
-import { Boxes, PackageCheck, AlertTriangle, PackageX, History } from "lucide-react";
+import { Boxes, PackageCheck, AlertTriangle, PackageX, History, SearchX } from "lucide-react";
 import { createClient } from "@ecomstrait/auth/server";
 import { getMySupplier } from "@/lib/supplier-context";
 import { EmptyState } from "@/components/app/empty-state";
 import { PendingGate } from "@/components/app/pending-gate";
+import { SearchBar } from "@/components/app/search-bar";
+import { Pagination } from "@/components/app/pagination";
 import { InventoryTable, type InventoryRow } from "@/components/inventory/inventory-table";
+import { clampPage, likeTerm, parseTableParams, type RawParams } from "@/lib/table-params";
 
 export const metadata: Metadata = { title: "Inventory" };
 
@@ -17,50 +20,78 @@ type Adjustment = {
   products: { title: string } | null;
 };
 
-export default async function InventoryPage() {
+export default async function InventoryPage({
+  searchParams,
+}: {
+  searchParams: Promise<RawParams>;
+}) {
+  const params = await searchParams;
+  const { q, page: wanted, size } = parseTableParams(params);
+
   const supabase = await createClient();
   const supplier = await getMySupplier();
   const approved = supplier?.status === "approved";
 
-  const { data: products } =
-    supplier && approved
-      ? await supabase
-          .from("products")
-          .select("id, title, stock, reserved, low_stock_threshold")
-          .eq("supplier_id", supplier.supplierId)
-          .order("title")
-      : { data: [] };
+  let rows: InventoryRow[] = [];
+  let total = 0;
+  let page = wanted;
+  let stats = { ok: 0, low: 0, out: 0, all: 0 };
+  let adjustments: Adjustment[] = [];
 
-  const rows: InventoryRow[] = products ?? [];
+  if (supplier && approved) {
+    // Tiles summarise the WHOLE catalog, not the current page, so they get their
+    // own lightweight pass over every row (three small ints each).
+    const { data: allStock } = await supabase
+      .from("products")
+      .select("stock, reserved, low_stock_threshold")
+      .eq("supplier_id", supplier.supplierId);
 
-  const { data: history } =
-    supplier && approved
-      ? await supabase
-        .from("inventory_adjustments")
-        .select("id, delta, reason, resulting_stock, created_at, products(title)")
-        .order("created_at", { ascending: false })
-        .limit(15)
-    : { data: [] };
+    stats = (allStock ?? []).reduce(
+      (acc, r) => {
+        const available = r.stock - r.reserved;
+        if (available <= 0) acc.out += 1;
+        else if (available <= r.low_stock_threshold) acc.low += 1;
+        else acc.ok += 1;
+        acc.all += 1;
+        return acc;
+      },
+      { ok: 0, low: 0, out: 0, all: 0 },
+    );
 
-  const adjustments = (history ?? []) as unknown as Adjustment[];
+    const listQuery = () => {
+      let query = supabase
+        .from("products")
+        .select("id, title, stock, reserved, low_stock_threshold", { count: "exact" })
+        .eq("supplier_id", supplier.supplierId);
+      if (q) query = query.or(`title.ilike.${likeTerm(q)},sku.ilike.${likeTerm(q)}`);
+      return query.order("title");
+    };
 
-  const stats = rows.reduce(
-    (acc, r) => {
-      const available = r.stock - r.reserved;
-      if (available <= 0) acc.out += 1;
-      else if (available <= r.low_stock_threshold) acc.low += 1;
-      else acc.ok += 1;
-      return acc;
-    },
-    { ok: 0, low: 0, out: 0 },
-  );
+    const { count } = await listQuery().range(0, 0);
+    total = count ?? 0;
+    page = clampPage(wanted, total, size);
+    const from = (page - 1) * size;
+    const { data } = await listQuery().range(from, from + size - 1);
+    rows = data ?? [];
+
+    const { data: history } = await supabase
+      .from("inventory_adjustments")
+      .select("id, delta, reason, resulting_stock, created_at, products(title)")
+      .order("created_at", { ascending: false })
+      .limit(15);
+    adjustments = (history ?? []) as unknown as Adjustment[];
+  }
 
   const tiles = [
-    { label: "Products", value: rows.length, icon: Boxes, tone: "text-ink-400" },
+    { label: "Products", value: stats.all, icon: Boxes, tone: "text-ink-400" },
     { label: "In stock", value: stats.ok, icon: PackageCheck, tone: "text-brand-500" },
     { label: "Low stock", value: stats.low, icon: AlertTriangle, tone: "text-amber-500" },
     { label: "Out of stock", value: stats.out, icon: PackageX, tone: "text-red-500" },
   ];
+
+  const searching = q.length > 0;
+  const summary =
+    total > 0 ? `${(page - 1) * size + 1}–${(page - 1) * size + rows.length} of ${total}` : undefined;
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -71,7 +102,7 @@ export default async function InventoryPage() {
         <div className="mt-6">
           <PendingGate status={supplier?.status ?? null} feature="inventory" />
         </div>
-      ) : rows.length === 0 ? (
+      ) : stats.all === 0 ? (
         <div className="mt-6">
           <EmptyState
             icon={Boxes}
@@ -94,8 +125,16 @@ export default async function InventoryPage() {
             ))}
           </div>
 
-          <div className="mt-6">
-            <InventoryTable rows={rows} />
+          <div className="mt-6 flex flex-col gap-4">
+            <SearchBar placeholder="Search products, SKU…" summary={summary} />
+            {rows.length === 0 && searching ? (
+              <EmptyState icon={SearchX} title="No matches" body={`No products match “${q}”.`} />
+            ) : (
+              <>
+                <InventoryTable key={`${q}:${page}`} rows={rows} />
+                <Pagination basePath="/inventory" params={params} page={page} total={total} size={size} />
+              </>
+            )}
           </div>
 
           {/* Recent adjustment history */}

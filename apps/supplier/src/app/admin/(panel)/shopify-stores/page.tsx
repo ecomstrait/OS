@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { createAdminClient, PROMO_USER_LIMIT } from "@ecomstrait/db";
 import type { ShopifyStoreStatus } from "@ecomstrait/db/types";
 import { StorefrontPasswordField } from "@/components/admin/storefront-password-field";
+import { SearchBar } from "@/components/app/search-bar";
+import { Pagination } from "@/components/app/pagination";
+import { clampPage, likeTerm, parseTableParams, type RawParams } from "@/lib/table-params";
 
 export const metadata: Metadata = { title: "Shopify stores — Admin" };
 
@@ -16,14 +19,32 @@ const STATUS_STYLE: Record<ShopifyStoreStatus, string> = {
   archived: "bg-ink-100 text-ink-400",
 };
 
-export default async function AdminShopifyStoresPage() {
+export default async function AdminShopifyStoresPage({
+  searchParams,
+}: {
+  searchParams: Promise<RawParams>;
+}) {
+  const params = await searchParams;
+  const { q, page: wanted, size } = parseTableParams(params);
+
   const client = createAdminClient();
   if (!client) return <p className="text-sm text-red-600">Server is not configured.</p>;
 
-  const { data: stores } = await client
-    .from("shopify_stores")
-    .select("id, shop_domain, status, sync_status, owner_user_id, storefront_password, created_at")
-    .order("created_at", { ascending: false });
+  const storeQuery = () => {
+    let query = client
+      .from("shopify_stores")
+      .select("id, shop_domain, status, sync_status, owner_user_id, storefront_password, created_at", {
+        count: "exact",
+      });
+    if (q) query = query.or(`shop_domain.ilike.${likeTerm(q)},sync_status.ilike.${likeTerm(q)}`);
+    return query.order("created_at", { ascending: false });
+  };
+
+  const { count } = await storeQuery().range(0, 0);
+  const total = count ?? 0;
+  const page = clampPage(wanted, total, size);
+  const from = (page - 1) * size;
+  const { data: stores } = await storeQuery().range(from, from + size - 1);
 
   const list = stores ?? [];
 
@@ -36,7 +57,13 @@ export default async function AdminShopifyStoresPage() {
     .from("subscriptions")
     .select("user_id", { count: "exact", head: true });
   const promo = promoUsed ?? 0;
-  const availablePool = list.filter((s) => s.status === "available").length;
+
+  // Pool health covers every store, not just the visible page.
+  const { count: availableCount } = await client
+    .from("shopify_stores")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "available");
+  const availablePool = availableCount ?? 0;
 
   // Map owner ids → emails for a readable "assigned to" column.
   const ownerIds = [...new Set(list.map((s) => s.owner_user_id).filter(Boolean))] as string[];
@@ -66,7 +93,7 @@ export default async function AdminShopifyStoresPage() {
     <div>
       <h1 className="text-2xl font-bold text-ink-950">Shopify stores</h1>
       <p className="mt-1 text-sm text-ink-500">
-        {list.length} store{list.length === 1 ? "" : "s"} in the pool. Set each dev store&apos;s
+        {total} store{total === 1 ? "" : "s"} in the pool. Set each dev store&apos;s
         storefront password so its assigned merchant can preview it.
       </p>
 
@@ -98,13 +125,21 @@ export default async function AdminShopifyStoresPage() {
         </div>
       </div>
 
+      <div className="mt-6">
+        <SearchBar
+          placeholder="Search domain or sync status…"
+          summary={total > 0 ? `${from + 1}–${from + list.length} of ${total}` : undefined}
+        />
+      </div>
+
       {list.length === 0 ? (
-        <div className="mt-6 rounded-2xl border border-dashed border-ink-200 bg-white p-10 text-center text-sm text-ink-500">
-          No Shopify stores connected yet. They appear here once the EcomStrait app is installed on a
-          dev store.
+        <div className="mt-4 rounded-2xl border border-dashed border-ink-200 bg-white p-10 text-center text-sm text-ink-500">
+          {q
+            ? `No stores match “${q}”.`
+            : "No Shopify stores connected yet. They appear here once the EcomStrait app is installed on a dev store."}
         </div>
       ) : (
-        <div className="mt-6 overflow-hidden rounded-2xl border border-ink-100 bg-white">
+        <div className="mt-4 overflow-hidden rounded-2xl border border-ink-100 bg-white">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-ink-100 text-left text-xs text-ink-400">
@@ -150,6 +185,8 @@ export default async function AdminShopifyStoresPage() {
           </table>
         </div>
       )}
+
+      <Pagination basePath="/admin/shopify-stores" params={params} page={page} total={total} size={size} />
     </div>
   );
 }

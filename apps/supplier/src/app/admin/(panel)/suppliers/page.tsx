@@ -3,6 +3,9 @@ import type { Metadata } from "next";
 import { ArrowRight } from "lucide-react";
 import { createAdminClient } from "@ecomstrait/db";
 import type { SupplierStatus } from "@ecomstrait/db/types";
+import { SearchBar } from "@/components/app/search-bar";
+import { Pagination } from "@/components/app/pagination";
+import { clampPage, likeTerm, pageSlice, parseTableParams, type RawParams } from "@/lib/table-params";
 
 export const metadata: Metadata = { title: "Suppliers — Admin" };
 
@@ -21,19 +24,49 @@ const ORDER: Record<SupplierStatus, number> = {
   rejected: 3,
 };
 
-export default async function AdminSuppliersPage() {
+type Row = {
+  id: string;
+  business_name: string | null;
+  contact_person: string | null;
+  country: string | null;
+  status: SupplierStatus;
+  quality_score: number | null;
+  created_at: string;
+};
+
+export default async function AdminSuppliersPage({
+  searchParams,
+}: {
+  searchParams: Promise<RawParams>;
+}) {
+  const params = await searchParams;
+  const { q, page: wanted, size } = parseTableParams(params);
+
   const client = createAdminClient();
   if (!client) {
     return <p className="text-sm text-red-600">Server is not configured (missing service role key).</p>;
   }
 
-  const { data } = await client
+  // `suppliers.status` is plain text, so the review-queue-first ordering is
+  // applied here rather than as an ORDER BY, then the page is sliced.
+  let query = client
     .from("suppliers")
-    .select("id, business_name, contact_person, country, status, quality_score, created_at")
-    .order("created_at", { ascending: false });
+    .select("id, business_name, contact_person, country, status, quality_score, created_at");
+  if (q) {
+    query = query.or(
+      `business_name.ilike.${likeTerm(q)},contact_person.ilike.${likeTerm(q)},country.ilike.${likeTerm(q)}`,
+    );
+  }
+  const { data } = await query.order("created_at", { ascending: false });
 
-  const suppliers = (data ?? []).sort((a, b) => ORDER[a.status] - ORDER[b.status]);
-  const reviewCount = suppliers.filter((s) => s.status === "in_review").length;
+  const all = ((data ?? []) as Row[]).sort((a, b) => ORDER[a.status] - ORDER[b.status]);
+  const total = all.length;
+  const page = clampPage(wanted, total, size);
+  const suppliers = pageSlice(all, page, size);
+  const reviewCount = all.filter((s) => s.status === "in_review").length;
+
+  const summary =
+    total > 0 ? `${(page - 1) * size + 1}–${(page - 1) * size + suppliers.length} of ${total}` : undefined;
 
   return (
     <div>
@@ -44,9 +77,15 @@ export default async function AdminSuppliersPage() {
           : "No applications awaiting review."}
       </p>
 
-      <div className="mt-6 overflow-hidden rounded-2xl border border-ink-100 bg-white">
+      <div className="mt-6">
+        <SearchBar placeholder="Search business, contact, country…" summary={summary} />
+      </div>
+
+      <div className="mt-4 overflow-hidden rounded-2xl border border-ink-100 bg-white">
         {suppliers.length === 0 ? (
-          <p className="p-8 text-center text-sm text-ink-400">No suppliers yet.</p>
+          <p className="p-8 text-center text-sm text-ink-400">
+            {q ? `No suppliers match “${q}”.` : "No suppliers yet."}
+          </p>
         ) : (
           <table className="w-full text-sm">
             <thead>
@@ -91,6 +130,8 @@ export default async function AdminSuppliersPage() {
           </table>
         )}
       </div>
+
+      <Pagination basePath="/admin/suppliers" params={params} page={page} total={total} size={size} />
     </div>
   );
 }
