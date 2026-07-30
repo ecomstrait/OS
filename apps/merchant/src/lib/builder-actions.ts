@@ -384,7 +384,10 @@ export async function createStore(input: {
       theme: input.theme || null,
       logo_url: input.logoUrl ?? null,
       content: input.plan as unknown as Record<string, unknown>,
-      status: isOwn ? "live" : "ready_for_review",
+      // A Shopify store isn't ready for anything until it's been provisioned —
+      // claiming a shop, pushing products and uploading the theme. Marking it
+      // ready_for_review here made launch look like it had done that work.
+      status: isOwn ? "live" : "draft",
     })
     .select("id")
     .single();

@@ -39,6 +39,7 @@ export async function provisionShopifyStore(storeId: string): Promise<{ error?: 
 
   // Use the already-linked pool store, or claim an available one.
   let sid = store.shopify_store_id;
+  const claimedNow = !sid;
   if (!sid) {
     const { data: avail } = await admin
       .from("shopify_stores")
@@ -81,7 +82,24 @@ export async function provisionShopifyStore(storeId: string): Promise<{ error?: 
     sku: p.id, // lets the order webhook map back to our product
   }));
 
-  const result = await pushProductsToShopify(shopRow.shop_domain, shopRow.access_token, pushList);
+  /** Put a freshly-claimed shop back in the pool so a failure doesn't strand it. */
+  async function releaseClaim() {
+    if (!claimedNow || !sid) return;
+    await admin!
+      .from("shopify_stores")
+      .update({ status: "available", owner_user_id: null, assigned_at: null })
+      .eq("id", sid)
+      .neq("status", "transferred");
+    await supabase.from("stores").update({ shopify_store_id: null }).eq("id", storeId);
+  }
+
+  let result: { created: number; errors: string[] };
+  try {
+    result = await pushProductsToShopify(shopRow.shop_domain, shopRow.access_token, pushList);
+  } catch (e) {
+    await releaseClaim();
+    return { error: `Couldn't reach Shopify: ${e instanceof Error ? e.message : "unknown error"}` };
+  }
 
   // Path 2 (shopify_liquid_theme): upload + publish our Liquid theme with the
   // store's brand settings. Requires the write_themes scope and a publicly
@@ -96,17 +114,32 @@ export async function provisionShopifyStore(storeId: string): Promise<{ error?: 
       heroSub?: string;
       tagline?: string;
     } | null;
-    const themeRes = await uploadAndPublishTheme(shopRow.shop_domain, shopRow.access_token, {
-      themeName: liquid.name,
-      sourceUrl: `${merchantUrl()}/api/themes/${liquid.id}`,
-      settings: settingsFromPlan(plan),
-      logo: logoAssetFrom(store.logo_url),
-    });
+    let themeRes: Awaited<ReturnType<typeof uploadAndPublishTheme>>;
+    try {
+      themeRes = await uploadAndPublishTheme(shopRow.shop_domain, shopRow.access_token, {
+        themeName: liquid.name,
+        sourceUrl: `${merchantUrl()}/api/themes/${liquid.id}`,
+        settings: settingsFromPlan(plan),
+        logo: logoAssetFrom(store.logo_url),
+      });
+    } catch (e) {
+      themeRes = { ok: false, error: e instanceof Error ? e.message : "theme upload threw" };
+    }
+
     if (themeRes.ok) {
       themeGid = themeRes.themeGid;
       themeNote = " + theme";
     } else {
-      themeNote = ` (theme failed: ${themeRes.error})`;
+      // A liquid-theme store without its theme isn't provisioned. Reporting
+      // success here is what left stores linked but themeless, with the
+      // Provision button gone and re-sync insisting the theme was missing.
+      await admin
+        .from("shopify_stores")
+        .update({ sync_status: `theme upload failed: ${themeRes.error}` })
+        .eq("id", sid);
+      return {
+        error: `Products pushed, but the theme upload failed: ${themeRes.error}. Fix that and provision again.`,
+      };
     }
   }
 
@@ -160,7 +193,12 @@ export async function resyncShopifyTheme(storeId: string): Promise<{ error?: str
     .eq("id", store.shopify_store_id)
     .maybeSingle();
   if (!shopRow?.access_token) return { error: "That Shopify store has no access token." };
-  if (!shopRow.theme_id) return { error: "No theme uploaded yet — provision the store first." };
+  if (!shopRow.theme_id) {
+    return {
+      error:
+        "No theme on this store yet — the upload didn't complete. Use \u201cRetry provisioning\u201d on the Stores page, then update again.",
+    };
+  }
 
   const plan = store.content as {
     brandColors?: string[];
