@@ -1,78 +1,11 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { CheckCircle2 } from "lucide-react";
-import { createAdminClient } from "@ecomstrait/db";
-import { getStripe } from "@/lib/stripe";
 import { getStorefront } from "@/lib/storefront";
-import { recordCustomerOrder } from "@/lib/order-sink";
+import { confirmOrder } from "@/lib/storefront-orders";
+import { writeCart } from "@/lib/storefront-api";
 
 export const metadata: Metadata = { title: "Thank you" };
-
-type Addr = { name?: string | null; address?: Record<string, string | null> | null };
-
-function formatAddr(d: Addr | null | undefined): string | null {
-  if (!d) return null;
-  const a = d.address ?? {};
-  const parts = [
-    d.name,
-    [a.line1, a.line2].filter(Boolean).join(" "),
-    [a.city, a.state, a.postal_code].filter(Boolean).join(" "),
-    a.country,
-  ].filter(Boolean);
-  return parts.length ? parts.join(", ") : null;
-}
-
-/** Record the paid order once (idempotent), route to suppliers, adjust stock. */
-async function recordOrder(storeId: string, sessionId: string): Promise<void> {
-  const stripe = getStripe();
-  const admin = createAdminClient();
-  if (!stripe || !admin) return;
-
-  const session = await stripe.checkout.sessions.retrieve(sessionId);
-  if (session.payment_status !== "paid") return;
-
-  const lines: { productId: string; quantity: number }[] = JSON.parse(
-    (session.metadata?.lines as string) ?? "[]",
-  );
-  const ids = lines.map((l) => l.productId);
-  if (!ids.length) return;
-
-  const [{ data: prods }, { data: sp }] = await Promise.all([
-    admin.from("products").select("id, title, retail_price, supplier_id").in("id", ids),
-    admin.from("store_products").select("product_id, price").eq("store_id", storeId),
-  ]);
-  const priceMap = new Map((sp ?? []).map((r) => [r.product_id, r.price]));
-
-  const items = lines.map((l) => {
-    const p = (prods ?? []).find((x) => x.id === l.productId);
-    return {
-      product_id: l.productId,
-      supplier_id: p?.supplier_id ?? null,
-      name: p?.title ?? "Product",
-      quantity: l.quantity,
-      unit_price: priceMap.get(l.productId) ?? p?.retail_price ?? null,
-    };
-  });
-
-  const cust = session.customer_details;
-  const s = session as unknown as {
-    shipping_details?: Addr;
-    collected_information?: { shipping_details?: Addr };
-  };
-  const shipText =
-    formatAddr(s.collected_information?.shipping_details) ??
-    formatAddr(s.shipping_details) ??
-    formatAddr({ name: cust?.name, address: cust?.address as unknown as Record<string, string | null> });
-
-  await recordCustomerOrder(admin, {
-    storeId,
-    externalId: sessionId,
-    customerName: cust?.name,
-    customerEmail: cust?.email,
-    shipping: shipText,
-    items,
-  });
-}
 
 export default async function SuccessPage({
   params,
@@ -85,9 +18,11 @@ export default async function SuccessPage({
   const { session_id } = await searchParams;
   if (session_id) {
     try {
-      await recordOrder(id, session_id);
+      await confirmOrder(id, session_id);
+      // The purchase went through — don't leave the paid items in the cart.
+      await writeCart(id, []);
     } catch {
-      /* best-effort */
+      /* best-effort: the thank-you page must render either way */
     }
   }
   const store = await getStorefront(id);

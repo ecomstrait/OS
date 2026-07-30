@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { getStorefront } from "@/lib/storefront";
+import { listStoreProducts } from "@/lib/storefront-api";
 import { StorefrontView } from "@/components/storefront/storefront-view";
 
 export async function generateMetadata({
@@ -21,5 +22,10 @@ export default async function StorePage({ params }: { params: Promise<{ id: stri
   const { id } = await params;
   const store = await getStorefront(id);
   if (!store) notFound();
-  return <StorefrontView store={store} />;
+
+  // First page is server-rendered so the store is crawlable and paints without
+  // JS; search and further pages come from the products API.
+  const { products, total } = await listStoreProducts(id, { page: 1 });
+
+  return <StorefrontView store={store} initialProducts={products} initialTotal={total} />;
 }
