@@ -26,7 +26,7 @@ export async function provisionShopifyStore(storeId: string): Promise<{ error?: 
 
   const { data: store } = await supabase
     .from("stores")
-    .select("id, type, shopify_store_id, theme, content, logo_url")
+    .select("id, type, shopify_store_id, theme, content, logo_url, name")
     .eq("id", storeId)
     .eq("user_id", user.id)
     .maybeSingle();
@@ -118,7 +118,7 @@ export async function provisionShopifyStore(storeId: string): Promise<{ error?: 
       themeRes = await uploadAndPublishTheme(shopRow.shop_domain, shopRow.access_token, {
         themeName: liquid.name,
         files: liquid.files,
-        settings: settingsFromPlan(plan),
+        settings: settingsFromPlan(plan, store.name),
         logo: logoAssetFrom(store.logo_url),
       });
     } catch (e) {
@@ -173,7 +173,7 @@ export async function resyncShopifyTheme(storeId: string): Promise<{ error?: str
 
   const { data: store } = await supabase
     .from("stores")
-    .select("id, type, shopify_store_id, content, logo_url")
+    .select("id, type, shopify_store_id, content, logo_url, name")
     .eq("id", storeId)
     .eq("user_id", user.id)
     .maybeSingle();
@@ -210,7 +210,7 @@ export async function resyncShopifyTheme(storeId: string): Promise<{ error?: str
     shopRow.shop_domain,
     shopRow.access_token,
     shopRow.theme_id,
-    settingsFromPlan(plan),
+    settingsFromPlan(plan, store.name),
     logoAssetFrom(store.logo_url),
   );
   if (!res.ok) return { error: res.error };
