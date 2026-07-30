@@ -75,6 +75,13 @@ export function InventoryTable({ rows }: { rows: InventoryRow[] }) {
 
   return (
     <div className="flex flex-col gap-3">
+      {dirty.length > 0 && (
+        <p role="status" className="rounded-xl bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+          {dirty.length} unsaved change{dirty.length === 1 ? "" : "s"} on this page — save before
+          searching or changing page.
+        </p>
+      )}
+
       <div className="flex items-center justify-between gap-3">
         <label className="flex items-center gap-2 text-sm text-ink-600">
           <input
