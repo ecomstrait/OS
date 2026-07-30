@@ -6,6 +6,8 @@ import type { StoreStatus, StoreType } from "@ecomstrait/db";
 import { ProvisionButton } from "@/components/stores/provision-button";
 import { ResyncButton } from "@/components/stores/resync-button";
 import { StorePreview } from "@/components/stores/store-preview";
+import { DeleteStoreButton } from "@/components/stores/delete-store-button";
+import { MakeItYoursButton } from "@/components/stores/make-it-yours-button";
 
 export const metadata: Metadata = { title: "Stores" };
 
@@ -42,20 +44,38 @@ export default async function StoresPage() {
   const shopifyIds = list.map((s) => s.shopify_store_id).filter(Boolean) as string[];
   const shopById = new Map<
     string,
-    { shop_domain: string; storefront_password: string | null }
+    {
+      shop_domain: string;
+      storefront_password: string | null;
+      status: string;
+      transfer_email: string | null;
+    }
   >();
   if (shopifyIds.length) {
     const { data: shops } = await supabase
       .from("shopify_stores")
-      .select("id, shop_domain, storefront_password")
+      .select("id, shop_domain, storefront_password, status, transfer_email")
       .in("id", shopifyIds);
     (shops ?? []).forEach((sh) =>
       shopById.set(sh.id, {
         shop_domain: sh.shop_domain,
         storefront_password: sh.storefront_password,
+        status: sh.status,
+        transfer_email: sh.transfer_email,
       }),
     );
   }
+
+  // Which stores have taken payments — those get archived rather than deleted.
+  const { data: paid } = await supabase
+    .from("store_orders")
+    .select("store_id")
+    .in("store_id", list.map((s) => s.id).length ? list.map((s) => s.id) : ["00000000-0000-0000-0000-000000000000"]);
+  const withOrders = new Set((paid ?? []).map((o) => o.store_id));
+
+  // Our Shopify partner referral link — merchants sign up through it.
+  const referralUrl =
+    process.env.NEXT_PUBLIC_SHOPIFY_REFERRAL_URL || "https://www.shopify.com/free-trial";
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -125,9 +145,22 @@ export default async function StoresPage() {
                       </a>
                     )
                   )}
+                  {shop && (
+                    <MakeItYoursButton
+                      storeId={s.id}
+                      referralUrl={referralUrl}
+                      requestedEmail={shop.status === "waiting_for_transfer" ? shop.transfer_email : null}
+                      transferred={shop.status === "transferred"}
+                    />
+                  )}
                   <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_STYLE[s.status]}`}>
                     {s.status.replace(/_/g, " ")}
                   </span>
+                  <DeleteStoreButton
+                    storeId={s.id}
+                    storeName={s.name ?? "Untitled store"}
+                    hasOrders={withOrders.has(s.id)}
+                  />
                 </div>
               </div>
               );

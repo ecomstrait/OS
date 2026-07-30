@@ -283,6 +283,8 @@ export type Database = {
           theme_id: string | null;
           sync_status: string | null;
           storefront_password: string | null;
+          transfer_email: string | null;
+          transfer_requested_at: string | null;
           notes: string | null;
           created_at: string;
           updated_at: string;

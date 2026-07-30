@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { createAdminClient, PROMO_USER_LIMIT } from "@ecomstrait/db";
 import type { ShopifyStoreStatus } from "@ecomstrait/db/types";
 import { StorefrontPasswordField } from "@/components/admin/storefront-password-field";
+import { TransferControl } from "@/components/admin/transfer-control";
 import { SearchBar } from "@/components/app/search-bar";
 import { Pagination } from "@/components/app/pagination";
 import { clampPage, likeTerm, parseTableParams, type RawParams } from "@/lib/table-params";
@@ -33,7 +34,7 @@ export default async function AdminShopifyStoresPage({
   const storeQuery = () => {
     let query = client
       .from("shopify_stores")
-      .select("id, shop_domain, status, sync_status, owner_user_id, storefront_password, created_at", {
+      .select("id, shop_domain, status, sync_status, owner_user_id, storefront_password, transfer_email, transfer_requested_at, created_at", {
         count: "exact",
       });
     if (q) query = query.or(`shop_domain.ilike.${likeTerm(q)},sync_status.ilike.${likeTerm(q)}`);
@@ -165,6 +166,11 @@ export default async function AdminShopifyStoresPage({
                   </td>
                   <td className="hidden px-4 py-3 text-ink-500 md:table-cell">
                     {s.owner_user_id ? emailById.get(s.owner_user_id) ?? "—" : "unassigned"}
+                    {s.transfer_email && (
+                      <p className="mt-0.5 text-xs font-medium text-amber-700">
+                        → transfer to {s.transfer_email}
+                      </p>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <span
@@ -174,10 +180,17 @@ export default async function AdminShopifyStoresPage({
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <StorefrontPasswordField
-                      shopifyStoreId={s.id}
-                      initial={s.storefront_password}
-                    />
+                    <div className="flex flex-col items-end gap-2">
+                      <StorefrontPasswordField
+                        shopifyStoreId={s.id}
+                        initial={s.storefront_password}
+                      />
+                      <TransferControl
+                        shopifyStoreId={s.id}
+                        transferEmail={s.transfer_email}
+                        status={s.status}
+                      />
+                    </div>
                   </td>
                 </tr>
               ))}

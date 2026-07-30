@@ -164,3 +164,78 @@ export async function returnToPending(id: string): Promise<{ error?: string }> {
   revalidatePath(`/admin/suppliers/${id}`);
   return {};
 }
+
+/**
+ * Complete a "Make it yours" handover.
+ *
+ * The transfer itself happens in Shopify (Settings → Users → transfer
+ * ownership); this records that it's done, which is what flips the merchant's
+ * badge to "Yours". The store leaves our pool for good — it now belongs to the
+ * merchant's Shopify account and must never be reassigned to someone else.
+ */
+export async function markStoreTransferred(
+  shopifyStoreId: string,
+): Promise<{ error?: string }> {
+  const a = await asAdmin();
+  if ("error" in a) return a;
+
+  const { data: shop } = await a.client
+    .from("shopify_stores")
+    .select("id, status, transfer_email")
+    .eq("id", shopifyStoreId)
+    .maybeSingle();
+  if (!shop) return { error: "Store not found." };
+  if (!shop.transfer_email) {
+    return { error: "No transfer has been requested for this store." };
+  }
+  if (shop.status === "transferred") return {};
+
+  const { error } = await a.client
+    .from("shopify_stores")
+    .update({
+      status: "transferred",
+      transferred_at: new Date().toISOString(),
+      sync_status: `transferred to ${shop.transfer_email}`,
+    })
+    .eq("id", shopifyStoreId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/admin/shopify-stores");
+  return {};
+}
+
+/**
+ * Cancel a pending transfer request — e.g. the merchant gave the wrong email,
+ * or changed their mind. Returns the store to the merchant's assigned state
+ * rather than the free pool: they still own it here.
+ */
+export async function cancelStoreTransfer(
+  shopifyStoreId: string,
+): Promise<{ error?: string }> {
+  const a = await asAdmin();
+  if ("error" in a) return a;
+
+  const { data: shop } = await a.client
+    .from("shopify_stores")
+    .select("id, status")
+    .eq("id", shopifyStoreId)
+    .maybeSingle();
+  if (!shop) return { error: "Store not found." };
+  if (shop.status === "transferred") {
+    return { error: "This store has already been transferred." };
+  }
+
+  const { error } = await a.client
+    .from("shopify_stores")
+    .update({
+      status: "assigned",
+      transfer_email: null,
+      transfer_requested_at: null,
+      sync_status: "transfer request cancelled",
+    })
+    .eq("id", shopifyStoreId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/admin/shopify-stores");
+  return {};
+}
