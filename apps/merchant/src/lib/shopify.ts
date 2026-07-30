@@ -381,3 +381,141 @@ export async function fetchShopCatalog(
   }
   return { productIds, skuToProductId, withoutMedia };
 }
+
+const DEFAULT_PROFILE = `
+{
+  deliveryProfiles(first: 5) {
+    nodes {
+      id
+      default
+      profileLocationGroups {
+        locationGroup { id }
+        locationGroupZones(first: 10) {
+          nodes {
+            zone { id name }
+            methodDefinitions(first: 5) { nodes { id name active } }
+          }
+        }
+      }
+    }
+  }
+}`;
+
+const DELIVERY_PROFILE_UPDATE = `
+mutation deliveryProfileUpdate($id: ID!, $profile: DeliveryProfileInput!) {
+  deliveryProfileUpdate(id: $id, profile: $profile) {
+    profile { id }
+    userErrors { field message }
+  }
+}`;
+
+export type ShippingState = {
+  /** Null when the read_shipping scope isn't granted. */
+  hasRate: boolean | null;
+  detail: string;
+};
+
+/** Does the store have any active shipping rate a customer could pick? */
+export async function fetchShippingState(shop: string, token: string): Promise<ShippingState> {
+  try {
+    const res = await shopifyGraphql(shop, token)<{
+      data?: {
+        deliveryProfiles?: {
+          nodes?: {
+            default: boolean;
+            profileLocationGroups?: {
+              locationGroupZones?: {
+                nodes?: { methodDefinitions?: { nodes?: { active: boolean }[] } }[];
+              };
+            }[];
+          }[];
+        };
+      };
+      errors?: { message: string }[];
+    }>(DEFAULT_PROFILE);
+
+    if (res.errors?.length) return { hasRate: null, detail: res.errors[0].message };
+
+    const rates = (res.data?.deliveryProfiles?.nodes ?? []).flatMap((p) =>
+      (p.profileLocationGroups ?? []).flatMap((g) =>
+        (g.locationGroupZones?.nodes ?? []).flatMap((z) =>
+          (z.methodDefinitions?.nodes ?? []).filter((m) => m.active),
+        ),
+      ),
+    );
+    return {
+      hasRate: rates.length > 0,
+      detail: rates.length
+        ? `${rates.length} active rate${rates.length === 1 ? "" : "s"}`
+        : "No shipping rate — checkout will block",
+    };
+  } catch (e) {
+    return { hasRate: null, detail: e instanceof Error ? e.message : "couldn't read shipping" };
+  }
+}
+
+/**
+ * Give a new store a usable shipping rate.
+ *
+ * A store with products but no rate takes the customer all the way to checkout
+ * and then refuses to complete, so provisioning seeds one. No-ops when a rate
+ * already exists — we never overwrite what a merchant set up themselves.
+ */
+export async function ensureDefaultShippingRate(
+  shop: string,
+  token: string,
+  opts: { amount?: number; countryCodes?: string[] } = {},
+): Promise<{ created: boolean; note: string }> {
+  const gql = shopifyGraphql(shop, token);
+
+  const state = await fetchShippingState(shop, token);
+  if (state.hasRate === null) return { created: false, note: `shipping not checked (${state.detail})` };
+  if (state.hasRate) return { created: false, note: "shipping rate already set" };
+
+  const res = await gql<{
+    data?: {
+      deliveryProfiles?: {
+        nodes?: { id: string; default: boolean; profileLocationGroups?: { locationGroup: { id: string } }[] }[];
+      };
+    };
+  }>(DEFAULT_PROFILE);
+  const profile =
+    res.data?.deliveryProfiles?.nodes?.find((p) => p.default) ?? res.data?.deliveryProfiles?.nodes?.[0];
+  const groupId = profile?.profileLocationGroups?.[0]?.locationGroup?.id;
+  if (!profile || !groupId) return { created: false, note: "no delivery profile to update" };
+
+  const update = await gql<{
+    data?: { deliveryProfileUpdate?: { userErrors?: { message: string }[] } };
+    errors?: { message: string }[];
+  }>(DELIVERY_PROFILE_UPDATE, {
+    id: profile.id,
+    profile: {
+      locationGroupsToUpdate: [
+        {
+          id: groupId,
+          zonesToCreate: [
+            {
+              name: "Standard shipping",
+              countries: opts.countryCodes?.length
+                ? opts.countryCodes.map((code) => ({ code }))
+                : [{ restOfWorld: true }],
+              methodDefinitionsToCreate: [
+                {
+                  name: "Standard",
+                  active: true,
+                  rateDefinition: {
+                    price: { amount: String(opts.amount ?? 5), currencyCode: "USD" },
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  });
+
+  const errs = collectErrors(update.data?.deliveryProfileUpdate?.userErrors, update.errors);
+  if (errs.length) return { created: false, note: `shipping rate failed: ${errs.join("; ")}` };
+  return { created: true, note: "added a standard shipping rate" };
+}

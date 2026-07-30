@@ -32,7 +32,9 @@ api_version = "2026-10"
 # read_publications/write_publications → publish products to the Online Store
 # sales channel. Without this a product exists in admin but never appears on
 # the storefront (publishedAt stays null).
-scopes = "write_products,write_metaobjects,write_metaobject_definitions,read_orders,read_themes,write_themes,read_locations,write_inventory,read_publications,write_publications"
+# read_shipping/write_shipping → create a default delivery rate at provision,
+# and read it back for the launch checklist.
+scopes = "write_products,write_metaobjects,write_metaobject_definitions,read_orders,read_themes,write_themes,read_locations,write_inventory,read_publications,write_publications,read_shipping,write_shipping"
 
 [auth]
 redirect_urls = [ "https://shopify-ten-jet.vercel.app/api/auth" ]

@@ -4,7 +4,15 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@ecomstrait/auth/server";
 import { createAdminClient } from "@ecomstrait/db";
 import { productImage } from "@/lib/catalog";
-import { pushProductsToShopify, fetchShopCatalog, backfillProductMedia } from "@/lib/shopify";
+import { shopifyGraphql } from "@/lib/shopify";
+import {
+  pushProductsToShopify,
+  fetchShopCatalog,
+  backfillProductMedia,
+  ensureDefaultShippingRate,
+  fetchShippingState,
+  fetchOnlineStorePublicationId,
+} from "@/lib/shopify";
 import {
   uploadAndPublishTheme,
   pushThemeSettings,
@@ -111,6 +119,16 @@ export async function provisionShopifyStore(storeId: string): Promise<{ error?: 
       .eq("product_id", ourId);
   }
 
+  // A store with products but no shipping rate dies at checkout, so seed one.
+  // Best-effort: never fail provisioning over it.
+  let shippingNote = "";
+  try {
+    const ship = await ensureDefaultShippingRate(shopRow.shop_domain, shopRow.access_token);
+    if (ship.created) shippingNote = " + shipping";
+  } catch {
+    /* reported by the launch checklist instead */
+  }
+
   // Path 2 (shopify_liquid_theme): upload + publish our Liquid theme with the
   // store's brand settings. Requires the write_themes scope and a publicly
   // reachable NEXT_PUBLIC_MERCHANT_URL (Shopify fetches the theme zip).
@@ -161,7 +179,7 @@ export async function provisionShopifyStore(storeId: string): Promise<{ error?: 
     .from("shopify_stores")
     .update({
       status: "ready_for_review",
-      sync_status: `pushed ${result.created} products${themeNote}`,
+      sync_status: `pushed ${result.created} products${themeNote}${shippingNote}`,
       ...(themeGid ? { theme_id: themeGid } : {}),
     })
     .eq("id", sid);
@@ -385,4 +403,121 @@ export async function syncProductsToShopify(
     skipped,
     note: `Added ${result.created} product${result.created === 1 ? "" : "s"}${skipped ? `, skipped ${skipped} already there` : ""}${media.updated ? `, added images to ${media.updated}` : ""}.`,
   };
+}
+
+export type ReadinessCheck = {
+  id: string;
+  label: string;
+  /** null = we can't determine it from the API. */
+  ok: boolean | null;
+  detail: string;
+  /** Where the merchant fixes it, when it's a Shopify admin setting. */
+  fixPath?: string;
+};
+
+/**
+ * Can this store actually take an order?
+ *
+ * Provisioning can succeed while the storefront is still uncheckoutable —
+ * products unpublished, no shipping rate, no payment provider. This surfaces
+ * those before a merchant discovers them at a dead checkout button.
+ */
+export async function getStoreReadiness(
+  storeId: string,
+): Promise<{ error?: string; shopDomain?: string; checks?: ReadinessCheck[] }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated." };
+
+  const { data: store } = await supabase
+    .from("stores")
+    .select("id, type, shopify_store_id")
+    .eq("id", storeId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!store) return { error: "Store not found." };
+  if (!store.shopify_store_id) return { error: "Provision this store on Shopify first." };
+
+  const admin = createAdminClient();
+  if (!admin) return { error: "Server not configured." };
+
+  const { data: shopRow } = await admin
+    .from("shopify_stores")
+    .select("shop_domain, access_token, theme_id")
+    .eq("id", store.shopify_store_id)
+    .maybeSingle();
+  if (!shopRow?.access_token) return { error: "That Shopify store has no access token." };
+
+  const shop = shopRow.shop_domain;
+  const token = shopRow.access_token;
+  const checks: ReadinessCheck[] = [];
+
+  // Products present and visible to the storefront.
+  const catalog = await fetchShopCatalog(shop, token).catch(() => null);
+  const gql = shopifyGraphql(shop, token);
+  const vis = await gql<{
+    data?: { products?: { nodes?: { publishedAt: string | null }[] } };
+  }>(`{ products(first: 100) { nodes { publishedAt } } }`).catch(() => null);
+  const nodes = vis?.data?.products?.nodes ?? [];
+  const unpublished = nodes.filter((p) => !p.publishedAt).length;
+
+  checks.push({
+    id: "products",
+    label: "Products in the store",
+    ok: (catalog?.productIds.size ?? 0) > 0,
+    detail: catalog ? `${catalog.productIds.size} product(s)` : "couldn't read the catalog",
+  });
+  checks.push({
+    id: "published",
+    label: "Products visible on the storefront",
+    ok: nodes.length > 0 ? unpublished === 0 : null,
+    detail:
+      nodes.length === 0
+        ? "no products to check"
+        : unpublished === 0
+          ? "all published to Online Store"
+          : `${unpublished} not published — they stay hidden`,
+  });
+
+  if (store.type === "shopify_liquid_theme") {
+    checks.push({
+      id: "theme",
+      label: "Theme installed",
+      ok: Boolean(shopRow.theme_id),
+      detail: shopRow.theme_id ? "EcomStrait theme published" : "not uploaded — run Retry provisioning",
+    });
+  }
+
+  const ship = await fetchShippingState(shop, token);
+  checks.push({
+    id: "shipping",
+    label: "Shipping rate",
+    ok: ship.hasRate,
+    detail: ship.detail,
+    fixPath: "settings/shipping",
+  });
+
+  // Publishing needs the scope; say so rather than reporting a false pass.
+  const pub = await fetchOnlineStorePublicationId(shop, token);
+  if (!pub) {
+    checks.push({
+      id: "scopes",
+      label: "App permissions",
+      ok: false,
+      detail: "Reinstall the app — it can't publish products without newer permissions",
+    });
+  }
+
+  // No Shopify API can enable a payment provider; only the owner can, in admin.
+  checks.push({
+    id: "payments",
+    label: "Payments",
+    ok: null,
+    detail: "Set up a provider in Shopify — checkout stays disabled until you do",
+    fixPath: "settings/payments",
+  });
+
+  return { shopDomain: shop, checks };
 }
