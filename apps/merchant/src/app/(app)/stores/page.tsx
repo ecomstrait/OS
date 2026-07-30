@@ -49,12 +49,13 @@ export default async function StoresPage() {
       storefront_password: string | null;
       status: string;
       transfer_email: string | null;
+      theme_id: string | null;
     }
   >();
   if (shopifyIds.length) {
     const { data: shops } = await supabase
       .from("shopify_stores")
-      .select("id, shop_domain, storefront_password, status, transfer_email")
+      .select("id, shop_domain, storefront_password, status, transfer_email, theme_id")
       .in("id", shopifyIds);
     (shops ?? []).forEach((sh) =>
       shopById.set(sh.id, {
@@ -62,6 +63,7 @@ export default async function StoresPage() {
         storefront_password: sh.storefront_password,
         status: sh.status,
         transfer_email: sh.transfer_email,
+        theme_id: sh.theme_id,
       }),
     );
   }
@@ -116,9 +118,14 @@ export default async function StoresPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  {s.type.startsWith("shopify") && !s.shopify_store_id && (
-                    <ProvisionButton storeId={s.id} />
-                  )}
+                  {s.type.startsWith("shopify") &&
+                    (!s.shopify_store_id ||
+                      (s.type === "shopify_liquid_theme" && !shop?.theme_id)) && (
+                      <ProvisionButton
+                        storeId={s.id}
+                        label={s.shopify_store_id ? "Retry provisioning" : undefined}
+                      />
+                    )}
                   {s.type === "shopify_liquid_theme" && s.shopify_store_id && (
                     <ResyncButton storeId={s.id} />
                   )}
