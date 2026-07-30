@@ -16,6 +16,9 @@ export function DeleteStoreButton({
   hasOrders,
   asMenuItem,
   onDone,
+  controlledOpen,
+  onClose,
+  hideTrigger,
 }: {
   storeId: string;
   storeName: string;
@@ -23,9 +26,15 @@ export function DeleteStoreButton({
   /** Render the trigger as a row inside the Actions menu. */
   asMenuItem?: boolean;
   onDone?: () => void;
+  /** Drive the dialog from a parent (so it can live outside a dropdown). */
+  controlledOpen?: boolean;
+  onClose?: () => void;
+  hideTrigger?: boolean;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [selfOpen, setSelfOpen] = useState(false);
+  const open = controlledOpen ?? selfOpen;
+  const setOpen = (v: boolean) => (controlledOpen !== undefined ? !v && onClose?.() : setSelfOpen(v));
   const [value, setValue] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -47,7 +56,7 @@ export function DeleteStoreButton({
 
   return (
     <>
-      {asMenuItem ? (
+      {hideTrigger ? null : asMenuItem ? (
         <button
           onClick={() => setOpen(true)}
           className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-red-600 hover:bg-red-50"

@@ -19,6 +19,9 @@ export function MakeItYoursButton({
   transferred,
   asMenuItem,
   onDone,
+  controlledOpen,
+  onClose,
+  hideTrigger,
 }: {
   storeId: string;
   referralUrl: string;
@@ -28,16 +31,23 @@ export function MakeItYoursButton({
   /** Render the trigger as a row inside the Actions menu. */
   asMenuItem?: boolean;
   onDone?: () => void;
+  /** Drive the dialog from a parent (so it can live outside a dropdown). */
+  controlledOpen?: boolean;
+  onClose?: () => void;
+  hideTrigger?: boolean;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [selfOpen, setSelfOpen] = useState(false);
+  const open = controlledOpen ?? selfOpen;
+  const setOpen = (v: boolean) => (controlledOpen !== undefined ? !v && onClose?.() : setSelfOpen(v));
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
   // Both states are informational — the badge belongs on the row, not the menu.
   if (transferred || requestedEmail) {
-    if (asMenuItem) return null;
+    // The row already shows this state; don't render a second badge.
+    if (asMenuItem || hideTrigger) return null;
     return transferred ? (
       <span className="inline-flex items-center gap-1.5 rounded-lg bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700">
         <Check className="h-3.5 w-3.5" /> Yours
@@ -68,7 +78,7 @@ export function MakeItYoursButton({
 
   return (
     <>
-      {asMenuItem ? (
+      {hideTrigger ? null : asMenuItem ? (
         <button
           onClick={() => setOpen(true)}
           className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium text-ink-700 hover:bg-ink-50"
