@@ -33,19 +33,97 @@ async function withSupplierNames(
   return rows.map((p) => ({ ...p, supplier_name: names.get(p.supplier_id) ?? "Supplier" }));
 }
 
-/** Published products across approved suppliers (optionally filtered). */
-export async function getPublishedCatalog(search?: string): Promise<CatalogProduct[]> {
+export type CatalogFilters = {
+  /** Free-text match on the product title. */
+  search?: string;
+  /** A supplier id, or "" / undefined for all suppliers. */
+  supplierId?: string;
+  /** A product category ("niche"), or "" / undefined for all. */
+  category?: string;
+};
+
+/** Strip LIKE wildcards so a typed `%` matches literally rather than everything. */
+function likeSafe(term: string): string {
+  return term.replace(/[%_\\]/g, " ").trim().slice(0, 80);
+}
+
+export type CatalogPage = { products: CatalogProduct[]; total: number };
+
+/**
+ * One page of published products across approved suppliers. `total` is the full
+ * filtered count, so the pager can show "1–24 of 312" rather than capping at
+ * whatever fits on screen.
+ */
+export async function getPublishedCatalog(
+  filters: CatalogFilters = {},
+  range?: { from: number; to: number },
+): Promise<CatalogPage> {
   const admin = createAdminClient();
-  if (!admin) return [];
-  let q = admin
+  if (!admin) return { products: [], total: 0 };
+
+  const build = () => {
+    let q = admin
+      .from("products")
+      .select(SELECT, { count: "exact" })
+      .eq("status", "published");
+    const search = likeSafe(filters.search ?? "");
+    if (search) q = q.ilike("title", `%${search}%`);
+    if (filters.supplierId) q = q.eq("supplier_id", filters.supplierId);
+    if (filters.category) q = q.eq("category", filters.category);
+    return q.order("created_at", { ascending: false });
+  };
+
+  const { data, count } = range
+    ? await build().range(range.from, range.to)
+    : await build().limit(60);
+
+  return {
+    products: await withSupplierNames(admin, data ?? []),
+    total: count ?? 0,
+  };
+}
+
+export type CatalogFacets = {
+  suppliers: { id: string; name: string }[];
+  categories: string[];
+};
+
+/**
+ * The supplier and category options to offer in the filter bar — derived from
+ * what's actually published, so the dropdowns never list an empty combination.
+ */
+export async function getCatalogFacets(): Promise<CatalogFacets> {
+  const admin = createAdminClient();
+  if (!admin) return { suppliers: [], categories: [] };
+
+  const { data } = await admin
     .from("products")
-    .select(SELECT)
-    .eq("status", "published")
-    .order("created_at", { ascending: false })
-    .limit(60);
-  if (search?.trim()) q = q.ilike("title", `%${search.trim()}%`);
-  const { data } = await q;
-  return withSupplierNames(admin, data ?? []);
+    .select("supplier_id, category")
+    .eq("status", "published");
+  const rows = data ?? [];
+
+  const categories = [
+    ...new Set(
+      rows
+        .map((r) => r.category?.trim())
+        .filter((c): c is string => Boolean(c)),
+    ),
+  ].sort((a, b) => a.localeCompare(b));
+
+  const supplierIds = [...new Set(rows.map((r) => r.supplier_id))];
+  const names = new Map<string, string>();
+  if (supplierIds.length) {
+    const { data: sup } = await admin
+      .from("suppliers")
+      .select("id, business_name")
+      .in("id", supplierIds);
+    (sup ?? []).forEach((s) => names.set(s.id, s.business_name ?? "Supplier"));
+  }
+  const suppliers = supplierIds
+    .map((id) => ({ id, name: names.get(id) ?? "Supplier" }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  return { suppliers, categories };
 }
 
 /** Auto-pick published products that fit a niche (falls back to any published). */
