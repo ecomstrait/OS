@@ -63,8 +63,12 @@ export async function provisionShopifyStore(storeId: string): Promise<{ error?: 
     .maybeSingle();
   if (!shopRow?.access_token) return { error: "That Shopify store has no access token." };
 
-  // Build the product list from the store's catalog.
-  const { data: sp } = await admin.from("store_products").select("product_id, price").eq("store_id", storeId);
+  // Build the product list from the store's catalog — supplier-approved only.
+  const { data: sp } = await admin
+    .from("store_products")
+    .select("product_id, price")
+    .eq("store_id", storeId)
+    .eq("status", "approved");
   const ids = (sp ?? []).map((r) => r.product_id);
   const { data: prods } = ids.length
     ? await admin.from("products").select("id, title, description").in("id", ids)

@@ -1,13 +1,22 @@
 import { ImageOff } from "lucide-react";
+import type { ListingStatus } from "@ecomstrait/db/types";
 import { productImage, type CatalogProduct } from "@/lib/catalog";
 import { AddButton } from "@/components/catalog/add-button";
+import { ListingMenu } from "@/components/catalog/listing-menu";
+import type { StoreOption } from "@/lib/listings";
 
 export function ProductCard({
   product,
   selected,
+  stores,
+  listings,
 }: {
   product: CatalogProduct;
   selected: boolean;
+  /** When the merchant has stores, the card offers "Add to store" instead of
+   *  the pre-store basket toggle. */
+  stores?: StoreOption[];
+  listings?: Record<string, ListingStatus>;
 }) {
   const img = productImage(product.images?.[0]);
   return (
@@ -45,7 +54,11 @@ export function ProductCard({
         {/* mt-auto pins the button to the card's bottom edge, so a two-line
             title in one tile doesn't push its button out of line with the rest. */}
         <div className="mt-auto pt-3">
-          <AddButton productId={product.id} selected={selected} />
+          {stores?.length ? (
+            <ListingMenu productId={product.id} stores={stores} listings={listings ?? {}} />
+          ) : (
+            <AddButton productId={product.id} selected={selected} />
+          )}
         </div>
       </div>
     </div>

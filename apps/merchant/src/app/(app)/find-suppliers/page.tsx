@@ -4,6 +4,7 @@ import { Search, PackageOpen, X } from "lucide-react";
 import { clampPage, parseTableParams, type RawParams } from "@ecomstrait/ui";
 import { Pagination } from "@ecomstrait/ui/pagination";
 import { getPublishedCatalog, getSelectedIds, getCatalogFacets } from "@/lib/catalog";
+import { getMerchantStores, getListingsFor } from "@/lib/listings";
 import { ProductCard } from "@/components/catalog/product-card";
 import { FilterSelect } from "@/components/catalog/filter-select";
 
@@ -25,16 +26,20 @@ export default async function FindSuppliersPage({
   const filters = { search: q, supplierId: supplier, category };
   const at = (page: number) => ({ from: (page - 1) * size, to: page * size - 1 });
 
-  const [firstTry, selected, facets] = await Promise.all([
+  const [firstTry, selected, facets, stores] = await Promise.all([
     getPublishedCatalog(filters, at(wanted)),
     getSelectedIds(),
     getCatalogFacets(),
+    getMerchantStores(),
   ]);
 
   // Only re-query when the requested page fell past the end of the result set.
   const page = clampPage(wanted, firstTry.total, size);
   const { products, total } =
     page === wanted ? firstTry : await getPublishedCatalog(filters, at(page));
+
+  // One lookup for the whole page rather than one per card.
+  const listings = await getListingsFor(products.map((p) => p.id));
 
   const filtering = Boolean(q || supplier || category);
   const supplierName = facets.suppliers.find((s) => s.id === supplier)?.name;
@@ -133,7 +138,13 @@ export default async function FindSuppliersPage({
           <>
             <div className="grid items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {products.map((p) => (
-                <ProductCard key={p.id} product={p} selected={selected.has(p.id)} />
+                <ProductCard
+                  key={p.id}
+                  product={p}
+                  selected={selected.has(p.id)}
+                  stores={stores}
+                  listings={listings[p.id] ?? {}}
+                />
               ))}
             </div>
             <Pagination
