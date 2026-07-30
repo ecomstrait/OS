@@ -14,11 +14,13 @@ import {
   Sparkles,
   Store,
   Trash2,
+  ClipboardCheck,
 } from "lucide-react";
 import { cn } from "@ecomstrait/ui";
 import { provisionShopifyStore, resyncShopifyTheme, syncProductsToShopify } from "@/lib/shopify-actions";
 import { DeleteStoreButton } from "@/components/stores/delete-store-button";
 import { MakeItYoursButton } from "@/components/stores/make-it-yours-button";
+import { ReadinessDialog } from "@/components/stores/readiness-dialog";
 
 type Props = {
   storeId: string;
@@ -61,7 +63,7 @@ export function StoreActions({
   const [pending, start] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
   const [isError, setIsError] = useState(false);
-  const [dialog, setDialog] = useState<"delete" | "transfer" | null>(null);
+  const [dialog, setDialog] = useState<"delete" | "transfer" | "readiness" | null>(null);
 
   const open = coords !== null;
 
@@ -137,6 +139,19 @@ export function StoreActions({
             onClick={() => run(() => syncProductsToShopify(storeId))}
           >
             <PackagePlus className="h-4 w-4" /> Sync products
+          </button>
+        )}
+
+        {hasShopify && (
+          <button
+            role="menuitem"
+            className={item}
+            onClick={() => {
+              setCoords(null);
+              setDialog("readiness");
+            }}
+          >
+            <ClipboardCheck className="h-4 w-4" /> Launch checklist
           </button>
         )}
 
@@ -220,6 +235,9 @@ export function StoreActions({
         onClose={() => setDialog(null)}
         onDone={() => setDialog(null)}
       />
+      {dialog === "readiness" && (
+        <ReadinessDialog storeId={storeId} onClose={() => setDialog(null)} />
+      )}
       <MakeItYoursButton
         storeId={storeId}
         referralUrl={referralUrl}
