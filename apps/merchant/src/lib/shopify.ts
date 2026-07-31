@@ -231,6 +231,11 @@ export async function pushProductsToShopify(
 
   // One lookup each for the whole batch. Null when the scope isn't granted.
   const locationId = await fetchPrimaryLocation(shop, token);
+  if (!locationId) {
+    errors.push(
+      "Stock levels not set — couldn't read the shop's location. The app needs the read_locations scope (reconnect the store). Products are created and tracked but show 0 in stock.",
+    );
+  }
   const publicationId = await fetchOnlineStorePublicationId(shop, token);
   if (!publicationId) {
     errors.push(
@@ -293,6 +298,9 @@ export async function pushProductsToShopify(
 
         const inventoryItemId =
           vr.data?.productVariantsBulkUpdate?.productVariants?.[0]?.inventoryItem?.id;
+        if (track && !inventoryItemId) {
+          errors.push(`${p.title} (stock): Shopify returned no inventory item for the variant`);
+        }
         if (track && locationId && inventoryItemId) {
           const iv = await gql<InventoryResp>(inventorySetDoc(), {
             input: {
