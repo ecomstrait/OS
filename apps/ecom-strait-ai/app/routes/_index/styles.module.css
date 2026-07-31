@@ -22,6 +22,29 @@
 .content {
   display: grid;
   gap: 2rem;
+  max-width: 42rem;
+  margin: 0 auto;
+}
+
+/* Brand tokens, matching the marketing site. */
+.eyebrow {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #10b981;
+}
+
+.footnote {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #6a80b0;
+}
+
+.link {
+  color: #10b981;
+  font-weight: 600;
 }
 
 .form {
@@ -70,4 +93,14 @@
   .list > li {
     padding-bottom: 1rem;
   }
+}
+
+.heading {
+  color: #0f172a;
+  letter-spacing: -0.02em;
+}
+
+.button {
+  background: #10b981;
+  border-color: #10b981;
 }
