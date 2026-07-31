@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { createClient } from "@ecomstrait/auth/client";
 import { Button, TextField } from "@/components/ui";
+import { authCallbackUrl } from "@/lib/site-url";
 
 export function SignupForm() {
   const router = useRouter();
@@ -28,7 +29,7 @@ export function SignupForm() {
       password,
       options: {
         data: { full_name: fullName },
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        emailRedirectTo: authCallbackUrl(),
       },
     });
     if (error) {
