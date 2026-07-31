@@ -2,6 +2,7 @@
 
 import { createClient } from "@ecomstrait/auth/client";
 import { Button } from "@/components/ui";
+import { authCallbackUrl } from "@/lib/site-url";
 
 /** Google OAuth sign-in. Works once the Google provider is enabled in Supabase. */
 export function GoogleButton({ label = "Continue with Google" }: { label?: string }) {
@@ -9,7 +10,7 @@ export function GoogleButton({ label = "Continue with Google" }: { label?: strin
     const supabase = createClient();
     await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: { redirectTo: authCallbackUrl() },
     });
   }
 

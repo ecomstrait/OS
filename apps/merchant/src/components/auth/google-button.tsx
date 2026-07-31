@@ -2,13 +2,14 @@
 
 import { createClient } from "@ecomstrait/auth/client";
 import { Button } from "@/components/ui";
+import { authCallbackUrl } from "@/lib/site-url";
 
 export function GoogleButton({ label = "Continue with Google" }: { label?: string }) {
   async function onClick() {
     const supabase = createClient();
     await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: { redirectTo: authCallbackUrl() },
     });
   }
 
