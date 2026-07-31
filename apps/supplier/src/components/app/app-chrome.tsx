@@ -18,6 +18,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { cn } from "@ecomstrait/ui";
+import { BetaBadge } from "@ecomstrait/ui/beta";
 import { signOut } from "@/lib/actions";
 import type { Notification } from "@/lib/notifications";
 
@@ -61,8 +62,12 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 
 function Brand() {
   return (
-    <Link href="/dashboard" className="text-base font-bold tracking-tight text-ink-950">
+    <Link
+      href="/dashboard"
+      className="inline-flex items-center gap-1.5 text-base font-bold tracking-tight text-ink-950"
+    >
       EcomStrait <span className="text-brand-600">Suppliers</span>
+      <BetaBadge />
     </Link>
   );
 }
