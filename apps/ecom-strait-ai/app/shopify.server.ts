@@ -6,6 +6,7 @@ import {
 } from "@shopify/shopify-app-react-router/server";
 import { PrismaSessionStorage } from "@shopify/shopify-app-session-storage-prisma";
 import prisma from "./db.server";
+import { merchantBaseUrl } from "./merchant-url.server";
 
 const shopify = shopifyApp({
   apiKey: process.env.SHOPIFY_API_KEY,
@@ -45,7 +46,7 @@ export async function pushConnection(session: {
   accessToken?: string;
   scope?: string;
 }): Promise<void> {
-  const merchant = process.env.ECOMSTRAIT_MERCHANT_URL;
+  const merchant = merchantBaseUrl();
   const secret = process.env.ECOMSTRAIT_SHARED_SECRET;
   if (!merchant || !secret || !session.accessToken) {
     console.log("[ecomstrait] connect skipped (missing merchant url / secret / token)");

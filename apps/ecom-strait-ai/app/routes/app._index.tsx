@@ -2,6 +2,7 @@ import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
 import { Link, useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
 import { authenticate } from "../shopify.server";
+import { merchantBaseUrl } from "../merchant-url.server";
 
 /**
  * EcomStrait home inside Shopify admin.
@@ -40,7 +41,7 @@ const SERVICES: [string, string][] = [
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { session } = await authenticate.admin(request);
-  const base = process.env.ECOMSTRAIT_MERCHANT_URL;
+  const base = merchantBaseUrl();
   const secret = process.env.ECOMSTRAIT_SHARED_SECRET;
 
   if (!base || !secret) {

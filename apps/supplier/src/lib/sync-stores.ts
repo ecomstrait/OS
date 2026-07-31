@@ -1,4 +1,5 @@
 import "server-only";
+import { merchantBaseUrl } from "@/lib/merchant-url";
 
 /**
  * Tell the merchant app to re-push a product to every Shopify store selling it.
@@ -30,7 +31,7 @@ export async function syncProductToStores(
   const ids = (Array.isArray(productIds) ? productIds : [productIds]).filter(Boolean);
   if (!ids.length) return;
 
-  const base = process.env.ECOMSTRAIT_MERCHANT_URL;
+  const base = merchantBaseUrl();
   const secret = process.env.ECOMSTRAIT_SHARED_SECRET;
   if (!base || !secret) return;
 
