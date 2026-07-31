@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { useFetcher, useLoaderData, useSearchParams } from "react-router";
 import { authenticate } from "../shopify.server";
+import { merchantBaseUrl } from "../merchant-url.server";
 
 /**
  * Discover products — the in-Shopify catalog browser.
@@ -37,7 +38,7 @@ type CatalogResponse = {
 
 function platform() {
   return {
-    base: process.env.ECOMSTRAIT_MERCHANT_URL,
+    base: merchantBaseUrl(),
     secret: process.env.ECOMSTRAIT_SHARED_SECRET,
   };
 }

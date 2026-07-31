@@ -1,4 +1,5 @@
 import "server-only";
+import { merchantBaseUrl } from "@/lib/merchant-url";
 
 /**
  * Ask the merchant app to push an approved listing into its Shopify store.
@@ -12,7 +13,7 @@ export async function pushListingToShopify(
   storeId: string,
   productId: string,
 ): Promise<{ pushed: boolean; note: string }> {
-  const base = process.env.ECOMSTRAIT_MERCHANT_URL;
+  const base = merchantBaseUrl();
   const secret = process.env.ECOMSTRAIT_SHARED_SECRET;
   if (!base || !secret) {
     return { pushed: false, note: "Approved. It goes live on the storefront right away." };
