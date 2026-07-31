@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@ecomstrait/auth/server";
 import { createAdminClient } from "@ecomstrait/db";
+import { wipeStoreContent } from "@/lib/shopify";
 
 /** Rename a store (owner-scoped). This is our platform label + the own-platform
  *  storefront name; the Shopify shop display name is set manually in Shopify. */
@@ -78,28 +79,74 @@ export async function deleteStore(
     .select("id", { count: "exact", head: true })
     .eq("store_id", storeId);
 
-  // Release the dev store back to the available pool. Needs the service role:
-  // merchants can read their assigned row but must not be able to write it.
+  // Release the dev store back to the pool — but only after clearing our
+  // content off it. Needs the service role: merchants can read their assigned
+  // row but must not be able to write it.
   //
   // NEVER release a store that has already been handed over — it lives on the
   // merchant's own Shopify account now, and recycling it would hand their live
   // shop to a different merchant. The `.neq` makes that a database-level
   // condition rather than a check that can be skipped by a race.
+  let wipeNote = "";
   if (store.shopify_store_id) {
     const admin = createAdminClient();
     if (admin) {
-      await admin
+      const { data: shopRow } = await admin
         .from("shopify_stores")
-        .update({
-          status: "available",
-          owner_user_id: null,
-          theme_id: null,
-          sync_status: "released — merchant removed the store",
-          transfer_email: null,
-          transfer_requested_at: null,
-        })
+        .select("shop_domain, access_token, theme_id, status")
         .eq("id", store.shopify_store_id)
-        .neq("status", "transferred");
+        .maybeSingle();
+
+      const alreadyTransferred = shopRow?.status === "transferred";
+
+      // Wipe what WE put there, so the next merchant gets a clean shop.
+      if (shopRow?.access_token && !alreadyTransferred) {
+        const { data: listings } = await admin
+          .from("store_products")
+          .select("shopify_product_id")
+          .eq("store_id", storeId)
+          .not("shopify_product_id", "is", null);
+        const productIds = (listings ?? [])
+          .map((l) => l.shopify_product_id)
+          .filter((id): id is string => Boolean(id));
+
+        const wipe = await wipeStoreContent(shopRow.shop_domain, shopRow.access_token, {
+          productIds,
+          themeGid: shopRow.theme_id,
+        });
+        wipeNote = wipe.errors.length
+          ? ` Cleared ${wipe.productsDeleted} product(s), but some content remains — support has been notified.`
+          : "";
+
+        // A partial wipe must not reach another merchant, so hold it back for
+        // an admin rather than returning a dirty shop to the pool.
+        if (wipe.errors.length) {
+          await admin
+            .from("shopify_stores")
+            .update({
+              status: "archived",
+              owner_user_id: null,
+              sync_status: `needs manual wipe: ${wipe.errors.slice(0, 2).join("; ")}`,
+            })
+            .eq("id", store.shopify_store_id)
+            .neq("status", "transferred");
+        }
+      }
+
+      if (!wipeNote) {
+        await admin
+          .from("shopify_stores")
+          .update({
+            status: "available",
+            owner_user_id: null,
+            theme_id: null,
+            sync_status: "released — wiped and returned to the pool",
+            transfer_email: null,
+            transfer_requested_at: null,
+          })
+          .eq("id", store.shopify_store_id)
+          .neq("status", "transferred");
+      }
     }
   }
 
@@ -114,7 +161,7 @@ export async function deleteStore(
     revalidatePath("/stores");
     return {
       outcome: "archived",
-      note: `Archived — this store has ${orderCount} paid order${orderCount === 1 ? "" : "s"}, so its records are kept.`,
+      note: `Archived — this store has ${orderCount} paid order${orderCount === 1 ? "" : "s"}, so its records are kept.${wipeNote}`,
     };
   }
 
@@ -127,7 +174,7 @@ export async function deleteStore(
 
   revalidatePath("/stores");
   revalidatePath("/find-suppliers");
-  return { outcome: "deleted", note: "Store deleted." };
+  return { outcome: "deleted", note: `Store deleted.${wipeNote}` };
 }
 
 /**

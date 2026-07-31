@@ -519,3 +519,88 @@ export async function ensureDefaultShippingRate(
   if (errs.length) return { created: false, note: `shipping rate failed: ${errs.join("; ")}` };
   return { created: true, note: "added a standard shipping rate" };
 }
+
+const PRODUCT_DELETE = `
+mutation productDelete($input: ProductDeleteInput!) {
+  productDelete(input: $input) { deletedProductId userErrors { message } }
+}`;
+
+const THEME_DELETE = `
+mutation themeDelete($id: ID!) {
+  themeDelete(id: $id) { deletedThemeId userErrors { message } }
+}`;
+
+/**
+ * Strip EcomStrait's content off a shop before it returns to the pool.
+ *
+ * Releasing a store without this hands the next merchant the previous one's
+ * products, images, theme and branding. Deliberately surgical: it removes only
+ * the products we recorded creating and the theme we installed, so anything the
+ * merchant added themselves is left alone rather than us wiping a shop we don't
+ * fully own.
+ */
+export async function wipeStoreContent(
+  shop: string,
+  token: string,
+  opts: { productIds: string[]; themeGid?: string | null },
+): Promise<{ productsDeleted: number; themeDeleted: boolean; errors: string[] }> {
+  const gql = shopifyGraphql(shop, token);
+  const errors: string[] = [];
+  let productsDeleted = 0;
+
+  for (const id of opts.productIds) {
+    try {
+      const res = await gql<{
+        data?: { productDelete?: { deletedProductId?: string | null; userErrors?: { message: string }[] } };
+        errors?: { message: string }[];
+      }>(PRODUCT_DELETE, { input: { id } });
+      const errs = collectErrors(res.data?.productDelete?.userErrors, res.errors);
+      // A product the merchant already deleted isn't a failure.
+      if (res.data?.productDelete?.deletedProductId) productsDeleted += 1;
+      else if (errs.length) errors.push(errs.join("; "));
+    } catch (e) {
+      errors.push(e instanceof Error ? e.message : "product delete failed");
+    }
+  }
+
+  let themeDeleted = false;
+  if (opts.themeGid) {
+    try {
+      const res = await gql<{
+        data?: { themeDelete?: { deletedThemeId?: string | null; userErrors?: { message: string }[] } };
+        errors?: { message: string }[];
+      }>(THEME_DELETE, { id: opts.themeGid });
+      themeDeleted = Boolean(res.data?.themeDelete?.deletedThemeId);
+      const errs = collectErrors(res.data?.themeDelete?.userErrors, res.errors);
+      if (!themeDeleted && errs.length) errors.push(errs.join("; "));
+    } catch (e) {
+      errors.push(e instanceof Error ? e.message : "theme delete failed");
+    }
+  }
+
+  return { productsDeleted, themeDeleted, errors };
+}
+
+/**
+ * Did this failure mean "the token is no longer valid"?
+ *
+ * Shopify reports it as a plain message rather than a typed code, so matching
+ * the text is the only option. Used to turn a raw API error into a "reconnect
+ * this store" state the merchant can act on.
+ */
+export function isShopifyAuthError(message: string | undefined | null): boolean {
+  if (!message) return false;
+  return /invalid api key or access token|unrecognized login|401|unauthorized/i.test(message);
+}
+
+/** Confirm a stored token still works, without mutating anything. */
+export async function isTokenAlive(shop: string, token: string): Promise<boolean> {
+  try {
+    const res = await shopifyGraphql(shop, token)<{ data?: { shop?: { name?: string } } }>(
+      `{ shop { name } }`,
+    );
+    return Boolean(res.data?.shop?.name);
+  } catch {
+    return false;
+  }
+}
