@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { authenticateEmbedded } from "@/lib/embedded-auth";
 import { pushProductsToShopify } from "@/lib/shopify";
+import { productImage } from "@/lib/catalog";
 
 export const runtime = "nodejs";
 
@@ -34,7 +35,7 @@ export async function POST(req: Request) {
 
   const { data: product } = await admin
     .from("products")
-    .select("id, title, description, retail_price, supplier_id, status")
+    .select("id, title, description, retail_price, supplier_id, status, images, stock, reserved")
     .eq("id", productId)
     .maybeSingle();
   if (!product) return NextResponse.json({ error: "Product not found" }, { status: 404 });
@@ -78,15 +79,32 @@ export async function POST(req: Request) {
       .maybeSingle();
     if (shop?.access_token) {
       try {
+        // Must carry the same payload as provisioning and Sync products.
+        // Omitting `inventory` leaves the variant untracked — Shopify reports
+        // no error, and the product lands showing no stock at all.
         const res = await pushProductsToShopify(shop.shop_domain, shop.access_token, [
           {
             title: product.title,
             description: product.description ?? null,
             price: product.retail_price,
             sku: product.id,
+            inventory: Math.max(0, (product.stock ?? 0) - (product.reserved ?? 0)),
+            images: (product.images ?? [])
+              .map((i: string) => productImage(i))
+              .filter((u): u is string => Boolean(u)),
           },
         ]);
         pushed = res.created > 0;
+
+        // Record what it became, so later syncs and removal can find it.
+        const created = res.ids.get(product.id);
+        if (created) {
+          await admin
+            .from("store_products")
+            .update({ shopify_product_id: created, shopify_synced_at: new Date().toISOString() })
+            .eq("store_id", storeId)
+            .eq("product_id", productId);
+        }
       } catch {
         // The listing is recorded either way; provisioning will pick it up.
       }

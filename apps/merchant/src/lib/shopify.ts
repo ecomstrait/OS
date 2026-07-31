@@ -221,6 +221,61 @@ function collectErrors(
   return [...(userErrors ?? []).map((e) => e.message), ...(topLevel ?? []).map((e) => e.message)];
 }
 
+
+const INVENTORY_ACTIVATE = `
+mutation inventoryActivate($inventoryItemId: ID!, $locationId: ID!, $available: Int) {
+  inventoryActivate(inventoryItemId: $inventoryItemId, locationId: $locationId, available: $available) {
+    inventoryLevel { id quantities(names: ["available"]) { name quantity } }
+    userErrors { field message }
+  }
+}`;
+
+type ActivateResp = {
+  data?: { inventoryActivate?: { userErrors?: { message: string }[] } };
+  errors?: GraphqlError[];
+};
+
+/**
+ * Set a variant's stock at a location, activating it there if it isn't already.
+ *
+ * `inventorySetQuantities` only works on an item already stocked at the
+ * location. A product created through the API isn't reliably activated at one,
+ * and the failure is a userError rather than a throw — which is how stock
+ * silently stayed at zero while every push reported success. `inventoryActivate`
+ * both stocks the item and seeds the quantity, so it's the right recovery.
+ */
+async function writeInventory(
+  gql: ReturnType<typeof shopifyGraphql>,
+  args: { inventoryItemId: string; locationId: string; quantity: number; changeFrom: number },
+): Promise<string[]> {
+  const quantity = Math.max(0, Math.trunc(args.quantity));
+  const set = await gql<InventoryResp>(inventorySetDoc(), {
+    input: {
+      name: "available",
+      reason: "correction",
+      quantities: [
+        {
+          inventoryItemId: args.inventoryItemId,
+          locationId: args.locationId,
+          quantity,
+          changeFromQuantity: args.changeFrom,
+        },
+      ],
+    },
+  });
+  const errs = collectErrors(set.data?.inventorySetQuantities?.userErrors, set.errors);
+  if (!errs.length) return [];
+
+  const activated = await gql<ActivateResp>(INVENTORY_ACTIVATE, {
+    inventoryItemId: args.inventoryItemId,
+    locationId: args.locationId,
+    available: quantity,
+  });
+  const aErrs = collectErrors(activated.data?.inventoryActivate?.userErrors, activated.errors);
+  // Report the original failure too — on a genuine problem it's the useful one.
+  return aErrs.length ? [...errs, ...aErrs] : [];
+}
+
 /**
  * Push the AI-built catalog into a Shopify store: one product each, then the
  * price/SKU onto its default variant. `created` counts products Shopify
@@ -310,24 +365,14 @@ export async function pushProductsToShopify(
           errors.push(`${p.title} (stock): Shopify returned no inventory item for the variant`);
         }
         if (track && locationId && inventoryItemId) {
-          const iv = await gql<InventoryResp>(inventorySetDoc(), {
-            input: {
-              name: "available",
-              reason: "correction",
-              quantities: [
-                {
-                  inventoryItemId,
-                  locationId,
-                  quantity: Math.max(0, Math.trunc(p.inventory ?? 0)),
-                  // Optimistic-concurrency baseline. Schema marks it optional
-                  // but Shopify rejects `available` without it. This runs
-                  // immediately after productCreate, so the current value is 0.
-                  changeFromQuantity: 0,
-                },
-              ],
-            },
+          // changeFrom 0: this runs immediately after productCreate, so the
+          // current value is 0. Shopify rejects `available` without a baseline.
+          const iErrs = await writeInventory(gql, {
+            inventoryItemId,
+            locationId,
+            quantity: p.inventory ?? 0,
+            changeFrom: 0,
           });
-          const iErrs = collectErrors(iv.data?.inventorySetQuantities?.userErrors, iv.errors);
           if (iErrs.length) errors.push(`${p.title} (stock): ${iErrs.join("; ")}`);
         }
       }
@@ -672,22 +717,13 @@ export async function backfillInventory(
         continue;
       }
 
-      const iv = await gql<InventoryResp>(inventorySetDoc(), {
-        input: {
-          name: "available",
-          reason: "correction",
-          quantities: [
-            {
-              inventoryItemId: item.inventoryItemId,
-              locationId,
-              quantity: Math.max(0, Math.trunc(item.quantity)),
-              // Untracked variants read as 0 until tracking is switched on.
-              changeFromQuantity: 0,
-            },
-          ],
-        },
+      // Untracked variants read as 0 until tracking is switched on above.
+      const iErrs = await writeInventory(gql, {
+        inventoryItemId: item.inventoryItemId,
+        locationId,
+        quantity: item.quantity,
+        changeFrom: 0,
       });
-      const iErrs = collectErrors(iv.data?.inventorySetQuantities?.userErrors, iv.errors);
       if (iErrs.length) errors.push(`${item.title} (stock): ${iErrs.join("; ")}`);
       else updated += 1;
     } catch (e) {
@@ -806,16 +842,12 @@ export async function setShopifyProductStock(
     const target = Math.max(0, Math.trunc(quantity));
     if (current === target) return { ok: true, mediaCount };
 
-    const res = await gql<InventoryResp>(inventorySetDoc(), {
-      input: {
-        name: "available",
-        reason: "correction",
-        quantities: [
-          { inventoryItemId: item.id, locationId, quantity: target, changeFromQuantity: current },
-        ],
-      },
+    const errs = await writeInventory(gql, {
+      inventoryItemId: item.id,
+      locationId,
+      quantity: target,
+      changeFrom: current,
     });
-    const errs = collectErrors(res.data?.inventorySetQuantities?.userErrors, res.errors);
     return errs.length ? { ok: false, error: errs.join("; "), mediaCount } : { ok: true, mediaCount };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "stock update failed" };
