@@ -153,7 +153,11 @@ mutation inventoryItemUpdate($id: ID!, $input: InventoryItemInput!) {
   }
 }`;
 
-const PRIMARY_LOCATION = `{ locations(first: 1, includeInactive: false) { nodes { id } } }`;
+const LOCATIONS = `{
+  locations(first: 25, includeInactive: false) {
+    nodes { id name isActive fulfillsOnlineOrders shipsInventory }
+  }
+}`;
 
 /**
  * Shopify requires a field-level `@idempotent` directive on this mutation (it
@@ -174,15 +178,47 @@ mutation inventorySetQuantities($input: InventorySetQuantitiesInput!) {
  * read_locations scope. Null means we still enable tracking but can't seed a
  * quantity — better than failing the whole product push over it.
  */
-export async function fetchPrimaryLocation(shop: string, token: string): Promise<string | null> {
+export type ShopLocation = {
+  id: string;
+  name: string;
+  isActive: boolean;
+  fulfillsOnlineOrders: boolean;
+  shipsInventory: boolean;
+};
+
+/** Every active location on the shop, in Shopify's own order. */
+export async function fetchLocations(shop: string, token: string): Promise<ShopLocation[]> {
   try {
     const res = await shopifyGraphql(shop, token)<{
-      data?: { locations?: { nodes?: { id: string }[] } };
-    }>(PRIMARY_LOCATION);
-    return res.data?.locations?.nodes?.[0]?.id ?? null;
+      data?: { locations?: { nodes?: ShopLocation[] } };
+    }>(LOCATIONS);
+    return res.data?.locations?.nodes ?? [];
   } catch {
-    return null;
+    return [];
   }
+}
+
+/**
+ * The location stock should be written to.
+ *
+ * Not simply the first one: a shop can have several, and stock at a location
+ * that doesn't fulfil online orders is invisible to the storefront — the
+ * product reads as out of stock while Shopify admin shows units on hand. Two
+ * shops with identical products then behave differently purely because of how
+ * their locations are configured.
+ *
+ * Falls back to the first active location so a shop with none marked for
+ * online orders still gets its stock somewhere rather than nowhere.
+ */
+export async function fetchPrimaryLocation(shop: string, token: string): Promise<string | null> {
+  const locations = await fetchLocations(shop, token);
+  if (!locations.length) return null;
+  return (
+    locations.find((l) => l.isActive && l.fulfillsOnlineOrders && l.shipsInventory) ??
+    locations.find((l) => l.isActive && l.fulfillsOnlineOrders) ??
+    locations.find((l) => l.isActive) ??
+    locations[0]
+  ).id;
 }
 
 type GraphqlError = { message: string };
@@ -230,6 +266,29 @@ mutation inventoryActivate($inventoryItemId: ID!, $locationId: ID!, $available: 
   }
 }`;
 
+const INVENTORY_LEVELS = `
+query inventoryLevels($id: ID!) {
+  inventoryItem(id: $id) {
+    inventoryLevels(first: 20) {
+      nodes { location { id } quantities(names: ["available"]) { name quantity } }
+    }
+  }
+}`;
+
+type LevelsResp = {
+  data?: {
+    inventoryItem?: {
+      inventoryLevels?: {
+        nodes?: {
+          location?: { id: string } | null;
+          quantities?: { name: string; quantity: number }[];
+        }[];
+      };
+    } | null;
+  };
+  errors?: GraphqlError[];
+};
+
 type ActivateResp = {
   data?: { inventoryActivate?: { userErrors?: { message: string }[] } };
   errors?: GraphqlError[];
@@ -249,31 +308,52 @@ async function writeInventory(
   args: { inventoryItemId: string; locationId: string; quantity: number; changeFrom: number },
 ): Promise<string[]> {
   const quantity = Math.max(0, Math.trunc(args.quantity));
-  const set = await gql<InventoryResp>(inventorySetDoc(), {
-    input: {
-      name: "available",
-      reason: "correction",
-      quantities: [
-        {
-          inventoryItemId: args.inventoryItemId,
-          locationId: args.locationId,
-          quantity,
-          changeFromQuantity: args.changeFrom,
-        },
-      ],
-    },
-  });
-  const errs = collectErrors(set.data?.inventorySetQuantities?.userErrors, set.errors);
+
+  const set = (changeFrom: number) =>
+    gql<InventoryResp>(inventorySetDoc(), {
+      input: {
+        name: "available",
+        reason: "correction",
+        quantities: [
+          {
+            inventoryItemId: args.inventoryItemId,
+            locationId: args.locationId,
+            quantity,
+            changeFromQuantity: changeFrom,
+          },
+        ],
+      },
+    });
+
+  const first = await set(args.changeFrom);
+  const errs = collectErrors(first.data?.inventorySetQuantities?.userErrors, first.errors);
   if (!errs.length) return [];
 
-  const activated = await gql<ActivateResp>(INVENTORY_ACTIVATE, {
-    inventoryItemId: args.inventoryItemId,
-    locationId: args.locationId,
-    available: quantity,
-  });
-  const aErrs = collectErrors(activated.data?.inventoryActivate?.userErrors, activated.errors);
-  // Report the original failure too — on a genuine problem it's the useful one.
-  return aErrs.length ? [...errs, ...aErrs] : [];
+  // Both ways this fails look identical from the caller — a userError, not a
+  // throw — so find out which it is rather than guessing.
+  const levels = await gql<LevelsResp>(INVENTORY_LEVELS, { id: args.inventoryItemId });
+  const here = levels.data?.inventoryItem?.inventoryLevels?.nodes?.find(
+    (n) => n.location?.id === args.locationId,
+  );
+
+  if (!here) {
+    // Not stocked at this location: setQuantities can't reach it. Activate
+    // stocks the item and seeds the quantity in one call.
+    const activated = await gql<ActivateResp>(INVENTORY_ACTIVATE, {
+      inventoryItemId: args.inventoryItemId,
+      locationId: args.locationId,
+      available: quantity,
+    });
+    const aErrs = collectErrors(activated.data?.inventoryActivate?.userErrors, activated.errors);
+    return aErrs.length ? [...errs, ...aErrs] : [];
+  }
+
+  // Stocked, so the baseline was stale — retry against the real value.
+  const actual = here.quantities?.find((q) => q.name === "available")?.quantity ?? 0;
+  if (actual === quantity) return [];
+  const retry = await set(actual);
+  const rErrs = collectErrors(retry.data?.inventorySetQuantities?.userErrors, retry.errors);
+  return rErrs.length ? [...errs, ...rErrs] : [];
 }
 
 /**

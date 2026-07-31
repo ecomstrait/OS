@@ -8,6 +8,7 @@ import { flagReconnectNeeded, alertPoolEmpty } from "@/lib/ops-alert";
 import { shopifyGraphql } from "@/lib/shopify";
 import {
   pushProductsToShopify,
+  fetchLocations,
   fetchShopCatalog,
   backfillProductMedia,
   backfillInventory,
@@ -617,6 +618,24 @@ export async function getStoreReadiness(
       detail: shopRow.theme_id ? "EcomStrait theme published" : "not uploaded — run Retry provisioning",
     });
   }
+
+  // Stock is written to one location. If that location doesn't fulfil online
+  // orders, the storefront reads every product as sold out while admin shows
+  // units on hand — the difference between two otherwise identical shops.
+  const locations = await fetchLocations(shop, token);
+  const onlineLoc = locations.find((l) => l.isActive && l.fulfillsOnlineOrders);
+  checks.push({
+    id: "inventory-location",
+    label: "Stock location",
+    ok: locations.length === 0 ? null : Boolean(onlineLoc),
+    detail:
+      locations.length === 0
+        ? "couldn't read the shop's locations"
+        : onlineLoc
+          ? `${onlineLoc.name} — fulfils online orders`
+          : `${locations.map((l) => l.name).join(", ")} — none fulfils online orders, so stock stays hidden from the storefront`,
+    fixPath: "settings/locations",
+  });
 
   const ship = await fetchShippingState(shop, token);
   checks.push({
