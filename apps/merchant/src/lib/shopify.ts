@@ -696,3 +696,209 @@ export async function backfillInventory(
   }
   return { updated, errors };
 }
+
+const PRODUCT_UPDATE = `
+mutation productUpdate($product: ProductUpdateInput!) {
+  productUpdate(product: $product) {
+    product { id }
+    userErrors { field message }
+  }
+}`;
+
+const PRODUCT_STOCK_STATE = `
+query productStock($id: ID!) {
+  product(id: $id) {
+    id
+    mediaCount { count }
+    variants(first: 1) {
+      nodes {
+        id
+        inventoryItem {
+          id
+          tracked
+          inventoryLevels(first: 1) {
+            nodes { location { id } quantities(names: ["available"]) { name quantity } }
+          }
+        }
+      }
+    }
+  }
+}`;
+
+/** Push title/description onto a product that already exists in the shop. */
+export async function updateShopifyProductContent(
+  shop: string,
+  token: string,
+  productGid: string,
+  content: { title: string; description?: string | null },
+): Promise<{ ok: boolean; error?: string }> {
+  const gql = shopifyGraphql(shop, token);
+  try {
+    const res = await gql<{
+      data?: { productUpdate?: { userErrors?: { message: string }[] } };
+      errors?: GraphqlError[];
+    }>(PRODUCT_UPDATE, {
+      product: {
+        id: productGid,
+        title: content.title,
+        descriptionHtml: content.description ? `<p>${content.description}</p>` : "",
+      },
+    });
+    const errs = collectErrors(res.data?.productUpdate?.userErrors, res.errors);
+    return errs.length ? { ok: false, error: errs.join("; ") } : { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "product update failed" };
+  }
+}
+
+/**
+ * Set a product's stock in the shop to an absolute number.
+ *
+ * Reads the current quantity first because `inventorySetQuantities` requires
+ * `changeFromQuantity` to match what's on record — passing a stale 0 fails
+ * against a product that has already sold units.
+ */
+export async function setShopifyProductStock(
+  shop: string,
+  token: string,
+  productGid: string,
+  quantity: number,
+): Promise<{ ok: boolean; error?: string; mediaCount?: number }> {
+  const gql = shopifyGraphql(shop, token);
+  try {
+    const state = await gql<{
+      data?: {
+        product?: {
+          mediaCount?: { count: number } | null;
+          variants?: {
+            nodes?: {
+              inventoryItem?: {
+                id: string;
+                tracked: boolean;
+                inventoryLevels?: {
+                  nodes?: {
+                    location: { id: string };
+                    quantities?: { name: string; quantity: number }[];
+                  }[];
+                };
+              } | null;
+            }[];
+          };
+        } | null;
+      };
+      errors?: GraphqlError[];
+    }>(PRODUCT_STOCK_STATE, { id: productGid });
+
+    const item = state.data?.product?.variants?.nodes?.[0]?.inventoryItem;
+    const mediaCount = state.data?.product?.mediaCount?.count;
+    if (!item) return { ok: false, error: "product has no inventory item", mediaCount };
+
+    const level = item.inventoryLevels?.nodes?.[0];
+    const locationId = level?.location?.id ?? (await fetchPrimaryLocation(shop, token));
+    if (!locationId) return { ok: false, error: "couldn't resolve a location", mediaCount };
+
+    if (!item.tracked) {
+      await gql(INVENTORY_ITEM_TRACK, { id: item.id, input: { tracked: true } });
+    }
+
+    const current =
+      level?.quantities?.find((q) => q.name === "available")?.quantity ?? 0;
+    const target = Math.max(0, Math.trunc(quantity));
+    if (current === target) return { ok: true, mediaCount };
+
+    const res = await gql<InventoryResp>(inventorySetDoc(), {
+      input: {
+        name: "available",
+        reason: "correction",
+        quantities: [
+          { inventoryItemId: item.id, locationId, quantity: target, changeFromQuantity: current },
+        ],
+      },
+    });
+    const errs = collectErrors(res.data?.inventorySetQuantities?.userErrors, res.errors);
+    return errs.length ? { ok: false, error: errs.join("; "), mediaCount } : { ok: true, mediaCount };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "stock update failed" };
+  }
+}
+
+const PRODUCT_STATUS_UPDATE = `
+mutation productStatus($product: ProductUpdateInput!) {
+  productUpdate(product: $product) {
+    product { id status }
+    userErrors { field message }
+  }
+}`;
+
+const PRODUCT_VARIANT_ID = `
+query productVariant($id: ID!) {
+  product(id: $id) { variants(first: 1) { nodes { id price } } }
+}`;
+
+const VARIANT_PRICE_UPDATE = `
+mutation variantPrice($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+  productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+    productVariants { id price }
+    userErrors { field message }
+  }
+}`;
+
+/**
+ * Show or hide a product on the shop's storefront.
+ *
+ * DRAFT rather than delete: a supplier unpublishing is usually temporary, and
+ * deleting would throw away the `shopify_product_id` that links the listing
+ * back to us — republishing would then have to create a new product and lose
+ * its URL, reviews and analytics.
+ */
+export async function setShopifyProductStatus(
+  shop: string,
+  token: string,
+  productGid: string,
+  status: "ACTIVE" | "DRAFT",
+): Promise<{ ok: boolean; error?: string }> {
+  const gql = shopifyGraphql(shop, token);
+  try {
+    const res = await gql<{
+      data?: { productUpdate?: { userErrors?: { message: string }[] } };
+      errors?: GraphqlError[];
+    }>(PRODUCT_STATUS_UPDATE, { product: { id: productGid, status } });
+    const errs = collectErrors(res.data?.productUpdate?.userErrors, res.errors);
+    return errs.length ? { ok: false, error: errs.join("; ") } : { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "status update failed" };
+  }
+}
+
+/** Set the selling price on a product's variant, skipping a no-op write. */
+export async function setShopifyProductPrice(
+  shop: string,
+  token: string,
+  productGid: string,
+  price: number,
+): Promise<{ ok: boolean; error?: string }> {
+  const gql = shopifyGraphql(shop, token);
+  const amount = (Math.round(price * 100) / 100).toFixed(2);
+  try {
+    const found = await gql<{
+      data?: { product?: { variants?: { nodes?: { id: string; price: string }[] } } | null };
+      errors?: GraphqlError[];
+    }>(PRODUCT_VARIANT_ID, { id: productGid });
+
+    const variant = found.data?.product?.variants?.nodes?.[0];
+    if (!variant) return { ok: false, error: "product has no variant" };
+    if (Number(variant.price) === Number(amount)) return { ok: true };
+
+    const res = await gql<{
+      data?: { productVariantsBulkUpdate?: { userErrors?: { message: string }[] } };
+      errors?: GraphqlError[];
+    }>(VARIANT_PRICE_UPDATE, {
+      productId: productGid,
+      variants: [{ id: variant.id, price: amount }],
+    });
+    const errs = collectErrors(res.data?.productVariantsBulkUpdate?.userErrors, res.errors);
+    return errs.length ? { ok: false, error: errs.join("; ") } : { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "price update failed" };
+  }
+}

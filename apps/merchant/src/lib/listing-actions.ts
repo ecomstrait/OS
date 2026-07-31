@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@ecomstrait/auth/server";
 import { createAdminClient } from "@ecomstrait/db";
+import { wipeStoreContent } from "@/lib/shopify";
 import type { ListingStatus } from "@ecomstrait/db/types";
 
 export type MerchantStore = {
@@ -105,7 +106,7 @@ export async function requestListing(
 export async function removeListing(
   storeId: string,
   productId: string,
-): Promise<{ error?: string }> {
+): Promise<{ error?: string; note?: string }> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -120,6 +121,46 @@ export async function removeListing(
     .maybeSingle();
   if (!store) return { error: "Store not found." };
 
+  // Pull it from Shopify BEFORE deleting the row — the row holds the only link
+  // to the Shopify product, so deleting first would strand it there for good.
+  // Custom-website storefronts need nothing: they read approved listings live.
+  let note: string | undefined;
+  const admin = createAdminClient();
+  if (admin) {
+    const { data: listing } = await admin
+      .from("store_products")
+      .select("shopify_product_id")
+      .eq("store_id", storeId)
+      .eq("product_id", productId)
+      .maybeSingle();
+
+    if (listing?.shopify_product_id) {
+      const { data: full } = await admin
+        .from("stores")
+        .select("shopify_store_id")
+        .eq("id", storeId)
+        .maybeSingle();
+      const { data: shop } = full?.shopify_store_id
+        ? await admin
+            .from("shopify_stores")
+            .select("shop_domain, access_token")
+            .eq("id", full.shopify_store_id)
+            .maybeSingle()
+        : { data: null };
+
+      if (shop?.access_token) {
+        const wipe = await wipeStoreContent(shop.shop_domain, shop.access_token, {
+          productIds: [listing.shopify_product_id],
+        });
+        // Leaving the row would strand the listing in our UI too, so the delete
+        // proceeds either way — but say so rather than claiming a clean removal.
+        if (wipe.errors.length) {
+          note = "Removed here, but it may still be visible on Shopify — check the store.";
+        }
+      }
+    }
+  }
+
   const { error } = await supabase
     .from("store_products")
     .delete()
@@ -130,5 +171,5 @@ export async function removeListing(
   revalidatePath("/find-suppliers");
   revalidatePath("/inventory");
   revalidatePath(`/store/${storeId}`);
-  return {};
+  return note ? { note } : {};
 }

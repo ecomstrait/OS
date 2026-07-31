@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@ecomstrait/db";
 import { pushProductsToShopify } from "@/lib/shopify";
+import { productImage } from "@/lib/catalog";
 
 export const runtime = "nodejs";
 
@@ -72,19 +73,36 @@ export async function POST(req: Request) {
 
   const { data: product } = await admin
     .from("products")
-    .select("id, title, description")
+    .select("id, title, description, images, stock, reserved")
     .eq("id", productId)
     .maybeSingle();
   if (!product) return NextResponse.json({ error: "Product not found" }, { status: 404 });
 
+  // Must carry the same payload as provisioning and Sync products, or a product
+  // approved through this path lands with no image and untracked stock.
   const result = await pushProductsToShopify(shop.shop_domain, shop.access_token, [
     {
       title: product.title,
       description: product.description ?? null,
       price: listing.price,
       sku: product.id, // lets the order webhook map back to our product
+      inventory: Math.max(0, (product.stock ?? 0) - (product.reserved ?? 0)),
+      images: (product.images ?? [])
+        .map((i: string) => productImage(i))
+        .filter((u): u is string => Boolean(u)),
     },
   ]);
+
+  // Record which Shopify product this listing became, so later syncs and
+  // removal can find it.
+  const created = result.ids.get(product.id);
+  if (created) {
+    await admin
+      .from("store_products")
+      .update({ shopify_product_id: created, shopify_synced_at: new Date().toISOString() })
+      .eq("store_id", storeId)
+      .eq("product_id", productId);
+  }
 
   if (result.errors.length) {
     return NextResponse.json({ pushed: false, errors: result.errors }, { status: 502 });

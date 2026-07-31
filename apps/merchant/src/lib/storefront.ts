@@ -43,10 +43,14 @@ export async function getStorefront(id: string): Promise<Storefront | null> {
 
   let products: StorefrontProduct[] = [];
   if (ids.length) {
+    // Published-only, matching listStoreProducts: a supplier who unpublishes a
+    // product has withdrawn it, and it must leave the grid here too — not just
+    // from the API-driven pages.
     const { data: prods } = await admin
       .from("products")
       .select("id, title, images, retail_price, supplier_id")
-      .in("id", ids);
+      .in("id", ids)
+      .eq("status", "published");
     const priceMap = new Map((sp ?? []).map((r) => [r.product_id, r.price]));
     products = (prods ?? []).map((p) => ({
       id: p.id,

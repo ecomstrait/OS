@@ -86,6 +86,39 @@ export async function flagReconnectNeeded(
   }
 }
 
+/**
+ * Warn the team when a supplier's price rise leaves a fixed listing below cost.
+ *
+ * The merchant set that price deliberately, so we don't overwrite it — but a
+ * listing selling under wholesale loses money on every order, and merchants
+ * have no in-app alerting yet.
+ */
+export async function alertListingBelowCost(
+  productTitle: string,
+  listings: { storeId: string; price: number }[],
+  cost: number,
+): Promise<void> {
+  if (!listings.length) return;
+  try {
+    const rows = listings
+      .map(
+        (l) =>
+          `<li>Store <code>${escapeHtml(l.storeId)}</code> — selling at ${l.price.toFixed(2)}</li>`,
+      )
+      .join("");
+    await sendOpsEmail(
+      `[EcomStrait] Listing below cost: ${productTitle}`,
+      `<p>The supplier raised the cost of <strong>${escapeHtml(productTitle)}</strong> to
+       ${cost.toFixed(2)}, but these listings have a merchant-set price below that and were
+       left unchanged:</p>
+       <ul>${rows}</ul>
+       <p>Each sale on them loses money. Contact the merchant, or adjust the listing price.</p>`,
+    );
+  } catch {
+    /* best-effort */
+  }
+}
+
 /** Tell the team the pool has run dry — no merchant can provision until it's refilled. */
 export async function alertPoolEmpty(reason: string): Promise<void> {
   const admin = createAdminClient();
