@@ -10,6 +10,7 @@ import {
   pushProductsToShopify,
   fetchShopCatalog,
   backfillProductMedia,
+  backfillInventory,
   ensureDefaultShippingRate,
   fetchShippingState,
   fetchOnlineStorePublicationId,
@@ -436,14 +437,39 @@ export async function syncProductsToShopify(
     ? await backfillProductMedia(shopRow.shop_domain, shopRow.access_token, needMedia)
     : { updated: 0, errors: [] };
 
+  // Products pushed before inventory sync existed sit there untracked. The
+  // normal path skips them for being present, so repair them here.
+  const needStock = (prods ?? [])
+    .flatMap((p) => {
+      const linked = linkedMap.get(p.id) ?? catalog.skuToProductId.get(p.id);
+      const item = linked ? catalog.untracked.get(linked) : undefined;
+      if (!item) return [];
+      return [
+        {
+          inventoryItemId: item.inventoryItemId,
+          title: p.title,
+          quantity: Math.max(0, (p.stock ?? 0) - (p.reserved ?? 0)),
+        },
+      ];
+    });
+  const stock = needStock.length
+    ? await backfillInventory(shopRow.shop_domain, shopRow.access_token, needStock)
+    : { updated: 0, errors: [] };
+
   const skipped = (prods ?? []).length - pending.length;
   if (!pending.length) {
     return {
       created: 0,
       skipped,
-      note: media.updated
-        ? `All ${skipped} already in Shopify — added images to ${media.updated}.`
-        : `All ${skipped} approved product${skipped === 1 ? " is" : "s are"} already in Shopify.`,
+      note:
+        media.updated || stock.updated
+          ? `All ${skipped} already in Shopify — ${[
+              media.updated ? `added images to ${media.updated}` : "",
+              stock.updated ? `set stock on ${stock.updated}` : "",
+            ]
+              .filter(Boolean)
+              .join(", ")}.`
+          : `All ${skipped} approved product${skipped === 1 ? " is" : "s are"} already in Shopify.`,
     };
   }
 
@@ -475,17 +501,18 @@ export async function syncProductsToShopify(
     .eq("id", store.shopify_store_id);
   revalidatePath("/stores");
 
-  if (result.errors.length) {
+  const allErrors = [...result.errors, ...media.errors, ...stock.errors];
+  if (allErrors.length) {
     return {
       created: result.created,
       skipped,
-      error: `${result.created} added, but some failed: ${result.errors.slice(0, 2).join("; ")}`,
+      error: `${result.created} added, but some failed: ${allErrors.slice(0, 2).join("; ")}`,
     };
   }
   return {
     created: result.created,
     skipped,
-    note: `Added ${result.created} product${result.created === 1 ? "" : "s"}${skipped ? `, skipped ${skipped} already there` : ""}${media.updated ? `, added images to ${media.updated}` : ""}.`,
+    note: `Added ${result.created} product${result.created === 1 ? "" : "s"}${skipped ? `, skipped ${skipped} already there` : ""}${media.updated ? `, added images to ${media.updated}` : ""}${stock.updated ? `, set stock on ${stock.updated}` : ""}.`,
   };
 }
 

@@ -145,6 +145,14 @@ export async function fetchOnlineStorePublicationId(
 }
 
 /** Seeding a quantity needs a location, which needs the read_locations scope. */
+const INVENTORY_ITEM_TRACK = `
+mutation inventoryItemUpdate($id: ID!, $input: InventoryItemInput!) {
+  inventoryItemUpdate(id: $id, input: $input) {
+    inventoryItem { id tracked }
+    userErrors { field message }
+  }
+}`;
+
 const PRIMARY_LOCATION = `{ locations(first: 1, includeInactive: false) { nodes { id } } }`;
 
 /**
@@ -345,11 +353,14 @@ export async function fetchShopCatalog(
   skuToProductId: Map<string, string>;
   /** Products in the shop with no images yet. */
   withoutMedia: Set<string>;
+  /** Products whose stock was never applied — variant inventory is untracked. */
+  untracked: Map<string, { inventoryItemId: string }>;
 }> {
   const gql = shopifyGraphql(shop, token);
   const productIds = new Set<string>();
   const skuToProductId = new Map<string, string>();
   const withoutMedia = new Set<string>();
+  const untracked = new Map<string, { inventoryItemId: string }>();
   let cursor: string | null = null;
 
   // 250 is the page maximum; the loop is bounded so a pagination bug can't spin.
@@ -360,7 +371,12 @@ export async function fetchShopCatalog(
           nodes?: {
             id: string;
             mediaCount?: { count: number } | null;
-            variants?: { nodes?: { sku: string | null }[] };
+            variants?: {
+              nodes?: {
+                sku: string | null;
+                inventoryItem?: { id: string; tracked: boolean } | null;
+              }[];
+            };
           }[];
           pageInfo?: { hasNextPage: boolean; endCursor: string | null };
         };
@@ -371,7 +387,7 @@ export async function fetchShopCatalog(
           nodes {
             id
             mediaCount { count }
-            variants(first: 5) { nodes { sku } }
+            variants(first: 5) { nodes { sku inventoryItem { id tracked } } }
           }
           pageInfo { hasNextPage endCursor }
         }
@@ -382,12 +398,16 @@ export async function fetchShopCatalog(
     for (const p of conn?.nodes ?? []) {
       productIds.add(p.id);
       if ((p.mediaCount?.count ?? 0) === 0) withoutMedia.add(p.id);
+      const first = p.variants?.nodes?.[0];
+      if (first?.inventoryItem && !first.inventoryItem.tracked) {
+        untracked.set(p.id, { inventoryItemId: first.inventoryItem.id });
+      }
       for (const v of p.variants?.nodes ?? []) if (v.sku) skuToProductId.set(v.sku, p.id);
     }
     if (!conn?.pageInfo?.hasNextPage) break;
     cursor = conn.pageInfo.endCursor;
   }
-  return { productIds, skuToProductId, withoutMedia };
+  return { productIds, skuToProductId, withoutMedia, untracked };
 }
 
 const DEFAULT_PROFILE = `
@@ -611,4 +631,68 @@ export async function isTokenAlive(shop: string, token: string): Promise<boolean
   } catch {
     return false;
   }
+}
+
+/**
+ * Apply stock to products already in the shop whose inventory was never set.
+ *
+ * Products pushed before inventory sync existed sit there untracked, and the
+ * normal sync skips them because they're already present — so without this the
+ * only fix is deleting and re-pushing every product. Only touches variants
+ * Shopify reports as untracked, so a merchant's own stock edits are left alone.
+ */
+export async function backfillInventory(
+  shop: string,
+  token: string,
+  items: { inventoryItemId: string; title: string; quantity: number }[],
+): Promise<{ updated: number; errors: string[] }> {
+  const gql = shopifyGraphql(shop, token);
+  const errors: string[] = [];
+  let updated = 0;
+
+  const locationId = await fetchPrimaryLocation(shop, token);
+  if (!locationId) {
+    return {
+      updated: 0,
+      errors: items.length
+        ? ["Couldn't read the shop's location, so stock levels weren't applied."]
+        : [],
+    };
+  }
+
+  for (const item of items) {
+    try {
+      const track = await gql<VariantsResp>(INVENTORY_ITEM_TRACK, {
+        id: item.inventoryItemId,
+        input: { tracked: true },
+      });
+      const tErrs = collectErrors(undefined, track.errors);
+      if (tErrs.length) {
+        errors.push(`${item.title} (stock): ${tErrs.join("; ")}`);
+        continue;
+      }
+
+      const iv = await gql<InventoryResp>(inventorySetDoc(), {
+        input: {
+          name: "available",
+          reason: "correction",
+          quantities: [
+            {
+              inventoryItemId: item.inventoryItemId,
+              locationId,
+              quantity: Math.max(0, Math.trunc(item.quantity)),
+              // Untracked variants read as 0 until tracking is switched on.
+              changeFromQuantity: 0,
+            },
+          ],
+        },
+      });
+      const iErrs = collectErrors(iv.data?.inventorySetQuantities?.userErrors, iv.errors);
+      if (iErrs.length) errors.push(`${item.title} (stock): ${iErrs.join("; ")}`);
+      else updated += 1;
+    } catch (e) {
+      errors.push(`${item.title}: ${e instanceof Error ? e.message : "stock update failed"}`);
+    }
+  }
+  return { updated, errors };
 }
