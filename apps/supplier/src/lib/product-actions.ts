@@ -1,11 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { redirect } from "next/navigation";
 import type { ProductStatus } from "@ecomstrait/db/types";
 import { requireApprovedSupplier } from "@/lib/supplier-context";
 import { enrichProduct, type EnrichInput, type Enrichment } from "@/lib/ai";
 import { chunk, cleanIds, type BulkResult } from "@/lib/bulk";
+import { syncProductToStores } from "@/lib/sync-stores";
 
 /** Raw form values (strings from inputs); parsed here into typed columns. */
 export type ProductInput = {
@@ -61,12 +63,29 @@ export async function updateProduct(
 ): Promise<{ error: string } | never> {
   const ctx = await requireApprovedSupplier();
   if ("error" in ctx) return ctx;
+
+  // Captured before the write: the price cascade needs to know which listings
+  // were still following this product's old price.
+  const { data: before } = await ctx.supabase
+    .from("products")
+    .select("retail_price")
+    .eq("id", id)
+    .eq("supplier_id", ctx.supplierId)
+    .maybeSingle();
+
   const { error } = await ctx.supabase
     .from("products")
     .update(toRow(input))
     .eq("id", id)
     .eq("supplier_id", ctx.supplierId);
   if (error) return { error: error.message };
+
+  // Custom-website storefronts read this row live, so title and images are
+  // already correct there — but their price comes from `store_products`, and
+  // Shopify stores hold a full copy that would otherwise stay frozen at
+  // whatever it was when the merchant listed it.
+  after(() => syncProductToStores(id, { previousPrice: before?.retail_price ?? null }));
+
   revalidatePath("/catalog");
   redirect("/catalog");
 }
@@ -96,6 +115,12 @@ export async function setProductStatus(
     .eq("id", id)
     .eq("supplier_id", ctx.supplierId);
   if (error) return { error: error.message };
+
+  // Unpublishing has to reach the storefronts already selling it, or the
+  // product stays buyable on every store that listed it while we consider it
+  // withdrawn. Publishing again brings the same listings back.
+  after(() => syncProductToStores(id, { status: true, content: false, stock: false }));
+
   revalidatePath("/catalog");
   return {};
 }
@@ -116,6 +141,7 @@ export async function bulkSetProductStatus(
   if (!targets.length) return { affected: 0, error: "Nothing selected." };
 
   let affected = 0;
+  const changed: string[] = [];
   for (const part of chunk(targets)) {
     const { data, error } = await ctx.supabase
       .from("products")
@@ -124,8 +150,13 @@ export async function bulkSetProductStatus(
       .in("id", part)
       .select("id");
     if (error) return { affected, error: error.message };
+    changed.push(...(data ?? []).map((r) => r.id));
     affected += data?.length ?? 0;
   }
+
+  // Same reason as setProductStatus: unpublishing has to reach the storefronts
+  // already selling these, or they stay buyable after we've withdrawn them.
+  after(() => syncProductToStores(changed, { status: true, content: false, stock: false }));
 
   revalidatePath("/catalog");
   revalidatePath("/inventory");

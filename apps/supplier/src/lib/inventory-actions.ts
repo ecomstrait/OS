@@ -1,7 +1,9 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { requireApprovedSupplier } from "@/lib/supplier-context";
+import { syncProductToStores } from "@/lib/sync-stores";
 import { chunk, cleanIds, type BulkResult } from "@/lib/bulk";
 
 /** Set a product's stock to an absolute value, logging the adjustment. */
@@ -36,6 +38,11 @@ export async function setStock(
     resulting_stock: stock,
     reason: reason ?? "Manual update",
   });
+
+  // Every Shopify store selling this product holds its own stock number and
+  // won't hear about the change otherwise. Runs after the response so the
+  // supplier's save stays fast however many stores carry it.
+  after(() => syncProductToStores(productId, { stock: true, content: false }));
 
   revalidatePath("/inventory");
   revalidatePath("/catalog");
@@ -122,6 +129,8 @@ export async function bulkSetStock(ids: string[], stock: number): Promise<BulkRe
     })),
   );
 
+  after(() => syncProductToStores(changed.map((c) => c.id), { stock: true, content: false }));
+
   revalidatePath("/inventory");
   revalidatePath("/catalog");
   return { affected: changed.length };
@@ -177,6 +186,8 @@ export async function bulkAdjustStock(ids: string[], delta: number): Promise<Bul
   }
 
   await ctx.supabase.from("inventory_adjustments").insert(log);
+
+  after(() => syncProductToStores(log.map((l) => l.product_id), { stock: true, content: false }));
 
   revalidatePath("/inventory");
   revalidatePath("/catalog");

@@ -1,4 +1,5 @@
 import { createAdminClient } from "@ecomstrait/db";
+import { propagateStockAfterSale } from "@/lib/product-propagation";
 
 type Admin = NonNullable<ReturnType<typeof createAdminClient>>;
 
@@ -95,5 +96,10 @@ export async function recordCustomerOrder(
         .from("inventory_adjustments")
         .insert({ product_id: i.product_id!, delta: -i.quantity, resulting_stock: next, reason: "Store sale" });
     }
+
+    // The same product is often listed on several stores. Shopify only knows
+    // about the copy that sold, so without this every other store keeps
+    // advertising stock that's already gone — and oversells it.
+    await propagateStockAfterSale(productIds);
   }
 }

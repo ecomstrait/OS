@@ -29,13 +29,15 @@ export async function checkoutStore(
       .eq("store_id", storeId)
       .eq("status", "approved")
       .in("product_id", ids),
-    admin.from("products").select("id, title").in("id", ids),
+    // Published-only for the same reason: an unpublished product is withdrawn
+    // and must not be sellable from a page that was loaded before that.
+    admin.from("products").select("id, title").in("id", ids).eq("status", "published"),
   ]);
   const priceMap = new Map((sp ?? []).map((r) => [r.product_id, r.price]));
   const nameMap = new Map((prods ?? []).map((p) => [p.id, p.title]));
 
   const lineItems = lines
-    .filter((l) => priceMap.has(l.productId))
+    .filter((l) => priceMap.has(l.productId) && nameMap.has(l.productId))
     .map((l) => ({
       quantity: Math.max(1, Math.min(99, Math.trunc(l.quantity))),
       price_data: {
