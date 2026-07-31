@@ -1,352 +1,177 @@
-import { useEffect } from "react";
-import type {
-  ActionFunctionArgs,
-  HeadersFunction,
-  LoaderFunctionArgs,
-} from "react-router";
-import { useFetcher } from "react-router";
-import { useAppBridge } from "@shopify/app-bridge-react";
-import { authenticate } from "../shopify.server";
+import type { HeadersFunction, LoaderFunctionArgs } from "react-router";
+import { Link, useLoaderData } from "react-router";
 import { boundary } from "@shopify/shopify-app-react-router/server";
+import { authenticate } from "../shopify.server";
+
+/**
+ * EcomStrait home inside Shopify admin.
+ *
+ * Replaces the app template's demo screen. A merchant opening this should see
+ * where their store stands, what EcomStrait does for them, and the one action
+ * that matters — find products to sell. Copy mirrors the marketing site so the
+ * story is the same in both places.
+ */
+
+type Overview = {
+  linked: boolean;
+  shopDomain: string;
+  merchantUrl: string;
+  store?: { id?: string; name?: string; type?: string; status?: string; liveUrl?: string | null };
+  counts: { approved: number; pending: number; declined: number };
+  catalogSize: number;
+  error?: string;
+};
+
+/** Mirrors `howItWorks` on the marketing site. */
+const HOW_IT_WORKS = [
+  "Verified suppliers publish their catalog, enriched by EcomAI.",
+  "You pick products — or ask EcomAI to build a whole store for your niche.",
+  "The supplier approves, and the product syncs here with price, images and stock.",
+  "You sell it; the supplier ships it.",
+];
+
+/** Mirrors the services section on the marketing site. */
+const SERVICES: [string, string][] = [
+  ["AI Website Builder", "A complete, on-brand store from a single prompt — pages, collections and copy."],
+  ["Supplier network", "Verified suppliers with central catalogs and automated publishing."],
+  ["Launch specialist", "We configure payments, shipping, taxes and domains so you can sell on day one."],
+  ["Shopify development", "Custom themes and apps, wired into the EcomStrait supplier network."],
+];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await authenticate.admin(request);
+  const { session } = await authenticate.admin(request);
+  const base = process.env.ECOMSTRAIT_MERCHANT_URL;
+  const secret = process.env.ECOMSTRAIT_SHARED_SECRET;
 
-  return null;
+  if (!base || !secret) {
+    return { data: null, configError: "This app isn't configured to reach EcomStrait yet." };
+  }
+
+  try {
+    const res = await fetch(
+      `${base}/api/embedded/overview?shop=${encodeURIComponent(session.shop)}`,
+      { headers: { "x-ecomstrait-secret": secret } },
+    );
+    const data = (await res.json()) as Overview;
+    if (!res.ok) return { data: null, configError: data.error ?? "Couldn't load your store." };
+    return { data, configError: null };
+  } catch {
+    return { data: null, configError: "Couldn't reach EcomStrait." };
+  }
 };
 
-export const action = async ({ request }: ActionFunctionArgs) => {
-  const { admin } = await authenticate.admin(request);
-  const color = ["Red", "Orange", "Yellow", "Green"][
-    Math.floor(Math.random() * 4)
-  ];
-  const response = await admin.graphql(
-    `#graphql
-      mutation populateProduct($product: ProductCreateInput!) {
-        productCreate(product: $product) {
-          product {
-            id
-            title
-            handle
-            status
-            variants(first: 10) {
-              edges {
-                node {
-                  id
-                  price
-                  barcode
-                  createdAt
-                }
-              }
-            }
-            demoInfo: metafield(namespace: "$app", key: "demo_info") {
-              jsonValue
-            }
-          }
-        }
-      }`,
-    {
-      variables: {
-        product: {
-          title: `${color} Snowboard`,
-          metafields: [
-            {
-              namespace: "$app",
-              key: "demo_info",
-              value: "Created by React Router Template",
-            },
-          ],
-        },
-      },
-    },
-  );
-  const responseJson = await response.json();
+export default function AppHome() {
+  const { data, configError } = useLoaderData<typeof loader>();
 
-  const product = responseJson.data!.productCreate!.product!;
-  const variantId = product.variants.edges[0]!.node!.id!;
-
-  const variantResponse = await admin.graphql(
-    `#graphql
-    mutation shopifyReactRouterTemplateUpdateVariant($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
-      productVariantsBulkUpdate(productId: $productId, variants: $variants) {
-        productVariants {
-          id
-          price
-          barcode
-          createdAt
-        }
-      }
-    }`,
-    {
-      variables: {
-        productId: product.id,
-        variants: [{ id: variantId, price: "100.00" }],
-      },
-    },
-  );
-
-  const variantResponseJson = await variantResponse.json();
-
-  const metaobjectResponse = await admin.graphql(
-    `#graphql
-    mutation shopifyReactRouterTemplateUpsertMetaobject($handle: MetaobjectHandleInput!, $values: JSON!) {
-      metaobjectUpsert(handle: $handle, values: $values) {
-        metaobject {
-          id
-          handle
-          values
-        }
-        userErrors {
-          field
-          message
-        }
-      }
-    }`,
-    {
-      variables: {
-        handle: {
-          type: "$app:example",
-          handle: "demo-entry",
-        },
-        values: {
-          title: "Demo Entry",
-          description:
-            "This metaobject was created by the Shopify app template to demonstrate the metaobject API.",
-        },
-      },
-    },
-  );
-
-  const metaobjectResponseJson = await metaobjectResponse.json();
-
-  return {
-    product: responseJson!.data!.productCreate!.product,
-    variant:
-      variantResponseJson!.data!.productVariantsBulkUpdate!.productVariants,
-    metaobject: metaobjectResponseJson!.data!.metaobjectUpsert!.metaobject,
-  };
-};
-
-export default function Index() {
-  const fetcher = useFetcher<typeof action>();
-
-  const shopify = useAppBridge();
-  const isLoading =
-    ["loading", "submitting"].includes(fetcher.state) &&
-    fetcher.formMethod === "POST";
-
-  useEffect(() => {
-    if (fetcher.data?.product?.id) {
-      shopify.toast.show("Product created");
-    }
-  }, [fetcher.data?.product?.id, shopify]);
-
-  const generateProduct = () => fetcher.submit({}, { method: "POST" });
+  const counts = data?.counts ?? { approved: 0, pending: 0, declined: 0 };
+  const dashboard = data?.merchantUrl ? `${data.merchantUrl}/stores` : null;
 
   return (
-    <s-page heading="Shopify app template">
-      <s-button slot="primary-action" onClick={generateProduct}>
-        Generate a product
-      </s-button>
-
-      <s-section heading="Congrats on creating a new Shopify app 🎉">
-        <s-paragraph>
-          This embedded app template uses{" "}
-          <s-link
-            href="https://shopify.dev/docs/apps/tools/app-bridge"
-            target="_blank"
-          >
-            App Bridge
-          </s-link>{" "}
-          interface examples like an{" "}
-          <s-link href="/app/additional">additional page in the app nav</s-link>
-          , as well as an{" "}
-          <s-link
-            href="https://shopify.dev/docs/api/admin-graphql"
-            target="_blank"
-          >
-            Admin GraphQL
-          </s-link>{" "}
-          mutation demo, to provide a starting point for app development.
-        </s-paragraph>
+    <s-page heading="EcomStrait — your AI ecommerce co-founder">
+      <s-section>
+        <s-banner tone="info" heading="EcomStrait beta">
+          <s-paragraph>
+            You&apos;re using the beta. Things may change, and the full version launches soon.
+          </s-paragraph>
+        </s-banner>
       </s-section>
-      <s-section heading="Get started with products">
-        <s-paragraph>
-          Generate a product with GraphQL and get the JSON output for that
-          product. Learn more about the{" "}
-          <s-link
-            href="https://shopify.dev/docs/api/admin-graphql/latest/mutations/productCreate"
-            target="_blank"
-          >
-            productCreate
-          </s-link>{" "}
-          mutation in our API references. Includes a product{" "}
-          <s-link
-            href="https://shopify.dev/docs/apps/build/custom-data/metafields"
-            target="_blank"
-          >
-            metafield
-          </s-link>{" "}
-          and{" "}
-          <s-link
-            href="https://shopify.dev/docs/apps/build/custom-data/metaobjects"
-            target="_blank"
-          >
-            metaobject
-          </s-link>
-          .
-        </s-paragraph>
-        <s-stack direction="inline" gap="base">
-          <s-button
-            onClick={generateProduct}
-            {...(isLoading ? { loading: true } : {})}
-          >
-            Generate a product
-          </s-button>
-          {fetcher.data?.product && (
-            <s-button
-              onClick={() => {
-                shopify.intents.invoke?.("edit:shopify/Product", {
-                  value: fetcher.data?.product?.id,
-                });
-              }}
-              target="_blank"
-              variant="tertiary"
-            >
-              Edit product
+
+      {configError ? (
+        <s-section>
+          <s-banner tone="critical" heading="Can't reach EcomStrait">
+            <s-paragraph>{configError}</s-paragraph>
+          </s-banner>
+        </s-section>
+      ) : !data?.linked ? (
+        <s-section heading="Connect this shop">
+          <s-paragraph>
+            This shop isn&apos;t linked to an EcomStrait store yet. Build and provision a store from
+            your dashboard, then everything you add here syncs straight into it.
+          </s-paragraph>
+          {dashboard && (
+            <s-button href={dashboard} target="_blank" variant="primary">
+              Open EcomStrait dashboard
             </s-button>
           )}
-        </s-stack>
-        {fetcher.data?.product && (
-          <s-section heading="productCreate mutation">
-            <s-stack direction="block" gap="base">
-              <s-box
-                padding="base"
-                borderWidth="base"
-                borderRadius="base"
-                background="subdued"
-              >
-                <pre
-                  style={{
-                    margin: 0,
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-word",
-                  }}
-                >
-                  <code>{JSON.stringify(fetcher.data.product, null, 2)}</code>
-                </pre>
-              </s-box>
-
-              <s-heading>productVariantsBulkUpdate mutation</s-heading>
-              <s-box
-                padding="base"
-                borderWidth="base"
-                borderRadius="base"
-                background="subdued"
-              >
-                <pre
-                  style={{
-                    margin: 0,
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-word",
-                  }}
-                >
-                  <code>{JSON.stringify(fetcher.data.variant, null, 2)}</code>
-                </pre>
-              </s-box>
-
-              <s-heading>metaobjectUpsert mutation</s-heading>
-              <s-box
-                padding="base"
-                borderWidth="base"
-                borderRadius="base"
-                background="subdued"
-              >
-                <pre
-                  style={{
-                    margin: 0,
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-word",
-                  }}
-                >
-                  <code>
-                    {JSON.stringify(fetcher.data.metaobject, null, 2)}
-                  </code>
-                </pre>
-              </s-box>
+        </s-section>
+      ) : (
+        <s-section heading={data.store?.name ?? "Your store"}>
+          <s-stack direction="inline" gap="large">
+            <s-stack direction="block" gap="small-300">
+              <s-text tone="neutral">Live products</s-text>
+              <s-heading>{counts.approved}</s-heading>
             </s-stack>
-          </s-section>
-        )}
-      </s-section>
+            <s-stack direction="block" gap="small-300">
+              <s-text tone="neutral">Awaiting supplier</s-text>
+              <s-heading>{counts.pending}</s-heading>
+            </s-stack>
+            <s-stack direction="block" gap="small-300">
+              <s-text tone="neutral">Available to add</s-text>
+              <s-heading>{data.catalogSize}</s-heading>
+            </s-stack>
+          </s-stack>
 
-      <s-section slot="aside" heading="App template specs">
-        <s-paragraph>
-          <s-text>Framework: </s-text>
-          <s-link href="https://reactrouter.com/" target="_blank">
-            React Router
-          </s-link>
-        </s-paragraph>
-        <s-paragraph>
-          <s-text>Interface: </s-text>
-          <s-link
-            href="https://shopify.dev/docs/api/app-home/using-polaris-components"
-            target="_blank"
-          >
-            Polaris web components
-          </s-link>
-        </s-paragraph>
-        <s-paragraph>
-          <s-text>API: </s-text>
-          <s-link
-            href="https://shopify.dev/docs/api/admin-graphql"
-            target="_blank"
-          >
-            GraphQL
-          </s-link>
-        </s-paragraph>
-        <s-paragraph>
-          <s-text>Custom data: </s-text>
-          <s-link
-            href="https://shopify.dev/docs/apps/build/custom-data"
-            target="_blank"
-          >
-            Metafields &amp; metaobjects
-          </s-link>
-        </s-paragraph>
-        <s-paragraph>
-          <s-text>Database: </s-text>
-          <s-link href="https://www.prisma.io/" target="_blank">
-            Prisma
-          </s-link>
-        </s-paragraph>
-      </s-section>
+          {counts.pending > 0 && (
+            <s-paragraph>
+              {counts.pending} product{counts.pending === 1 ? " is" : "s are"} waiting on supplier
+              approval. They appear in this shop automatically once approved.
+            </s-paragraph>
+          )}
+          {counts.declined > 0 && (
+            <s-paragraph>
+              {counts.declined} request{counts.declined === 1 ? " was" : "s were"} declined — your
+              dashboard shows the supplier&apos;s reason.
+            </s-paragraph>
+          )}
 
-      <s-section slot="aside" heading="Next steps">
+          <s-stack direction="inline" gap="base">
+            <Link to="/app/discover">
+              <s-button variant="primary">Discover products</s-button>
+            </Link>
+            {dashboard && (
+              <s-button href={dashboard} target="_blank">
+                Open dashboard
+              </s-button>
+            )}
+          </s-stack>
+        </s-section>
+      )}
+
+      <s-section heading="What EcomStrait does">
+        <s-paragraph>
+          We connect verified suppliers to store owners, and let AI do the heavy lifting in between —
+          from building the store to enriching every product.
+        </s-paragraph>
         <s-unordered-list>
-          <s-list-item>
-            Build an{" "}
-            <s-link
-              href="https://shopify.dev/docs/apps/getting-started/build-app-example"
-              target="_blank"
-            >
-              example app
-            </s-link>
-          </s-list-item>
-          <s-list-item>
-            Explore Shopify&apos;s API with{" "}
-            <s-link
-              href="https://shopify.dev/docs/apps/tools/graphiql-admin-api"
-              target="_blank"
-            >
-              GraphiQL
-            </s-link>
-          </s-list-item>
+          {SERVICES.map(([title, description]) => (
+            <s-list-item key={title}>
+              <s-text>{title}</s-text> — {description}
+            </s-list-item>
+          ))}
         </s-unordered-list>
+      </s-section>
+
+      <s-section slot="aside" heading="How it works">
+        <s-ordered-list>
+          {HOW_IT_WORKS.map((step) => (
+            <s-list-item key={step}>{step}</s-list-item>
+          ))}
+        </s-ordered-list>
+      </s-section>
+
+      <s-section slot="aside" heading="Need a hand?">
+        <s-paragraph>
+          Our launch specialists set up payments, shipping, taxes and your domain so the store is
+          ready to sell.
+        </s-paragraph>
+        {data?.merchantUrl && (
+          <s-button href={data.merchantUrl} target="_blank">
+            Talk to us
+          </s-button>
+        )}
       </s-section>
     </s-page>
   );
 }
 
-export const headers: HeadersFunction = (headersArgs) => {
-  return boundary.headers(headersArgs);
-};
+export const headers: HeadersFunction = (headersArgs) => boundary.headers(headersArgs);

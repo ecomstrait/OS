@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./pagination": "./src/pagination.tsx",
+    "./beta": "./src/beta-badge.tsx",
     "./theme.css": "./src/theme.css"
   },
   "dependencies": {

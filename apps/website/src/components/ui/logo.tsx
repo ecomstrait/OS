@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { BetaBadge } from "@/components/ui/beta-badge";
 
 type LogoProps = {
   className?: string;
@@ -29,9 +30,12 @@ export function Logo({ className, invert = false, showText = true }: LogoProps) 
         </svg>
       </span>
       {showText && (
-        <span className="text-lg font-extrabold tracking-tight font-display">
-          <span className={invert ? "text-white" : "text-ink-950"}>Ecom</span>
-          <span className="text-brand-500">Strait</span>
+        <span className="inline-flex items-center gap-1.5 text-lg font-extrabold tracking-tight font-display">
+          <span>
+            <span className={invert ? "text-white" : "text-ink-950"}>Ecom</span>
+            <span className="text-brand-500">Strait</span>
+          </span>
+          <BetaBadge />
         </span>
       )}
     </Link>

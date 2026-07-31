@@ -176,6 +176,14 @@ export default function DiscoverPage() {
 
   return (
     <s-page heading="Discover products to sell">
+      <s-section>
+        <s-banner tone="info" heading="EcomStrait beta">
+          <s-paragraph>
+            You&apos;re using the beta. Things may change, and the full version launches soon.
+          </s-paragraph>
+        </s-banner>
+      </s-section>
+
       {!data?.linked && (
         <s-section>
           <s-banner tone="warning" heading="This shop isn't linked to a store yet">
