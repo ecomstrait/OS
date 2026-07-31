@@ -17,7 +17,12 @@ const shopify = shopifyApp({
   sessionStorage: new PrismaSessionStorage(prisma),
   distribution: AppDistribution.AppStore,
   future: {
-    expiringOfflineAccessTokens: true,
+    // Deliberately OFF. This flag makes offline tokens expire (~24h) and rely on
+    // the library refreshing them while a merchant is using the app. EcomStrait
+    // needs background access when nobody is present — syncing products,
+    // provisioning, wiping a store on delete — and it stores its own copy of the
+    // token, which nothing refreshes. With the flag on, that copy died daily.
+    expiringOfflineAccessTokens: false,
   },
   hooks: {
     // On install: hand the shop + access token to the EcomStrait platform. The

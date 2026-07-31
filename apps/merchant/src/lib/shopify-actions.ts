@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@ecomstrait/auth/server";
 import { createAdminClient } from "@ecomstrait/db";
 import { productImage } from "@/lib/catalog";
+import { flagReconnectNeeded, alertPoolEmpty } from "@/lib/ops-alert";
 import { shopifyGraphql } from "@/lib/shopify";
 import {
   pushProductsToShopify,
@@ -12,6 +13,7 @@ import {
   ensureDefaultShippingRate,
   fetchShippingState,
   fetchOnlineStorePublicationId,
+  isTokenAlive,
 } from "@/lib/shopify";
 import {
   uploadAndPublishTheme,
@@ -20,6 +22,89 @@ import {
   logoAssetFrom,
 } from "@/lib/shopify-theme";
 import { liquidThemeForStyle } from "@/lib/themes";
+
+type AdminClient = NonNullable<ReturnType<typeof createAdminClient>>;
+
+/**
+ * Take a genuinely free, working store from the pool.
+ *
+ * Two things the old query got wrong and both were reachable in production:
+ * a shop already referenced by another `stores` row could still read
+ * `available` and be handed to a second merchant, and a shop whose token had
+ * gone stale passed the `access_token is not null` filter only to fail on the
+ * first Shopify call. Candidates are now cross-checked against live links and
+ * probed before being claimed.
+ */
+async function claimPoolStore(
+  admin: AdminClient,
+  userId: string,
+): Promise<{ id: string } | { error: string }> {
+  const { data: candidates } = await admin
+    .from("shopify_stores")
+    .select("id, shop_domain, access_token")
+    .eq("status", "available")
+    .not("access_token", "is", null)
+    .order("created_at", { ascending: true })
+    .limit(20);
+  if (!candidates?.length) {
+    return { error: "No store is available right now — our team has been notified and is adding more. Try again shortly." };
+  }
+
+  // Any shop already attached to a store is in use, whatever its status says.
+  const { data: linked } = await admin
+    .from("stores")
+    .select("shopify_store_id")
+    .not("shopify_store_id", "is", null);
+  const inUse = new Set((linked ?? []).map((l) => l.shopify_store_id));
+
+  const stale: { id: string; shop_domain: string }[] = [];
+  for (const candidate of candidates) {
+    if (inUse.has(candidate.id)) continue;
+
+    // A cheap probe beats claiming a store and failing three calls later.
+    let alive = false;
+    try {
+      const res = await shopifyGraphql(candidate.shop_domain, candidate.access_token!)<{
+        data?: { shop?: { name?: string } };
+      }>(`{ shop { name } }`);
+      alive = Boolean(res.data?.shop?.name);
+    } catch {
+      alive = false;
+    }
+    if (!alive) {
+      stale.push({ id: candidate.id, shop_domain: candidate.shop_domain });
+      continue;
+    }
+
+    const { data: won } = await admin
+      .from("shopify_stores")
+      .update({ status: "building", owner_user_id: userId, assigned_at: new Date().toISOString() })
+      // Losing this race means another merchant claimed it first.
+      .eq("id", candidate.id)
+      .eq("status", "available")
+      .select("id")
+      .maybeSingle();
+    if (won) return { id: won.id };
+  }
+
+  // Flag dead tokens so the admin pool view shows why they can't be used, and
+  // email the team the first time each one breaks.
+  for (const { id, shop_domain } of stale) {
+    await flagReconnectNeeded(id, shop_domain);
+  }
+
+  await alertPoolEmpty(
+    stale.length
+      ? `${stale.length} available store(s) have rejected tokens and need reconnecting.`
+      : "No stores are marked available.",
+  );
+
+  return {
+    error: stale.length
+      ? "No store is ready right now — our team has been notified and is preparing one. Try again shortly."
+      : "No store is available right now — our team has been notified and is adding more. Try again shortly.",
+  };
+}
 
 /**
  * Provision a Shopify-path store: claim an available store from the pool,
@@ -49,19 +134,9 @@ export async function provisionShopifyStore(storeId: string): Promise<{ error?: 
   let sid = store.shopify_store_id;
   const claimedNow = !sid;
   if (!sid) {
-    const { data: avail } = await admin
-      .from("shopify_stores")
-      .select("id")
-      .eq("status", "available")
-      .not("access_token", "is", null)
-      .limit(1)
-      .maybeSingle();
-    if (!avail) return { error: "No connected Shopify store available. Install the app on a dev store first." };
-    sid = avail.id;
-    await admin
-      .from("shopify_stores")
-      .update({ status: "building", owner_user_id: user.id, assigned_at: new Date().toISOString() })
-      .eq("id", sid);
+    const claimed = await claimPoolStore(admin, user.id);
+    if ("error" in claimed) return { error: claimed.error };
+    sid = claimed.id;
     await supabase.from("stores").update({ shopify_store_id: sid }).eq("id", storeId);
   }
 
@@ -290,6 +365,15 @@ export async function syncProductsToShopify(
     .maybeSingle();
   if (!shopRow?.access_token) return { error: "That Shopify store has no access token." };
 
+  // A stale token otherwise surfaces as a raw Shopify error with no next step.
+  if (!(await isTokenAlive(shopRow.shop_domain, shopRow.access_token))) {
+    await flagReconnectNeeded(store.shopify_store_id, shopRow.shop_domain);
+    return {
+      error:
+        "This store's connection needs restoring. Our team has been notified — we'll sort it and you can try again shortly.",
+    };
+  }
+
   const { data: sp } = await admin
     .from("store_products")
     .select("product_id, price, shopify_product_id")
@@ -453,6 +537,23 @@ export async function getStoreReadiness(
   const shop = shopRow.shop_domain;
   const token = shopRow.access_token;
   const checks: ReadinessCheck[] = [];
+
+  // Everything below needs a working token, so lead with it.
+  if (!(await isTokenAlive(shop, token))) {
+    await flagReconnectNeeded(store.shopify_store_id, shop);
+    return {
+      shopDomain: shop,
+      checks: [
+        {
+          id: "connection",
+          label: "Shopify connection",
+          ok: false,
+          detail:
+            "Connection interrupted. Our team has been notified and is restoring it — nothing for you to do.",
+        },
+      ],
+    };
+  }
 
   // Products present and visible to the storefront.
   const catalog = await fetchShopCatalog(shop, token).catch(() => null);

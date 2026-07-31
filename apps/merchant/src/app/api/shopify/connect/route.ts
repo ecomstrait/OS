@@ -28,18 +28,43 @@ export async function POST(req: Request) {
   const admin = createAdminClient();
   if (!admin) return NextResponse.json({ error: "Server not configured" }, { status: 500 });
 
-  const { error } = await admin.from("shopify_stores").upsert(
-    {
-      shop_domain: shop,
-      access_token: accessToken,
-      scopes: body.scopes ?? null,
-      shopify_shop_id: body.shopifyShopId ?? null,
-      status: "available",
-      sync_status: "connected",
-    },
-    { onConflict: "shop_domain" },
-  );
+  // The Shopify app calls this on every load, not just on install, so this must
+  // only refresh the CONNECTION. Previously it upserted `status: "available"`
+  // unconditionally, which meant a merchant opening their own store handed it
+  // back to the pool and made it claimable by someone else.
+  const connection = {
+    access_token: accessToken,
+    scopes: body.scopes ?? null,
+    shopify_shop_id: body.shopifyShopId ?? null,
+    sync_status: "connected",
+  };
+
+  const { data: existing } = await admin
+    .from("shopify_stores")
+    .select("id, status, owner_user_id")
+    .eq("shop_domain", shop)
+    .maybeSingle();
+
+  if (!existing) {
+    // Genuinely new shop — it joins the pool as available.
+    const { error } = await admin
+      .from("shopify_stores")
+      .insert({ shop_domain: shop, status: "available", ...connection });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true, status: "available" });
+  }
+
+  // A shop with an owner, or one already handed over, keeps its status.
+  const claimed =
+    Boolean(existing.owner_user_id) ||
+    existing.status === "transferred" ||
+    existing.status === "archived";
+
+  const { error } = await admin
+    .from("shopify_stores")
+    .update(claimed ? connection : { ...connection, status: "available" })
+    .eq("id", existing.id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, status: claimed ? existing.status : "available" });
 }

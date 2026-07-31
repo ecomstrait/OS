@@ -59,6 +59,14 @@ export default async function AdminShopifyStoresPage({
     .select("user_id", { count: "exact", head: true });
   const promo = promoUsed ?? 0;
 
+  // Stores whose token Shopify has rejected. Merchants have no access to these
+  // shops, so nothing happens until an admin reconnects them.
+  const { data: broken } = await client
+    .from("shopify_stores")
+    .select("id, shop_domain, sync_status, status")
+    .ilike("sync_status", "%reconnect needed%");
+  const needsReconnect = broken ?? [];
+
   // Pool health covers every store, not just the visible page.
   const { count: availableCount } = await client
     .from("shopify_stores")
@@ -97,6 +105,34 @@ export default async function AdminShopifyStoresPage({
         {total} store{total === 1 ? "" : "s"} in the pool. Set each dev store&apos;s
         storefront password so its assigned merchant can preview it.
       </p>
+
+      {needsReconnect.length > 0 && (
+        <div className="mt-5 rounded-2xl border border-red-200 bg-red-50 p-4">
+          <p className="text-sm font-bold text-red-800">
+            {needsReconnect.length} store{needsReconnect.length === 1 ? "" : "s"} need reconnecting
+          </p>
+          <p className="mt-1 text-xs text-red-700">
+            Shopify has rejected the stored access token. Merchants can&apos;t fix this — open the
+            EcomStrait app on each shop once to restore access. Provisioning and product sync stay
+            blocked until then.
+          </p>
+          <ul className="mt-2 flex flex-col gap-1">
+            {needsReconnect.map((s) => (
+              <li key={s.id} className="text-xs font-medium text-red-800">
+                <a
+                  href={`https://admin.shopify.com/store/${s.shop_domain.split(".")[0]}/apps`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline"
+                >
+                  {s.shop_domain}
+                </a>
+                <span className="font-normal text-red-600"> — open the app to reconnect</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Beta ops metrics */}
       <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-3">
