@@ -1,5 +1,15 @@
-<section class="hero{% if settings.hero_image != blank %} hero--image{% endif %}"
-  {%- if settings.hero_image != blank %} style="background-image:linear-gradient(90deg, rgba(23,24,26,.86) 0%, rgba(23,24,26,.58) 100%), url('{{ settings.hero_image | image_url: width: 2000 }}')"{% endif %}>
+{%- liquid
+  assign hero_bg = settings.hero_image_url
+  if hero_bg == blank and settings.hero_image != blank
+    assign hero_bg = settings.hero_image | image_url: width: 2000
+  endif
+-%}
+<section class="hero{% if hero_bg != blank or settings.hero_video_url != blank %} hero--image{% endif %}"
+  {%- if hero_bg != blank %} style="background-image:linear-gradient(90deg, rgba(23,24,26,.86) 0%, rgba(23,24,26,.58) 100%), url('{{ hero_bg }}')"{% endif %}>
+  {%- if settings.hero_video_url != blank -%}
+    <video class="hero__video" src="{{ settings.hero_video_url }}" autoplay muted loop playsinline aria-hidden="true"></video>
+    <span class="hero__scrim" aria-hidden="true"></span>
+  {%- endif -%}
   <span class="hero__stripes" aria-hidden="true"></span>
   <div class="container hero__inner">
     <p class="eyebrow">{{ shop.name }} &mdash; Built to work</p>

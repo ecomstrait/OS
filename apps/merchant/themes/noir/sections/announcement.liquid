@@ -1,0 +1,13 @@
+{%- if settings.announcement != blank -%}
+  <div class="announcement-bar">
+    <div class="container">{{ settings.announcement }}</div>
+  </div>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "Announcement",
+  "settings": [],
+  "presets": [{ "name": "Announcement" }]
+}
+{% endschema %}

@@ -406,6 +406,32 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["store_theme_versions"]["Row"]>;
         Relationships: [];
       };
+      store_assets: {
+        Row: {
+          id: string;
+          store_id: string;
+          user_id: string;
+          kind: "image" | "video";
+          provider: "supabase" | "r2";
+          url: string;
+          external_id: string | null;
+          file_name: string | null;
+          mime_type: string | null;
+          bytes: number | null;
+          width: number | null;
+          height: number | null;
+          role: string | null;
+          alt: string | null;
+          created_at: string;
+        };
+        Insert: {
+          store_id: string;
+          user_id: string;
+          url: string;
+        } & Partial<Omit<Database["public"]["Tables"]["store_assets"]["Row"], "id" | "store_id" | "user_id" | "url" | "created_at">>;
+        Update: Partial<Database["public"]["Tables"]["store_assets"]["Row"]>;
+        Relationships: [];
+      };
       store_orders: {
         Row: {
           id: string;

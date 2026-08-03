@@ -1,0 +1,23 @@
+{%- if settings.about_body != blank or settings.about_image_url != blank -%}
+  <section class="about-section">
+    <div class="container about-section__inner">
+      {%- if settings.about_image_url != blank -%}
+        <img class="about-section__media" src="{{ settings.about_image_url }}" alt="" loading="lazy" width="1200" height="800">
+      {%- endif -%}
+      <div class="about-section__copy">
+        {%- if settings.about_heading != blank -%}
+          <h2>{{ settings.about_heading }}</h2>
+        {%- endif -%}
+        <p class="muted">{{ settings.about_body }}</p>
+      </div>
+    </div>
+  </section>
+{%- endif -%}
+
+{% schema %}
+{
+  "name": "About",
+  "settings": [],
+  "presets": [{ "name": "About" }]
+}
+{% endschema %}

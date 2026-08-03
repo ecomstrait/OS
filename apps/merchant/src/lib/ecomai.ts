@@ -6,6 +6,26 @@
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 const DEFAULT_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
 
+/** A media reference in a plan. `url` is absolute — CDN, bucket, or embed. */
+export type PlanMedia = {
+  url: string;
+  kind: "image" | "video";
+  alt?: string;
+};
+
+/**
+ * An editable content block. Themes render what they support and skip the
+ * rest, so adding a type here never breaks a store built on an older theme.
+ */
+export type PlanSection = {
+  id: string;
+  type: "text" | "image" | "video" | "gallery" | "features";
+  heading?: string;
+  body?: string;
+  media?: PlanMedia[];
+  items?: { title: string; description: string }[];
+};
+
 export type StorePlan = {
   storeName: string;
   tagline: string;
@@ -17,6 +37,13 @@ export type StorePlan = {
   seoTitle: string;
   seoDescription: string;
   source: "groq" | "preset";
+  /** Everything below is optional: stores built before the content editor
+   *  existed have none of it, and must keep rendering unchanged. */
+  announcement?: string;
+  heroMedia?: PlanMedia | null;
+  aboutMedia?: PlanMedia | null;
+  sections?: PlanSection[];
+  footerText?: string;
 };
 
 function presetPlan(idea: string): StorePlan {

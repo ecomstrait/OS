@@ -23,6 +23,8 @@ import {
   settingsFromPlan,
   logoAssetFrom,
 } from "@/lib/shopify-theme";
+import { themeFilesWithContent } from "@/lib/theme-content";
+import { normalizePlan } from "@/lib/store-plan";
 import { liquidThemeForStyle } from "@/lib/themes";
 
 type AdminClient = NonNullable<ReturnType<typeof createAdminClient>>;
@@ -213,18 +215,18 @@ export async function provisionShopifyStore(storeId: string): Promise<{ error?: 
   let themeGid: string | null = null;
   if (store.type === "shopify_liquid_theme") {
     const liquid = liquidThemeForStyle(store.theme);
-    const plan = store.content as {
-      brandColors?: string[];
-      heroHeadline?: string;
-      heroSub?: string;
-      tagline?: string;
-    } | null;
+    // Normalised rather than cast: `content` is free-form JSON, and the theme
+    // now reads media and section blocks out of it that a bare cast wouldn't
+    // guarantee are well formed.
+    const plan = normalizePlan(store.content, store.name ?? undefined);
     let themeRes: Awaited<ReturnType<typeof uploadAndPublishTheme>>;
     try {
       themeRes = await uploadAndPublishTheme(shopRow.shop_domain, shopRow.access_token, {
         themeName: liquid.name,
-        files: liquid.files,
-        settings: settingsFromPlan(plan, store.name),
+        // The merchant's content blocks are rendered into the package here —
+        // they can't be theme settings, because Liquid can't read a JSON array.
+        files: themeFilesWithContent(liquid.files, plan),
+        settings: settingsFromPlan(plan, store.name, store.theme),
         logo: logoAssetFrom(store.logo_url),
       });
     } catch (e) {
@@ -279,7 +281,7 @@ export async function resyncShopifyTheme(storeId: string): Promise<{ error?: str
 
   const { data: store } = await supabase
     .from("stores")
-    .select("id, type, shopify_store_id, content, logo_url, name")
+    .select("id, type, shopify_store_id, content, logo_url, name, theme")
     .eq("id", storeId)
     .eq("user_id", user.id)
     .maybeSingle();
@@ -305,18 +307,13 @@ export async function resyncShopifyTheme(storeId: string): Promise<{ error?: str
     };
   }
 
-  const plan = store.content as {
-    brandColors?: string[];
-    heroHeadline?: string;
-    heroSub?: string;
-    tagline?: string;
-  } | null;
+  const plan = normalizePlan(store.content, store.name ?? undefined);
 
   const res = await pushThemeSettings(
     shopRow.shop_domain,
     shopRow.access_token,
     shopRow.theme_id,
-    settingsFromPlan(plan, store.name),
+    settingsFromPlan(plan, store.name, store.theme),
     logoAssetFrom(store.logo_url),
   );
   if (!res.ok) return { error: res.error };
