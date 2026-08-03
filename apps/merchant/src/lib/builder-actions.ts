@@ -296,7 +296,13 @@ export async function editStore(storeId: string, instruction: string): Promise<E
  */
 export async function updateStore(
   storeId: string,
-  input: { name: string; theme: string; logoUrl: string | null },
+  input: {
+    name: string;
+    theme: string;
+    logoUrl: string | null;
+    /** The edited content plan. Omit to leave `stores.content` untouched. */
+    content?: StorePlan;
+  },
 ): Promise<{ error?: string; note?: string }> {
   const supabase = await createClient();
   const {
@@ -314,15 +320,18 @@ export async function updateStore(
 
   const themeChanged = Boolean(input.theme) && input.theme !== store.theme;
   const logoChanged = (input.logoUrl ?? null) !== store.logo_url;
+  const contentChanged =
+    input.content !== undefined &&
+    JSON.stringify(input.content) !== JSON.stringify(store.content ?? {});
 
   // Only snapshot when the look actually changes — renaming a store shouldn't
   // fill the history with visually identical entries.
-  if (themeChanged || logoChanged) {
+  if (themeChanged || logoChanged || contentChanged) {
     await snapshotStore(
       supabase,
       storeId,
       { content: store.content, theme: store.theme, logo_url: store.logo_url },
-      themeChanged ? `Theme → ${input.theme}` : "Logo changed",
+      themeChanged ? `Theme → ${input.theme}` : contentChanged ? "Content edited" : "Logo changed",
     );
   }
 
@@ -332,6 +341,7 @@ export async function updateStore(
       name: input.name.trim() || "My Store",
       theme: input.theme || null,
       logo_url: input.logoUrl,
+      ...(contentChanged ? { content: input.content as unknown as Record<string, unknown> } : {}),
     })
     .eq("id", storeId)
     .eq("user_id", user.id);

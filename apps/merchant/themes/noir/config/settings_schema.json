@@ -1,7 +1,7 @@
 [
   {
     "name": "theme_info",
-    "theme_name": "Noir — EcomStrait",
+    "theme_name": "Noir \u2014 EcomStrait",
     "theme_version": "1.0.0",
     "theme_author": "EcomStrait",
     "theme_documentation_url": "https://ecomstrait.com",
@@ -49,7 +49,7 @@
     "settings": [
       {
         "type": "paragraph",
-        "content": "Noir is a dark theme — the near-black canvas and off-white text are fixed. Brand and accent tint the highlights: prices, buttons, rules and links."
+        "content": "Noir is a dark theme \u2014 the near-black canvas and off-white text are fixed. Brand and accent tint the highlights: prices, buttons, rules and links."
       },
       {
         "type": "color",
@@ -133,6 +133,44 @@
         "id": "footer_text",
         "label": "Footer note",
         "default": "Powered by EcomStrait"
+      }
+    ]
+  },
+  {
+    "name": "Content",
+    "settings": [
+      {
+        "type": "text",
+        "id": "announcement",
+        "label": "Announcement bar",
+        "info": "Shown above the header on every page. Leave blank to hide it."
+      },
+      {
+        "type": "text",
+        "id": "hero_image_url",
+        "label": "Hero image URL",
+        "info": "Set by EcomStrait from your media library. Overrides the hero image picker."
+      },
+      {
+        "type": "text",
+        "id": "hero_video_url",
+        "label": "Hero video URL",
+        "info": "Plays muted behind the hero. Overrides the hero image."
+      },
+      {
+        "type": "text",
+        "id": "about_heading",
+        "label": "About heading"
+      },
+      {
+        "type": "textarea",
+        "id": "about_body",
+        "label": "About text"
+      },
+      {
+        "type": "text",
+        "id": "about_image_url",
+        "label": "About image URL"
       }
     ]
   }

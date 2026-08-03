@@ -1,26 +1,73 @@
+/**
+ * The store templates shown on the marketing site.
+ *
+ * One entry per Liquid theme we actually ship (see LIQUID_THEMES in the
+ * merchant app). They deliberately match by slug: the gallery used to advertise
+ * twelve invented templates against six real packages, so eleven of them
+ * silently fell back to Aurora once a merchant picked one. Anything added here
+ * needs a real theme behind it.
+ */
+
 export type StoreTemplate = {
   slug: string;
   name: string;
   category: string;
   tagline: string;
-  /** Two-stop gradient used for the preview mock (from, to). */
+  /** Two-stop gradient behind the product tiles (from, to). Keep it light. */
   gradient: [string, string];
+  /** Used for text on white and as a background for white text — keep it dark. */
   accent: string;
 };
 
 export const storeTemplates: StoreTemplate[] = [
-  { slug: "lumiere", name: "Lumière", category: "Cosmetics", tagline: "Clean beauty, elevated", gradient: ["#fce7f3", "#fbcfe8"], accent: "#db2777" },
-  { slug: "northfield", name: "NorthField", category: "Fashion", tagline: "Everyday essentials", gradient: ["#e0e7ff", "#c7d2fe"], accent: "#4f46e5" },
-  { slug: "voltix", name: "Voltix", category: "Electronics", tagline: "Tech that keeps up", gradient: ["#dbeafe", "#bfdbfe"], accent: "#2563eb" },
-  { slug: "rooted", name: "Rooted", category: "Furniture", tagline: "Warm, modern living", gradient: ["#fef3c7", "#fde68a"], accent: "#d97706" },
-  { slug: "peak", name: "Peak", category: "Sports", tagline: "Gear up, go further", gradient: ["#dcfce7", "#bbf7d0"], accent: "#16a34a" },
-  { slug: "aurora", name: "Aurora", category: "Jewelry", tagline: "Everyday brilliance", gradient: ["#ede9fe", "#ddd6fe"], accent: "#7c3aed" },
-  { slug: "harvest", name: "Harvest", category: "Grocery", tagline: "Fresh, delivered", gradient: ["#ecfccb", "#d9f99d"], accent: "#65a30d" },
-  { slug: "pawsome", name: "Pawsome", category: "Pet Store", tagline: "Happy pets, happy homes", gradient: ["#ffedd5", "#fed7aa"], accent: "#ea580c" },
-  { slug: "vitalis", name: "Vitalis", category: "Medical", tagline: "Care you can trust", gradient: ["#cffafe", "#a5f3fc"], accent: "#0891b2" },
-  { slug: "chapter", name: "Chapter", category: "Books", tagline: "Stories worth keeping", gradient: ["#fee2e2", "#fecaca"], accent: "#dc2626" },
-  { slug: "savory", name: "Savory", category: "Restaurant", tagline: "Order in, dine well", gradient: ["#fef9c3", "#fef08a"], accent: "#ca8a04" },
-  { slug: "nest", name: "Nest", category: "Home Decor", tagline: "Make it yours", gradient: ["#f3e8ff", "#e9d5ff"], accent: "#9333ea" },
+  {
+    slug: "aurora",
+    name: "Aurora",
+    category: "Fashion",
+    tagline: "Modern, minimal, conversion-first",
+    gradient: ["#d1fae5", "#bfdbfe"],
+    accent: "#059669",
+  },
+  {
+    slug: "noir",
+    name: "Noir",
+    category: "Jewelry",
+    tagline: "Dark, premium, high-contrast",
+    gradient: ["#e2e8f0", "#cbd5e1"],
+    accent: "#0f172a",
+  },
+  {
+    slug: "bloom",
+    name: "Bloom",
+    category: "Beauty",
+    tagline: "Colourful, friendly, lifestyle-led",
+    gradient: ["#fce7f3", "#ede9fe"],
+    accent: "#db2777",
+  },
+  {
+    slug: "cove",
+    name: "Cove",
+    category: "Home & Wellness",
+    tagline: "Soft, editorial, story-driven",
+    gradient: ["#e0f2fe", "#e0e7ff"],
+    accent: "#0284c7",
+  },
+  {
+    slug: "forge",
+    name: "Forge",
+    category: "Outdoor & Tools",
+    tagline: "Strong type, utilitarian, gear-ready",
+    gradient: ["#ffedd5", "#fee2e2"],
+    accent: "#ea580c",
+  },
+  {
+    slug: "marble",
+    name: "Marble",
+    category: "Accessories",
+    tagline: "Neutral, refined, timeless",
+    gradient: ["#eef2f7", "#dbe3ee"],
+    accent: "#475569",
+  },
 ];
 
 export function getStoreBySlug(slug: string): StoreTemplate | undefined {
@@ -28,6 +75,11 @@ export function getStoreBySlug(slug: string): StoreTemplate | undefined {
 }
 
 export const galleryCategories = [
-  "All", "Fashion", "Cosmetics", "Electronics", "Furniture", "Sports",
-  "Jewelry", "Grocery", "Pet Store", "Medical", "Books", "Restaurant", "Home Decor",
+  "All",
+  "Fashion",
+  "Jewelry",
+  "Beauty",
+  "Home & Wellness",
+  "Outdoor & Tools",
+  "Accessories",
 ];

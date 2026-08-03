@@ -3,11 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Sparkles, Loader2, Send, Store, Globe, ShoppingBag, ImageOff, ImagePlus, X, Check, ExternalLink, ArrowLeft } from "lucide-react";
+import { Sparkles, Loader2, Send, Store, Globe, ShoppingBag, ImageOff, ImagePlus, X, Check, ExternalLink, ArrowLeft, Pencil } from "lucide-react";
 import { cn } from "@ecomstrait/ui";
 import { createClient } from "@ecomstrait/auth/client";
 import type { StoreType } from "@ecomstrait/db";
 import { storeThemes } from "@/content/themes";
+import { ContentEditor } from "@/components/builder/content-editor";
 import {
   buildStore,
   refineStore,
@@ -159,6 +160,7 @@ export function StoreBuilder({
   );
   const [logoUrl, setLogoUrl] = useState<string | null>(existing?.logoUrl ?? null);
   const [uploading, setUploading] = useState(false);
+  const [editingContent, setEditingContent] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -279,7 +281,14 @@ export function StoreBuilder({
     setSaving(true);
     setError(null);
     setSavedAt(false);
-    const res = await updateStore(existing.id, { name, theme, logoUrl });
+    // Send the plan too: the content editor writes straight into `plan`, and
+    // updateStore only persists it when it actually differs.
+    const res = await updateStore(existing.id, {
+      name,
+      theme,
+      logoUrl,
+      ...(plan ? { content: plan } : {}),
+    });
     setSaving(false);
     if (res.error) {
       setError(res.error);
@@ -395,7 +404,20 @@ export function StoreBuilder({
       {/* ---- Right: preview + action bar ---- */}
       <div className="flex h-1/2 flex-1 flex-col bg-ink-50/50 lg:h-full">
         <div className="flex-1 overflow-y-auto">
-          {!plan ? (
+          {editingContent && plan && existing ? (
+            <div className="p-4">
+              <div className="rounded-xl border border-ink-100 bg-white p-4 shadow-sm">
+                <ContentEditor
+                  storeId={existing.id}
+                  plan={plan}
+                  onChange={(next) => {
+                    setPlan(next);
+                    setSavedAt(false);
+                  }}
+                />
+              </div>
+            </div>
+          ) : !plan ? (
             <div className="grid h-full place-items-center p-8 text-center">
               <div className="max-w-xs">
                 <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-ink-100 text-ink-400">
@@ -492,6 +514,20 @@ export function StoreBuilder({
 
             {editing ? (
               <div className="ml-auto flex items-center gap-2">
+                {existing && plan && (
+                  <button
+                    onClick={() => setEditingContent((v) => !v)}
+                    className={cn(
+                      "inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm font-semibold transition",
+                      editingContent
+                        ? "border-brand-500 bg-brand-50 text-brand-700"
+                        : "border-ink-200 text-ink-700 hover:bg-ink-50",
+                    )}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    {editingContent ? "Preview" : "Content"}
+                  </button>
+                )}
                 {existing && (
                   <VersionHistory
                     storeId={existing.id}

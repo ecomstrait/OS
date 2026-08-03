@@ -34,7 +34,7 @@ export const niches: Niche[] = [
     margin: [35, 50], suppliers: [30, 70], monthlyRevenue: [3000, 12000],
     productIdeas: ["Everyday Essentials Tee", "Knit Sweater", "Statement Jacket", "Layering Set"],
     countries: ["United States", "United Kingdom", "Australia"],
-    storeSlug: "northfield",
+    storeSlug: "aurora",
     themes: ["fashion-shop1", "fashion-shop2", "fashion-shop3"],
   },
   {
@@ -45,7 +45,7 @@ export const niches: Niche[] = [
     margin: [35, 52], suppliers: [30, 70], monthlyRevenue: [3000, 11000],
     productIdeas: ["Organic Cotton Tee", "Relaxed Hoodie", "Straight Jean", "Everyday Shirt"],
     countries: ["United States", "United Kingdom", "Canada"],
-    storeSlug: "northfield",
+    storeSlug: "aurora",
     themes: ["clothing-shop1", "clothing-shop2", "clothing-shop3"],
   },
   {
@@ -56,7 +56,7 @@ export const niches: Niche[] = [
     margin: [35, 50], suppliers: [20, 45], monthlyRevenue: [3000, 12000],
     productIdeas: ["Everyday Sneaker", "Trail Runner", "Leather Boot", "Court Classic"],
     countries: ["United States", "Canada", "Australia"],
-    storeSlug: "peak",
+    storeSlug: "forge",
     themes: ["shoes-shop1", "shoes-shop2", "shoes-shop3"],
   },
   {
@@ -67,7 +67,7 @@ export const niches: Niche[] = [
     margin: [42, 58], suppliers: [25, 60], monthlyRevenue: [3000, 12000],
     productIdeas: ["Radiance Serum", "Tinted SPF", "Overnight Mask", "Everyday Glow Set"],
     countries: ["United States", "United Kingdom", "Canada"],
-    storeSlug: "lumiere",
+    storeSlug: "bloom",
     themes: ["comsmatic-shop"],
   },
   {
@@ -78,7 +78,7 @@ export const niches: Niche[] = [
     margin: [45, 60], suppliers: [15, 40], monthlyRevenue: [4000, 15000],
     productIdeas: ["Solitaire Pendant", "Stacking Rings", "Huggie Hoops", "Tennis Bracelet"],
     countries: ["United States", "India", "United Kingdom"],
-    storeSlug: "aurora",
+    storeSlug: "noir",
     themes: ["Jewellery-shop"],
   },
   {
@@ -89,7 +89,7 @@ export const niches: Niche[] = [
     margin: [38, 52], suppliers: [15, 35], monthlyRevenue: [5000, 18000],
     productIdeas: ["Smart Fitness Watch", "Minimalist Automatic", "Leather Strap Set", "Gift Box Bundle"],
     countries: ["United States", "Germany", "United Arab Emirates"],
-    storeSlug: "aurora",
+    storeSlug: "marble",
     themes: ["watches-shop"],
   },
   {
@@ -100,7 +100,7 @@ export const niches: Niche[] = [
     margin: [28, 42], suppliers: [20, 50], monthlyRevenue: [4000, 16000],
     productIdeas: ["Flagship Smartphone", "Wireless Earbuds", "Fast Charger", "Smart Accessories"],
     countries: ["United States", "Germany", "Canada"],
-    storeSlug: "voltix",
+    storeSlug: "forge",
     themes: ["smartphones-shop"],
   },
   {
@@ -111,7 +111,7 @@ export const niches: Niche[] = [
     margin: [25, 40], suppliers: [15, 40], monthlyRevenue: [3000, 10000],
     productIdeas: ["Seasonal Produce Box", "Artisan Pantry Set", "Cold-Pressed Oils", "Coffee Subscription"],
     countries: ["United States", "United Kingdom", "Canada"],
-    storeSlug: "harvest",
+    storeSlug: "cove",
     themes: ["grocery-shop1", "grocery-shop2", "grocery-shop3"],
   },
   {
@@ -122,7 +122,7 @@ export const niches: Niche[] = [
     margin: [38, 52], suppliers: [18, 45], monthlyRevenue: [3000, 12000],
     productIdeas: ["Grain-Free Food", "Orthopedic Bed", "Chew Toys", "Grooming Kit"],
     countries: ["United States", "United Kingdom", "Canada"],
-    storeSlug: "pawsome",
+    storeSlug: "bloom",
     themes: ["pets-shop"],
   },
   {
@@ -133,7 +133,7 @@ export const niches: Niche[] = [
     margin: [30, 45], suppliers: [12, 30], monthlyRevenue: [2000, 9000],
     productIdeas: ["Bestseller Fiction", "Signed Editions", "Kids' Boxset", "Linen Bookmarks"],
     countries: ["United States", "United Kingdom", "Canada"],
-    storeSlug: "chapter",
+    storeSlug: "cove",
     themes: ["books-shop"],
   },
   {
@@ -144,7 +144,7 @@ export const niches: Niche[] = [
     margin: [42, 58], suppliers: [15, 40], monthlyRevenue: [3000, 12000],
     productIdeas: ["Handwoven Throw", "Statement Lighting", "Ceramic Vase", "Framed Art Print"],
     countries: ["United States", "United Kingdom", "Australia"],
-    storeSlug: "nest",
+    storeSlug: "cove",
     themes: ["home-decore"],
   },
   {
@@ -155,7 +155,7 @@ export const niches: Niche[] = [
     margin: [40, 55], suppliers: [12, 30], monthlyRevenue: [3000, 11000],
     productIdeas: ["Memory Foam Pillow", "Linen Duvet Set", "Cushion Covers", "Weighted Blanket"],
     countries: ["United States", "United Kingdom", "Australia"],
-    storeSlug: "nest",
+    storeSlug: "cove",
     themes: ["pillow-shop"],
   },
 
@@ -168,7 +168,7 @@ export const niches: Niche[] = [
     margin: [40, 55], suppliers: [18, 40], monthlyRevenue: [4000, 14000],
     productIdeas: ["Signature Eau de Parfum", "Travel Spray Set", "Oud Collection", "Layering Kit"],
     countries: ["United States", "United Arab Emirates", "United Kingdom"],
-    storeSlug: "lumiere",
+    storeSlug: "bloom",
   },
   {
     slug: "health",
@@ -178,7 +178,7 @@ export const niches: Niche[] = [
     margin: [45, 60], suppliers: [15, 35], monthlyRevenue: [4000, 14000],
     productIdeas: ["Daily Multivitamin", "Magnesium Glycinate", "Electrolyte Mix", "Wellness Bundle"],
     countries: ["United States", "Canada", "United Kingdom"],
-    storeSlug: "vitalis",
+    storeSlug: "cove",
   },
 ];
 

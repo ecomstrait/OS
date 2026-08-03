@@ -1,4 +1,5 @@
 import { shopifyGraphql, SHOPIFY_API_VERSION } from "@/lib/shopify";
+import { themeTokens } from "@/lib/theme-tokens";
 
 /** Theme settings we override per store (written to config/settings_data.json). */
 export type ThemeSettings = Record<string, string | number>;
@@ -179,24 +180,45 @@ export function settingsFromPlan(
     heroSub?: string;
     tagline?: string;
     storeName?: string;
+    announcement?: string;
+    heroMedia?: { url: string; kind: "image" | "video" } | null;
+    aboutMedia?: { url: string; kind: "image" | "video" } | null;
+    about?: string;
+    footerText?: string;
   } | null,
   /** The merchant's store name — beats the Shopify shop handle in the header. */
   storeName?: string | null,
+  /** Which theme these settings are for; drives the non-brand defaults. */
+  themeId?: string | null,
 ): ThemeSettings {
   const colors = plan?.brandColors ?? [];
   const brand = (storeName ?? plan?.storeName ?? "").trim();
+  const t = themeTokens(themeId);
+  // Media lives on our CDN, so it can't go through Shopify's image_picker —
+  // the themes read these URL settings instead and fall back to the picker.
+  const heroImage = plan?.heroMedia?.kind === "image" ? plan.heroMedia.url : "";
+  const heroVideo = plan?.heroMedia?.kind === "video" ? plan.heroMedia.url : "";
   return {
     // Without these the header fell back to `shop.name` (the dev-store handle)
     // and rendered the logo with an invalid `width:px`.
     ...(brand ? { store_name: brand } : {}),
     logo_width: 140,
-    color_brand: colors[0] || "#10b981",
-    color_accent: colors[1] || colors[0] || "#3b82f6",
-    color_text: colors[2] || "#0f172a",
-    color_bg: "#ffffff",
+    color_brand: colors[0] || t.brand,
+    color_accent: colors[1] || colors[0] || t.accent,
+    // Surface colours come from the theme, never from the brand palette or a
+    // hardcoded white: the tinted background is part of what distinguishes
+    // Bloom from Forge from Marble, and overriding it flattens all of them.
+    color_text: t.ink,
+    color_bg: t.bg,
     hero_heading: plan?.heroHeadline || "Your brand, beautifully built",
     hero_subheading: plan?.heroSub || "Curated products, fast shipping, and a store designed to convert.",
     hero_cta: "Shop now",
-    footer_text: plan?.tagline || "Powered by EcomStrait",
+    footer_text: plan?.footerText || plan?.tagline || "Powered by EcomStrait",
+    announcement: plan?.announcement ?? "",
+    hero_image_url: heroImage,
+    hero_video_url: heroVideo,
+    about_heading: plan?.about ? "About us" : "",
+    about_body: plan?.about ?? "",
+    about_image_url: plan?.aboutMedia?.kind === "image" ? plan.aboutMedia.url : "",
   };
 }
