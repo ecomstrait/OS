@@ -61,11 +61,25 @@ export type BuilderContext = {
   presetThemeName: string;
 };
 
+/**
+ * The two selling paths on offer.
+ *
+ * `shopify_shopify_theme` still exists in the database and is still labelled
+ * elsewhere, but isn't offered here: it and `shopify_liquid_theme` both mean
+ * "a Shopify store", and the difference was ours to explain rather than the
+ * merchant's to choose.
+ */
 const PATHS: { type: StoreType; label: string; icon: typeof Store }[] = [
   { type: "own_platform", label: "Own website", icon: Globe },
-  { type: "shopify_liquid_theme", label: "Shopify + our theme", icon: Store },
-  { type: "shopify_shopify_theme", label: "Shopify theme", icon: Store },
+  { type: "shopify_liquid_theme", label: "Shopify store", icon: Store },
 ];
+
+/** Every type that can appear on an existing store, including the retired one. */
+const PATH_LABELS: Record<StoreType, string> = {
+  own_platform: "Own website",
+  shopify_liquid_theme: "Shopify store",
+  shopify_shopify_theme: "Shopify store",
+};
 
 const isSkip = (s: string) => /^(skip|none|no|na|-)$/i.test(s.trim());
 
@@ -494,7 +508,7 @@ export function StoreBuilder({
                   return (
                     <>
                       <Icon className="h-3.5 w-3.5" />
-                      <span className="hidden sm:inline">{p?.label ?? type}</span>
+                      <span className="hidden sm:inline">{p?.label ?? PATH_LABELS[type] ?? type}</span>
                     </>
                   );
                 })()}
@@ -508,10 +522,6 @@ export function StoreBuilder({
                 ))}
               </div>
             )}
-            <select value={theme} onChange={(e) => { setTheme(e.target.value); setSavedAt(false); }} disabled={!plan} aria-label="Theme" className="h-9 rounded-lg border border-ink-200 bg-white px-2 text-sm outline-none focus:border-brand-400 disabled:opacity-50">
-              {storeThemes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
-
             {editing ? (
               <div className="ml-auto flex items-center gap-2">
                 {existing && plan && (
@@ -552,8 +562,8 @@ export function StoreBuilder({
                 </button>
               </div>
             ) : (
-              <button onClick={create} disabled={!plan || saving || !canCreateStore} className="ml-auto inline-flex h-9 items-center gap-2 rounded-lg bg-brand-500 px-4 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:opacity-50">
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><ShoppingBag className="h-4 w-4" /> Launch my store</>}
+              <button onClick={create} disabled={!plan || saving || !canCreateStore} className="ml-auto inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-lg bg-brand-500 px-4 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:opacity-50">
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><ShoppingBag className="h-4 w-4" /> <span className="whitespace-nowrap">Launch my store</span></>}
               </button>
             )}
           </div>
