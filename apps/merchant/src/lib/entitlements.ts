@@ -39,10 +39,18 @@ export async function getEntitlements(): Promise<Entitlements> {
       .maybeSingle();
     tokensUsed = usage?.tokens_used ?? 0;
 
+    // Only launched stores count against the plan. The builder creates a draft
+    // as soon as EcomAI produces a plan, so counting those would let a couple
+    // of abandoned attempts lock a merchant out of the store they do want.
+    //
+    // Keyed on `launched_at`, not status: a launched Shopify store sits at
+    // status 'draft' until it's provisioned, so excluding by status would have
+    // made Shopify stores free and unlimited.
     const { count } = await supabase
       .from("stores")
       .select("id", { count: "exact", head: true })
-      .eq("user_id", user.id);
+      .eq("user_id", user.id)
+      .not("launched_at", "is", null);
     storesUsed = count ?? 0;
   }
 

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Sparkles, Loader2, Send, Store, Globe, ShoppingBag, ImageOff, ImagePlus, X, Check, ExternalLink, ArrowLeft, Pencil } from "lucide-react";
+import { Sparkles, Loader2, Send, Store, Globe, ShoppingBag, ImageOff, ImagePlus, X, Check, ExternalLink, ArrowLeft, Pencil, Trash2 } from "lucide-react";
 import { cn } from "@ecomstrait/ui";
 import { createClient } from "@ecomstrait/auth/client";
 import type { StoreType } from "@ecomstrait/db";
@@ -15,8 +15,13 @@ import {
   createStore,
   editStore,
   updateStore,
+  ensureDraftStore,
+  saveDraft,
+  discardDraft,
   type PreviewProduct,
 } from "@/lib/builder-actions";
+import type { DraftStore } from "@/lib/drafts";
+import { draftExpiryLabel } from "@/lib/store-status";
 import type { StorePlan } from "@/lib/ecomai";
 import { VersionHistory } from "@/components/builder/version-history";
 
@@ -88,12 +93,15 @@ export function StoreBuilder({
   initialTheme,
   canCreateStore,
   existing,
+  draft,
   context,
 }: {
   userId: string;
   initialTheme: string;
   canCreateStore: boolean;
   existing?: ExistingStore;
+  /** An unlaunched build to pick back up. Ignored when editing a live store. */
+  draft?: DraftStore | null;
   context?: BuilderContext;
 }) {
   const router = useRouter();
@@ -101,6 +109,9 @@ export function StoreBuilder({
   const nextId = () => ++idRef.current;
 
   const editing = Boolean(existing);
+  // A draft is only meaningful in build mode — /stores/[id]/edit is for stores
+  // that already exist, and mixing the two would offer Launch on a live store.
+  const resumed = editing ? null : (draft ?? null);
 
   // Questions the merchant has effectively already answered elsewhere.
   const skipped = useMemo(() => {
@@ -135,6 +146,21 @@ export function StoreBuilder({
             content: `"${existing.name}" is loaded on the right. Tell me what to change — colours, the headline, the tagline — and I'll update your live store.`,
           },
         ]
+      : resumed
+      ? [
+          {
+            id: 0,
+            role: "ai",
+            content: `Welcome back — I've reloaded "${resumed.name}", the store you were building. Nothing's public yet, so ask for any tweaks and hit Launch my store when you're happy.`,
+          },
+          {
+            id: 1,
+            role: "ai",
+            // Said plainly up front. A merchant who leaves this open for a week
+            // should have been told the draft goes away, not discover it gone.
+            content: `Heads up: an untouched draft ${draftExpiryLabel(resumed.updatedAt)}. Every edit resets that, and launching keeps it for good.`,
+          },
+        ]
       : [
           { id: 0, role: "ai", content: "Hi! I'm EcomAI, your co-founder. Let's build your store together." },
           ...(context && (context.productCount || context.presetTheme)
@@ -158,31 +184,72 @@ export function StoreBuilder({
           { id: 2, role: "ai", content: QUESTIONS[0]?.q ?? "Ready when you are — say “go” and I'll build it." },
         ],
   );
-  const [stage, setStage] = useState<"asking" | "ready">(existing ? "ready" : "asking");
+  const [stage, setStage] = useState<"asking" | "ready">(
+    existing || resumed ? "ready" : "asking",
+  );
   const [qIndex, setQIndex] = useState(0);
   const [answers, setAnswers] = useState<Answers>(seeded);
 
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [plan, setPlan] = useState<StorePlan | null>(existing?.plan ?? null);
-  const [products, setProducts] = useState<PreviewProduct[]>(existing?.products ?? []);
-
-  const [name, setName] = useState(existing?.name ?? "");
-  const [type, setType] = useState<StoreType>(existing?.type ?? "own_platform");
-  const [theme, setTheme] = useState(
-    existing?.theme || context?.presetTheme || initialTheme || storeThemes[0].id,
+  const [plan, setPlan] = useState<StorePlan | null>(existing?.plan ?? resumed?.plan ?? null);
+  const [products, setProducts] = useState<PreviewProduct[]>(
+    existing?.products ?? resumed?.products ?? [],
   );
-  const [logoUrl, setLogoUrl] = useState<string | null>(existing?.logoUrl ?? null);
+
+  const [name, setName] = useState(existing?.name ?? resumed?.name ?? "");
+  const [type, setType] = useState<StoreType>(existing?.type ?? resumed?.type ?? "own_platform");
+  const [theme, setTheme] = useState(
+    existing?.theme || resumed?.theme || context?.presetTheme || initialTheme || storeThemes[0].id,
+  );
+  const [logoUrl, setLogoUrl] = useState<string | null>(
+    existing?.logoUrl ?? resumed?.logoUrl ?? null,
+  );
   const [uploading, setUploading] = useState(false);
   const [editingContent, setEditingContent] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  /**
+   * The unlaunched store row backing this build.
+   *
+   * It's what gives the content editor and the media library something to
+   * attach to before Launch — an upload needs a store id to belong to.
+   */
+  const [draftId, setDraftId] = useState<string | null>(resumed?.id ?? null);
+  const [discarding, setDiscarding] = useState(false);
+  /** The id whose media the editor addresses: a live store, or the draft. */
+  const mediaStoreId = existing?.id ?? draftId;
+
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, busy]);
+
+  /**
+   * Keep the draft in step with the workbench.
+   *
+   * Debounced so typing a store name isn't one write per keystroke, and it
+   * doubles as the TTL heartbeat: each save moves `updated_at`, so a draft
+   * someone is actively working on can't expire underneath them.
+   *
+   * Launched stores are excluded — those save explicitly, and writing on every
+   * keystroke would push half-typed changes onto a live storefront.
+   */
+  useEffect(() => {
+    if (!draftId || editing || !plan) return;
+    const t = setTimeout(() => {
+      void saveDraft(draftId, {
+        name,
+        theme,
+        logoUrl,
+        plan,
+        products: products.map((x) => ({ id: x.id, price: x.price })),
+      });
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [draftId, editing, plan, name, theme, logoUrl, products]);
 
   function pushAi(content: string) {
     setMessages((m) => [...m, { id: nextId(), role: "ai", content }]);
@@ -211,6 +278,28 @@ export function StoreBuilder({
     pushAi(
       `Done! I built "${p.storeName}" with ${res.products?.length ?? 0} products, a matching theme, and SEO. Take a look on the right — want any tweaks? (e.g. "make it navy", "punchier headline"). When it's ready, set how you want to sell and hit Launch my store.`,
     );
+
+    // Persist it as a draft now that there's something to persist. This is what
+    // unlocks Content and the media library before Launch — both address a
+    // store by id, so until a row exists there's nothing to upload against.
+    const draftRes = await ensureDraftStore({
+      draftId,
+      name: p.storeName,
+      theme: res.theme && !context?.presetTheme ? res.theme : theme,
+      logoUrl,
+      plan: p,
+      products: (res.products ?? []).map((x) => ({ id: x.id, price: x.price })),
+    });
+    if (draftRes.storeId) {
+      setDraftId(draftRes.storeId);
+      pushAi(
+        "I've saved this as a draft, so you can edit the text and swap in your own images and video from Content before anything goes live.",
+      );
+    } else if (draftRes.error) {
+      // Non-fatal: the build is still on screen and still launchable, the
+      // merchant just can't upload media until the draft saves.
+      setError(`${draftRes.error} Your build is safe — Launch still works.`);
+    }
   }
 
   async function send() {
@@ -313,11 +402,30 @@ export function StoreBuilder({
     router.refresh();
   }
 
+  async function discard() {
+    if (!draftId) return;
+    setDiscarding(true);
+    setError(null);
+    const res = await discardDraft(draftId);
+    setDiscarding(false);
+    if (res.error) {
+      setError(res.error);
+      return;
+    }
+    // Straight back to a blank builder rather than leaving a preview of a store
+    // that no longer exists on screen.
+    router.replace("/builder");
+    router.refresh();
+  }
+
   async function create() {
     if (!plan) return;
     setSaving(true);
     setError(null);
     const res = await createStore({
+      // Promote the row we've been editing instead of inserting a new one, so
+      // the media uploaded during the build stays attached to the live store.
+      draftId,
       name,
       type,
       theme,
@@ -418,11 +526,11 @@ export function StoreBuilder({
       {/* ---- Right: preview + action bar ---- */}
       <div className="flex h-1/2 flex-1 flex-col bg-ink-50/50 lg:h-full">
         <div className="flex-1 overflow-y-auto">
-          {editingContent && plan && existing ? (
+          {editingContent && plan && mediaStoreId ? (
             <div className="p-4">
               <div className="rounded-xl border border-ink-100 bg-white p-4 shadow-sm">
                 <ContentEditor
-                  storeId={existing.id}
+                  storeId={mediaStoreId}
                   plan={plan}
                   onChange={(next) => {
                     setPlan(next);
@@ -562,11 +670,45 @@ export function StoreBuilder({
                 </button>
               </div>
             ) : (
-              <button onClick={create} disabled={!plan || saving || !canCreateStore} className="ml-auto inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-lg bg-brand-500 px-4 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:opacity-50">
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><ShoppingBag className="h-4 w-4" /> <span className="whitespace-nowrap">Launch my store</span></>}
-              </button>
+              <div className="ml-auto flex items-center gap-2">
+                {/* Both need a store id to upload against, so they appear once
+                    the draft exists rather than only after Launch. */}
+                {plan && draftId && (
+                  <button
+                    onClick={() => setEditingContent((v) => !v)}
+                    className={cn(
+                      "inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm font-semibold transition",
+                      editingContent
+                        ? "border-brand-500 bg-brand-50 text-brand-700"
+                        : "border-ink-200 text-ink-700 hover:bg-ink-50",
+                    )}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    {editingContent ? "Preview" : "Content"}
+                  </button>
+                )}
+                {draftId && (
+                  <button
+                    onClick={discard}
+                    disabled={discarding || saving}
+                    title="Delete this draft and start over"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-ink-200 px-3 text-sm font-semibold text-ink-600 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                  >
+                    {discarding ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                    <span className="hidden sm:inline">Discard</span>
+                  </button>
+                )}
+                <button onClick={create} disabled={!plan || saving || !canCreateStore} className="inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-lg bg-brand-500 px-4 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:opacity-50">
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><ShoppingBag className="h-4 w-4" /> <span className="whitespace-nowrap">Launch my store</span></>}
+                </button>
+              </div>
             )}
           </div>
+          {!editing && draftId && (
+            <p className="mt-2 text-xs text-ink-400">
+              Saved as a draft — not public, and it doesn&apos;t count against your plan until you launch.
+            </p>
+          )}
           {!editing && !canCreateStore && plan && <p className="mt-2 text-xs text-amber-600">Store limit reached — upgrade in Billing to create more.</p>}
           {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
         </div>

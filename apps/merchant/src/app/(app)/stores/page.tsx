@@ -6,6 +6,8 @@ import type { StoreStatus, StoreType } from "@ecomstrait/db";
 import { StorePreview } from "@/components/stores/store-preview";
 import { MakeItYoursButton } from "@/components/stores/make-it-yours-button";
 import { StoreActions } from "@/components/stores/store-actions";
+import { DiscardDraftButton } from "@/components/stores/discard-draft-button";
+import { draftExpiryLabel } from "@/lib/store-status";
 
 export const metadata: Metadata = { title: "Stores" };
 
@@ -30,7 +32,7 @@ export default async function StoresPage() {
   } = await supabase.auth.getUser();
   const { data: stores } = await supabase
     .from("stores")
-    .select("id, name, type, status, theme, live_url, shopify_store_id, created_at")
+    .select("id, name, type, status, theme, live_url, shopify_store_id, created_at, launched_at, updated_at")
     .eq("user_id", user!.id)
     .order("created_at", { ascending: false });
 
@@ -104,6 +106,40 @@ export default async function StoresPage() {
           <div className="overflow-hidden rounded-2xl border border-ink-100 bg-white">
             {list.map((s) => {
               const shop = s.shopify_store_id ? shopById.get(s.shopify_store_id) : undefined;
+
+              // An unlaunched build, not a store. It has no live URL, no
+              // Shopify shop and nothing to provision or transfer, so the
+              // normal action menu would be a list of things that don't apply.
+              if (!s.launched_at) {
+                return (
+                  <div key={s.id} className="flex items-center justify-between gap-4 border-b border-ink-50 px-4 py-4 last:border-0">
+                    <div className="flex items-center gap-3">
+                      <span className="grid h-10 w-10 place-items-center rounded-lg bg-ink-100 text-ink-400">
+                        <Sparkles className="h-5 w-5" />
+                      </span>
+                      <div>
+                        <p className="font-medium text-ink-900">{s.name ?? "Untitled store"}</p>
+                        <p className="text-xs text-ink-400">
+                          Unlaunched draft · {draftExpiryLabel(s.updated_at)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Link
+                        href={`/builder?draft=${s.id}`}
+                        className="text-sm font-semibold text-brand-600 hover:underline"
+                      >
+                        Resume building
+                      </Link>
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_STYLE.draft}`}>
+                        draft
+                      </span>
+                      <DiscardDraftButton storeId={s.id} />
+                    </div>
+                  </div>
+                );
+              }
+
               return (
               <div key={s.id} className="flex items-center justify-between gap-4 border-b border-ink-50 px-4 py-4 last:border-0">
                 <div className="flex items-center gap-3">

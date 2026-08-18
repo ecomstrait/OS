@@ -309,6 +309,10 @@ export type Database = {
           live_url: string | null;
           logo_url: string | null;
           content: Record<string, unknown>;
+          /** When Launch was pressed. NULL means it's still a builder draft. */
+          launched_at: string | null;
+          /** Builder product picks, held until Launch turns them into listings. */
+          draft_products: { id: string; price: number | null }[];
           created_at: string;
           updated_at: string;
         };

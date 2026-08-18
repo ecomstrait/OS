@@ -1,4 +1,5 @@
 import { createAdminClient } from "@ecomstrait/db";
+import { isPublicStatus } from "@/lib/store-status";
 import { productImage } from "@/lib/catalog";
 import type { StorePlan } from "@/lib/ecomai";
 import { normalizePlan } from "@/lib/store-plan";
@@ -31,7 +32,10 @@ export async function getStorefront(id: string): Promise<Storefront | null> {
     .select("id, name, logo_url, theme, status, content, type")
     .eq("id", id)
     .maybeSingle();
-  if (!store || store.type !== "own_platform") return null;
+  // Drafts exist from the moment the builder starts, so status has to gate the
+  // public page — otherwise an unfinished store is browsable and purchasable at
+  // its URL the instant a merchant opens the builder.
+  if (!store || store.type !== "own_platform" || !isPublicStatus(store.status)) return null;
 
   // Only supplier-approved listings reach the public storefront.
   const { data: sp } = await admin

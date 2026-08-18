@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { createAdminClient } from "@ecomstrait/db";
 import { productImage } from "@/lib/catalog";
+import { isPublicStatus } from "@/lib/store-status";
 
 /**
  * Data layer for the public storefront API.
@@ -70,7 +71,9 @@ export async function resolveStore(storeId: string): Promise<StoreSummary | null
     .select("id, name, logo_url, theme, type, status")
     .eq("id", storeId)
     .maybeSingle();
-  if (!data || data.type !== "own_platform") return null;
+  // Same gate as getStorefront: a draft must not be readable, and above all
+  // must not be purchasable, through the API either.
+  if (!data || data.type !== "own_platform" || !isPublicStatus(data.status)) return null;
   return {
     id: data.id,
     name: data.name ?? "Store",

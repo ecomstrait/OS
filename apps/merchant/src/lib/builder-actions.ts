@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@ecomstrait/auth/server";
-import { createAdminClient, type StoreType } from "@ecomstrait/db";
+import { createAdminClient, type StoreType, type StoreStatus } from "@ecomstrait/db";
 import { revalidatePath } from "next/cache";
 import { assertTokenBudget, recordTokenUsage, assertCanCreateStore } from "@/lib/entitlements";
 import { autoSelectProducts, getSelectedProducts, productImage } from "@/lib/catalog";
@@ -10,6 +10,7 @@ import { merchantUrl } from "@/lib/stripe";
 import { resyncShopifyTheme } from "@/lib/shopify-actions";
 import { generateStorePlan, refineStorePlan, themeForStyle, type StorePlan } from "@/lib/ecomai";
 import { normalizePlan } from "@/lib/store-plan";
+import { purgeStoreMedia } from "@/lib/draft-sweep";
 
 export type BuilderAnswers = {
   niche: string;
@@ -366,8 +367,182 @@ export async function updateStore(
   return { note: "Saved." };
 }
 
-/** Launch the store: persist plan + products; own-platform stores go live. */
+/**
+ * The store row the builder edits before Launch.
+ *
+ * It exists because the content editor and the media library both address a
+ * store by id — an upload has to belong to something. Creating the row up
+ * front is what lets a merchant assemble their store properly instead of
+ * launching first and fixing the images afterwards.
+ *
+ * Reuses the merchant's newest draft rather than inserting per attempt. Someone
+ * who rebuilds three times should end up with one row, not three, and keeping
+ * the same id means the media they already uploaded is still there.
+ *
+ * `draftId` pins a specific draft — the builder passes the one it's resuming,
+ * so a second tab can't quietly redirect the work into a different row.
+ */
+export async function ensureDraftStore(input: {
+  draftId?: string | null;
+  name: string;
+  theme: string;
+  logoUrl?: string | null;
+  plan: StorePlan;
+  products: { id: string; price: number | null }[];
+}): Promise<{ storeId?: string; error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated." };
+
+  const fields = {
+    name: input.name.trim() || "My Store",
+    theme: input.theme || null,
+    logo_url: input.logoUrl ?? null,
+    content: input.plan as unknown as Record<string, unknown>,
+    draft_products: input.products,
+  };
+
+  // Guard on `launched_at` as well as ownership: once a draft has been launched
+  // its row is a real store, and a stale builder tab must not write over it.
+  // Status alone won't do — a launched Shopify store is 'draft' too.
+  const reuse = async (id: string) =>
+    supabase
+      .from("stores")
+      .update(fields)
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .is("launched_at", null)
+      .select("id")
+      .maybeSingle();
+
+  if (input.draftId) {
+    const { data } = await reuse(input.draftId);
+    if (data) return { storeId: data.id };
+    // The pinned draft was launched or swept — fall through and make a new one.
+  }
+
+  const { data: newest } = await supabase
+    .from("stores")
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("status", "draft")
+    .is("launched_at", null)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (newest) {
+    const { data } = await reuse(newest.id);
+    if (data) return { storeId: data.id };
+  }
+
+  const { data: created, error } = await supabase
+    .from("stores")
+    .insert({
+      user_id: user.id,
+      // The selling path is chosen in the action bar, which the merchant may
+      // not have touched yet. `type` is NOT NULL, so a draft holds the default
+      // and Launch writes whatever they actually picked.
+      type: "own_platform",
+      status: "draft",
+      ...fields,
+    })
+    .select("id")
+    .single();
+  if (error || !created) return { error: error?.message ?? "Could not save your draft." };
+
+  return { storeId: created.id };
+}
+
+/**
+ * Persist in-progress builder edits onto the draft.
+ *
+ * Doubles as the TTL heartbeat — `stores_touch_updated_at` moves `updated_at`
+ * on every write, so a draft someone is actively working on can't be swept out
+ * from under them.
+ */
+export async function saveDraft(
+  storeId: string,
+  input: {
+    name: string;
+    theme: string;
+    logoUrl: string | null;
+    plan: StorePlan;
+    products: { id: string; price: number | null }[];
+  },
+): Promise<{ ok?: true; error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated." };
+
+  const { data, error } = await supabase
+    .from("stores")
+    .update({
+      name: input.name.trim() || "My Store",
+      theme: input.theme || null,
+      logo_url: input.logoUrl,
+      content: input.plan as unknown as Record<string, unknown>,
+      draft_products: input.products,
+    })
+    .eq("id", storeId)
+    .eq("user_id", user.id)
+    .is("launched_at", null)
+    .select("id")
+    .maybeSingle();
+  if (error) return { error: error.message };
+  // No row means it's no longer a draft — launched in another tab, or swept.
+  if (!data) return { error: "This draft is no longer available." };
+
+  return { ok: true };
+}
+
+/** Throw away a draft and everything attached to it. */
+export async function discardDraft(storeId: string): Promise<{ ok?: true; error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated." };
+
+  // Ownership is checked here so the media purge can't be aimed at someone
+  // else's store by id; the delete below re-checks it against RLS anyway.
+  const { data: store } = await supabase
+    .from("stores")
+    .select("id")
+    .eq("id", storeId)
+    .eq("user_id", user.id)
+    .is("launched_at", null)
+    .maybeSingle();
+  if (!store) return { error: "Draft not found." };
+
+  const admin = createAdminClient();
+  if (admin) await purgeStoreMedia(admin, [storeId]);
+
+  const { error } = await supabase
+    .from("stores")
+    .delete()
+    .eq("id", storeId)
+    .eq("user_id", user.id)
+    .is("launched_at", null);
+  if (error) return { error: error.message };
+
+  revalidatePath("/stores");
+  return { ok: true };
+}
+
+/**
+ * Launch the store: persist plan + products; own-platform stores go live.
+ *
+ * `draftId` promotes the row the builder has been editing rather than inserting
+ * a new one, so the media uploaded during the build stays attached to the store
+ * that ends up live.
+ */
 export async function createStore(input: {
+  draftId?: string | null;
   name: string;
   type: StoreType;
   theme: string;
@@ -385,23 +560,52 @@ export async function createStore(input: {
   if (!user) return { error: "Not authenticated." };
 
   const isOwn = input.type === "own_platform";
-  const { data: store, error } = await supabase
-    .from("stores")
-    .insert({
-      user_id: user.id,
-      name: input.name.trim() || "My Store",
-      type: input.type,
-      theme: input.theme || null,
-      logo_url: input.logoUrl ?? null,
-      content: input.plan as unknown as Record<string, unknown>,
-      // A Shopify store isn't ready for anything until it's been provisioned —
-      // claiming a shop, pushing products and uploading the theme. Marking it
-      // ready_for_review here made launch look like it had done that work.
-      status: isOwn ? "live" : "draft",
-    })
-    .select("id")
-    .single();
-  if (error || !store) return { error: error?.message ?? "Could not launch store." };
+  const fields = {
+    name: input.name.trim() || "My Store",
+    type: input.type,
+    theme: input.theme || null,
+    logo_url: input.logoUrl ?? null,
+    content: input.plan as unknown as Record<string, unknown>,
+    // A Shopify store isn't ready for anything until it's been provisioned —
+    // claiming a shop, pushing products and uploading the theme. Marking it
+    // ready_for_review here made launch look like it had done that work.
+    status: (isOwn ? "live" : "draft") as StoreStatus,
+    // The picks become real listings below, so the holding field is cleared.
+    draft_products: [],
+    // What separates a launched store from a builder draft. It also stops the
+    // expiry sweep touching a Shopify store, which stays at status 'draft'
+    // until it's been provisioned.
+    launched_at: new Date().toISOString(),
+  };
+
+  let store: { id: string } | null = null;
+
+  if (input.draftId) {
+    // `.is("launched_at", null)` makes the promotion idempotent: a double-click
+    // that gets past the button's disabled state finds nothing to update the
+    // second time rather than launching the same store twice.
+    const { data, error } = await supabase
+      .from("stores")
+      .update(fields)
+      .eq("id", input.draftId)
+      .eq("user_id", user.id)
+      .is("launched_at", null)
+      .select("id")
+      .maybeSingle();
+    if (error) return { error: error.message };
+    if (!data) return { error: "This store has already been launched." };
+    store = data;
+  }
+
+  if (!store) {
+    const { data, error } = await supabase
+      .from("stores")
+      .insert({ user_id: user.id, ...fields })
+      .select("id")
+      .single();
+    if (error || !data) return { error: error?.message ?? "Could not launch store." };
+    store = data;
+  }
 
   if (input.products.length) {
     // Listings start pending and carry their supplier, so each one lands in that

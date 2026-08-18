@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@ecomstrait/auth/server";
 import { createAdminClient } from "@ecomstrait/db";
 import { wipeStoreContent } from "@/lib/shopify";
+import { purgeStoreMedia } from "@/lib/draft-sweep";
 
 /** Rename a store (owner-scoped). This is our platform label + the own-platform
  *  storefront name; the Shopify shop display name is set manually in Shopify. */
@@ -164,6 +165,13 @@ export async function deleteStore(
       note: `Archived — this store has ${orderCount} paid order${orderCount === 1 ? "" : "s"}, so its records are kept.${wipeNote}`,
     };
   }
+
+  // Deleting the row cascades to `store_assets`, but nothing cascades to object
+  // storage — so the uploaded images and video go first, or we keep paying to
+  // host media for a store that no longer exists. Archiving above deliberately
+  // keeps them: that store can still be looked at.
+  const mediaAdmin = createAdminClient();
+  if (mediaAdmin) await purgeStoreMedia(mediaAdmin, [storeId]);
 
   const { error } = await supabase
     .from("stores")
