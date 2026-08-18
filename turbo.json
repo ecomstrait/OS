@@ -14,7 +14,11 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": [".next/**", "!.next/cache/**"]
+      // `next dev` writes a multi-GB Turbopack cache under .next/dev that
+      // `next build` never produces. Until it was excluded here, every cached
+      // build tarred it up as build output — 2.6GB per entry, 24GB of
+      // .turbo/cache across 168 entries.
+      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**"]
     },
     "dev": {
       "cache": false,

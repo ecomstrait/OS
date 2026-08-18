@@ -1,6 +1,7 @@
 /**
  * Curated, **labeled/illustrative** knowledge base that grounds the EcomAI
- * builder. Each niche maps to one or more real templates under /public/themes.
+ * builder. Each niche maps to one or more real templates in the private themes
+ * bucket (sources live at <repo-root>/themes, served through /api/theme).
  * Where a niche has multiple themes, the builder picks one at random and lets
  * the visitor "change the concept" to cycle through the others.
  *
@@ -21,7 +22,7 @@ export type Niche = {
   productIdeas: string[];
   countries: string[];
   storeSlug?: string;
-  /** Theme folders under /public/themes. Non-empty = available in the beta. */
+  /** Theme folder names in the themes bucket. Non-empty = available in the beta. */
   themes?: string[];
 };
 

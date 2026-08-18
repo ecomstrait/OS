@@ -1,25 +1,41 @@
 /**
- * Sync public/themes/** to a PRIVATE Supabase Storage bucket ("themes").
+ * Sync <repo-root>/themes/** to a PRIVATE Supabase Storage bucket ("themes").
  *
  * The themes are the AI-Builder's secret sauce: they must NOT live in git or be
  * publicly browsable. They are served only through the authenticated proxy at
  * /api/theme/[...path], which reads this private bucket with the service role.
  *
- * Usage:
- *   node scripts/upload-themes.mjs                 # sync ALL themes (upsert)
- *   node scripts/upload-themes.mjs shoes-shop1     # sync ONE theme (fast)
- *   node scripts/upload-themes.mjs a b c           # sync several themes
- *   node scripts/upload-themes.mjs shoes-shop1 --clean
+ * The sources sit at the repo root, outside every app, so that no Next.js build
+ * ever walks 191MB of third-party templates while tracing its bundle. This
+ * script is the only thing that reads them, and it runs by hand.
+ *
+ * It lives in this app because `@supabase/supabase-js` resolves here under
+ * pnpm's isolated node_modules — but every path it touches is resolved from
+ * the script's own location, so it runs correctly from any directory.
+ *
+ * Usage (from anywhere):
+ *   node apps/website/scripts/upload-themes.mjs              # sync ALL (upsert)
+ *   node apps/website/scripts/upload-themes.mjs shoes-shop1  # sync ONE (fast)
+ *   node apps/website/scripts/upload-themes.mjs a b c        # sync several
+ *   node apps/website/scripts/upload-themes.mjs shoes-shop1 --clean
  *                                                  # wipe that theme's objects in
  *                                                  # the bucket first (true sync —
  *                                                  # handles renames/deletes)
+ *
+ * Or via pnpm:  pnpm themes:upload [names…] [--clean]
  *
  * Needs (from .env.local): NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
  */
 import { createClient } from "@supabase/supabase-js";
 import { readdir, readFile } from "node:fs/promises";
-import { join, relative, extname } from "node:path";
+import { join, relative, extname, dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { existsSync, readFileSync, statSync } from "node:fs";
+
+/* ---- Anchor every path to this file, not to the caller's cwd ------------- */
+const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));   // apps/website/scripts
+const APP_DIR = resolve(SCRIPT_DIR, "..");                    // apps/website
+const REPO_ROOT = resolve(APP_DIR, "..", "..");               // <repo root>
 
 /* ---- Load .env.local (no dependency on node --env-file) ---- */
 function loadEnv(file) {
@@ -32,7 +48,9 @@ function loadEnv(file) {
     if (!(m[1] in process.env)) process.env[m[1]] = v;
   }
 }
-loadEnv(".env.local");
+// The app's own env file wins; the root one is the fallback for a shared setup.
+loadEnv(join(REPO_ROOT, ".env.local"));
+loadEnv(join(APP_DIR, ".env.local"));
 
 const URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -42,7 +60,7 @@ if (!URL || !KEY) {
 }
 
 const BUCKET = "themes";
-const ROOT = "public/themes";
+const ROOT = join(REPO_ROOT, "themes");
 const CONCURRENCY = 10;
 
 const MIME = {
@@ -107,7 +125,9 @@ async function cleanPrefix(prefix) {
 
 async function main() {
   if (!existsSync(ROOT)) {
-    console.error(`✗ ${ROOT} not found — run from the repo root.`);
+    // Gitignored on purpose, so a fresh clone genuinely won't have it.
+    console.error(`✗ Theme sources not found at ${ROOT}`);
+    console.error("  They're deliberately not in git — copy them in before syncing.");
     process.exit(1);
   }
 

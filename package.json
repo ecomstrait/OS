@@ -13,7 +13,8 @@
     "dev:merchant": "pnpm --filter @ecomstrait/merchant dev",
     "build:website": "pnpm --filter @ecomstrait/website build",
     "build:supplier": "pnpm --filter @ecomstrait/supplier build",
-    "build:merchant": "pnpm --filter @ecomstrait/merchant build"
+    "build:merchant": "pnpm --filter @ecomstrait/merchant build",
+    "themes:upload": "node apps/website/scripts/upload-themes.mjs"
   },
   "devDependencies": {
     "turbo": "^2.5.8"

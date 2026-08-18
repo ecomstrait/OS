@@ -27,7 +27,7 @@ export type BusinessPlan = {
   buildSteps: BuildStep[];
   growthSuggestions: string[];
   storeSlug?: string;
-  /** Theme folders under /public/themes for this niche (may be several). */
+  /** Theme folder names in the themes bucket for this niche (may be several). */
   themes: string[];
   /** Whether the matched niche has a live preview (vs. beta / coming soon). */
   available: boolean;

@@ -48,5 +48,8 @@ next-env.d.ts
 # Raw store-template library (curated copies live in public/themes)
 newstores-themes/
 
-# Themes are served from private Supabase Storage (see scripts/upload-themes.mjs), not git
-public/themes/
+# Raw theme sources. Deliberately at the repo root and outside every app, so no
+# Next.js build ever walks them — 191MB of templates has no business being
+# traced as part of a bundle. They are uploaded to a private Supabase bucket by
+# apps/website/scripts/upload-themes.mjs and served through /api/theme.
+/themes/
