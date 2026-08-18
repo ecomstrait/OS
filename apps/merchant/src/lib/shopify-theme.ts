@@ -64,20 +64,35 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * Overwrite a theme's `settings_data.json` (colors, hero, fonts) and, if given,
  * upload the merchant logo into `assets/` — on an EXISTING theme. This is the
  * live re-sync used after EcomAI cosmetic edits; no create/publish.
+ *
+ * `files` carries anything that isn't expressible as a setting. Content blocks
+ * are the case that matters: Liquid can't read arbitrary JSON, so a merchant's
+ * sections are generated as markup into `sections/custom-content.liquid`. They
+ * go in the same upsert as the settings so a re-sync can't half-apply.
  */
 export async function pushThemeSettings(
   shop: string,
   token: string,
   themeGid: string,
   settings: ThemeSettings,
-  logo?: { url: string; filename: string },
+  opts: {
+    logo?: { url: string; filename: string };
+    /** filename -> contents, upserted alongside settings_data.json. */
+    files?: Record<string, string>;
+  } = {},
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const gql = shopifyGraphql(shop, token);
   const next: ThemeSettings = { ...settings };
   const files: { filename: string; body: { type: string; value: string } }[] = [];
-  if (logo) {
-    next.logo_asset = logo.filename;
-    files.push({ filename: `assets/${logo.filename}`, body: { type: "URL", value: logo.url } });
+  if (opts.logo) {
+    next.logo_asset = opts.logo.filename;
+    files.push({
+      filename: `assets/${opts.logo.filename}`,
+      body: { type: "URL", value: opts.logo.url },
+    });
+  }
+  for (const [filename, value] of Object.entries(opts.files ?? {})) {
+    files.push({ filename, body: { type: "TEXT", value } });
   }
   files.push({
     filename: "config/settings_data.json",
@@ -149,7 +164,7 @@ export async function uploadAndPublishTheme(
     await sleep(1500);
   }
 
-  const applied = await pushThemeSettings(shop, token, gid, opts.settings, opts.logo);
+  const applied = await pushThemeSettings(shop, token, gid, opts.settings, { logo: opts.logo });
   if (!applied.ok) return applied;
 
   // 4. Publish so the storefront uses it.

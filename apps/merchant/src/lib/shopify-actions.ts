@@ -23,7 +23,11 @@ import {
   settingsFromPlan,
   logoAssetFrom,
 } from "@/lib/shopify-theme";
-import { themeFilesWithContent } from "@/lib/theme-content";
+import {
+  themeFilesWithContent,
+  customContentSection,
+  CUSTOM_CONTENT_FILE,
+} from "@/lib/theme-content";
 import { normalizePlan } from "@/lib/store-plan";
 import { liquidThemeForStyle } from "@/lib/themes";
 
@@ -268,9 +272,15 @@ export async function provisionShopifyStore(storeId: string): Promise<{ error?: 
 }
 
 /**
- * Re-sync EcomAI cosmetic edits to a LIVE Shopify store: push the current plan
- * (colors, hero, logo from `stores.content`) onto the already-published theme
- * via themeFilesUpsert. No re-create/re-publish — fast and safe.
+ * Re-sync EcomAI edits to a LIVE Shopify store: push the current plan (colors,
+ * hero, logo and content blocks from `stores.content`) onto the already-
+ * published theme via themeFilesUpsert. No re-create/re-publish — fast and safe.
+ *
+ * The content blocks matter here as much as the settings do. Provisioning runs
+ * once, so when it was the only thing that generated
+ * `sections/custom-content.liquid`, a merchant who added a gallery after
+ * launching saw it in the builder preview and never on their store — and one
+ * who deleted a section watched it stay up.
  */
 export async function resyncShopifyTheme(storeId: string): Promise<{ error?: string; ok?: boolean }> {
   const supabase = await createClient();
@@ -314,7 +324,10 @@ export async function resyncShopifyTheme(storeId: string): Promise<{ error?: str
     shopRow.access_token,
     shopRow.theme_id,
     settingsFromPlan(plan, store.name, store.theme),
-    logoAssetFrom(store.logo_url),
+    {
+      logo: logoAssetFrom(store.logo_url),
+      files: { [CUSTOM_CONTENT_FILE]: customContentSection(plan) },
+    },
   );
   if (!res.ok) return { error: res.error };
 
