@@ -24,7 +24,11 @@ out/
 build/
 
 # misc
+# OS junk. Also filtered by apps/merchant/scripts/bundle-themes.mjs, which would
+# otherwise pack these into the Liquid themes uploaded to merchants' stores.
 .DS_Store
+Thumbs.db
+desktop.ini
 *.pem
 
 # debug
