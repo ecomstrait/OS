@@ -351,7 +351,7 @@ export function StoreBuilder({
         return;
       }
       if (res.plan) setPlan(res.plan);
-      pushAi(`Done — ${res.note ?? "updated."}`);
+      pushAi(res.note ?? "Updated.");
       router.refresh();
       return;
     }
@@ -362,8 +362,12 @@ export function StoreBuilder({
       pushAi(res.error);
       return;
     }
-    setPlan(res.plan!);
-    pushAi("Updated — check the preview.");
+    // EcomAI answers questions as well as making changes, so only repaint the
+    // preview when it reports an actual edit — and always show its own words
+    // rather than a fixed "Updated", which said nothing when it had in fact
+    // answered a question or refused something it can't do.
+    if (res.changed?.length && res.plan) setPlan(res.plan);
+    pushAi(res.reply ?? "Updated — check the preview.");
   }
 
   async function onLogo(file: File) {

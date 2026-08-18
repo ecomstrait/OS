@@ -40,12 +40,14 @@
         --stone-2: color-mix(in srgb, var(--accent) 22%, var(--bg));
         --line: color-mix(in srgb, var(--ink) 12%, transparent);
         --muted: color-mix(in srgb, var(--ink) 52%, var(--bg));
+        --surface: var(--stone);
       }
       {{ settings.heading_font | font_face: font_display: 'swap' }}
       {{ settings.body_font | font_face: font_display: 'swap' }}
     {%- endstyle -%}
 
     {{ 'theme.css' | asset_url | stylesheet_tag }}
+    {{ 'theme.js' | asset_url | script_tag }}
   </head>
 
   <body class="template-{{ template.name }}">

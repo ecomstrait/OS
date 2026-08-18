@@ -38,12 +38,14 @@
         --line: color-mix(in srgb, var(--ink) 20%, transparent);
         --rule: var(--ink);
         --muted: color-mix(in srgb, var(--ink) 60%, var(--bg));
+        --surface: var(--wash);
       }
       {{ settings.heading_font | font_face: font_display: 'swap' }}
       {{ settings.body_font | font_face: font_display: 'swap' }}
     {%- endstyle -%}
 
     {{ 'theme.css' | asset_url | stylesheet_tag }}
+    {{ 'theme.js' | asset_url | script_tag }}
   </head>
 
   <body class="template-{{ template.name }}">

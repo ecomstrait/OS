@@ -1,0 +1,112 @@
+{%- comment -%}
+  The collection sidebar: every category, plus sort and the storefront filters.
+
+  One GET form wraps sort and filters so it works with JavaScript disabled —
+  theme.js only upgrades it to submit on change and drops the Apply button.
+  The category links sit outside the form because they are navigation, not a
+  filter: each is its own collection URL.
+
+  Filters come from `collection.filters`, which is populated by the storefront
+  filter settings (Search & Discovery). A shop with none configured gets the
+  category list and sort alone rather than an empty panel.
+{%- endcomment -%}
+<aside class="collection-aside">
+  <div class="collection-aside__block">
+    <h2 class="collection-aside__title">Categories</h2>
+    <ul class="category-list">
+      <li>
+        <a href="{{ routes.all_products_collection_url }}"
+           class="category-list__link{% if collection.handle == 'all' %} is-active{% endif %}"
+           {% if collection.handle == 'all' %}aria-current="page"{% endif %}>
+          All products
+        </a>
+      </li>
+      {%- for c in collections -%}
+        {%- unless c.handle == 'all' or c.products_count == 0 -%}
+          <li>
+            <a href="{{ c.url }}"
+               class="category-list__link{% if c.handle == collection.handle %} is-active{% endif %}"
+               {% if c.handle == collection.handle %}aria-current="page"{% endif %}>
+              {{ c.title }}
+              <span class="category-list__count">{{ c.products_count }}</span>
+            </a>
+          </li>
+        {%- endunless -%}
+      {%- endfor -%}
+    </ul>
+  </div>
+
+  <form method="get" action="{{ collection.url }}" class="collection-aside__form" data-filter-form>
+    {%- if collection.sort_options.size > 0 -%}
+      <div class="collection-aside__block">
+        <label class="collection-aside__title" for="sort-by">Sort</label>
+        {%- assign current_sort = collection.sort_by | default: collection.default_sort_by -%}
+        <select id="sort-by" name="sort_by" class="field">
+          {%- for opt in collection.sort_options -%}
+            <option value="{{ opt.value }}" {% if opt.value == current_sort %}selected{% endif %}>{{ opt.name }}</option>
+          {%- endfor -%}
+        </select>
+      </div>
+    {%- endif -%}
+
+    {%- for filter in collection.filters -%}
+      <div class="collection-aside__block">
+        <h2 class="collection-aside__title">{{ filter.label }}</h2>
+
+        {%- case filter.type -%}
+          {%- when 'price_range' -%}
+            <div class="price-filter">
+              <label class="price-filter__field">
+                <span class="visually-hidden">Minimum price</span>
+                <input type="number" class="field" inputmode="numeric"
+                       name="{{ filter.min_value.param_name }}"
+                       value="{{ filter.min_value.value }}"
+                       placeholder="{{ 0 | money_without_currency | strip_html }}"
+                       min="0" max="{{ filter.range_max | money_without_currency | strip_html }}">
+              </label>
+              <span class="price-filter__dash" aria-hidden="true">&ndash;</span>
+              <label class="price-filter__field">
+                <span class="visually-hidden">Maximum price</span>
+                <input type="number" class="field" inputmode="numeric"
+                       name="{{ filter.max_value.param_name }}"
+                       value="{{ filter.max_value.value }}"
+                       placeholder="{{ filter.range_max | money_without_currency | strip_html }}"
+                       min="0" max="{{ filter.range_max | money_without_currency | strip_html }}">
+              </label>
+            </div>
+
+          {%- else -%}
+            <ul class="filter-list">
+              {%- for value in filter.values -%}
+                <li>
+                  <label class="filter-list__item{% if value.count == 0 and value.active == false %} is-empty{% endif %}">
+                    <input type="checkbox"
+                           name="{{ value.param_name }}"
+                           value="{{ value.value }}"
+                           {% if value.active %}checked{% endif %}
+                           {% if value.count == 0 and value.active == false %}disabled{% endif %}>
+                    <span>{{ value.label }}</span>
+                    <span class="filter-list__count">{{ value.count }}</span>
+                  </label>
+                </li>
+              {%- endfor -%}
+            </ul>
+        {%- endcase -%}
+      </div>
+    {%- endfor -%}
+
+    <button type="submit" class="btn btn-ghost collection-aside__apply" data-filter-apply>Apply</button>
+  </form>
+
+  {%- comment -%} Only offer "clear" when something is actually filtered. {%- endcomment -%}
+  {%- assign active_count = 0 -%}
+  {%- for filter in collection.filters -%}
+    {%- assign active_count = active_count | plus: filter.active_values.size -%}
+    {%- if filter.type == 'price_range' and filter.min_value.value or filter.max_value.value -%}
+      {%- assign active_count = active_count | plus: 1 -%}
+    {%- endif -%}
+  {%- endfor -%}
+  {%- if active_count > 0 -%}
+    <a href="{{ collection.url }}" class="collection-aside__clear">Clear all filters</a>
+  {%- endif -%}
+</aside>

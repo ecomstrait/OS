@@ -1,5 +1,17 @@
+{%- liquid
+  assign menu = linklists[section.settings.menu]
+  if menu == blank
+    assign menu = linklists.main-menu
+  endif
+-%}
 <header class="site-header">
   <div class="container site-header__inner">
+    <button class="nav-toggle" type="button" data-nav-toggle aria-expanded="false" aria-controls="nav-drawer" aria-label="Menu">
+      <span class="nav-toggle__bar" aria-hidden="true"></span>
+      <span class="nav-toggle__bar" aria-hidden="true"></span>
+      <span class="nav-toggle__bar" aria-hidden="true"></span>
+    </button>
+
     <a href="{{ routes.root_url }}" class="site-header__logo">
       {%- if settings.logo_asset != blank -%}
         <img src="{{ settings.logo_asset | asset_url }}" alt="{{ shop.name | escape }}" style="width:{{ settings.logo_width }}px" width="{{ settings.logo_width }}" height="40" loading="eager">
@@ -11,22 +23,75 @@
     </a>
 
     <nav class="site-nav" aria-label="Primary">
-      {%- for link in linklists.main-menu.links -%}
-        <a href="{{ link.url }}" class="site-nav__link{% if link.active %} is-active{% endif %}">{{ link.title }}</a>
+      {%- for link in menu.links -%}
+        {%- if link.links.size > 0 -%}
+          {%- comment -%}
+            A hover menu a keyboard can't reach isn't navigation. The parent
+            stays a real link to its own page, and the submenu opens on
+            focus-within as well as hover, so tabbing through it works.
+          {%- endcomment -%}
+          <div class="site-nav__group">
+            <a href="{{ link.url }}" class="site-nav__link{% if link.active or link.child_active %} is-active{% endif %}" aria-haspopup="true">
+              {{ link.title }}<span class="site-nav__caret" aria-hidden="true"></span>
+            </a>
+            <div class="site-nav__menu">
+              {%- for child in link.links -%}
+                <a href="{{ child.url }}" class="site-nav__menu-link">{{ child.title }}</a>
+              {%- endfor -%}
+            </div>
+          </div>
+        {%- else -%}
+          <a href="{{ link.url }}" class="site-nav__link{% if link.active %} is-active{% endif %}">{{ link.title }}</a>
+        {%- endif -%}
       {%- else -%}
         <a href="{{ routes.all_products_collection_url }}" class="site-nav__link">Shop</a>
+        <a href="{{ routes.collections_url }}" class="site-nav__link">Collections</a>
       {%- endfor -%}
     </nav>
 
-    <a href="{{ routes.cart_url }}" class="site-header__cart" aria-label="Cart">
-      Cart <span class="cart-count">{{ cart.item_count }}</span>
-    </a>
+    <div class="site-header__actions">
+      <a href="{{ routes.search_url }}" class="site-header__icon" aria-label="Search">
+        <svg viewBox="0 0 20 20" fill="none" aria-hidden="true" focusable="false"><circle cx="9" cy="9" r="6" stroke="currentColor" stroke-width="1.6"/><path d="M13.5 13.5 18 18" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+      </a>
+      <a href="{{ routes.cart_url }}" class="site-header__cart" aria-label="Cart, {{ cart.item_count }} items">
+        <span class="site-header__cart-label">Cart</span>
+        <span class="cart-count">{{ cart.item_count }}</span>
+      </a>
+    </div>
   </div>
 </header>
+
+{%- comment -%}
+  Outside <header> on purpose: the sticky header has backdrop-filter, which
+  makes it a containing block and would trap a fixed-position overlay inside it.
+{%- endcomment -%}
+<div class="nav-drawer" id="nav-drawer" data-nav-drawer>
+  <div class="nav-drawer__panel" role="dialog" aria-modal="true" aria-label="Menu">
+    <div class="nav-drawer__head">
+      <span class="nav-drawer__title">{{ settings.store_name | default: shop.name }}</span>
+      <button class="nav-drawer__close" type="button" data-nav-close aria-label="Close menu">&times;</button>
+    </div>
+    <nav class="nav-drawer__nav" aria-label="Mobile">
+      {%- for link in menu.links -%}
+        <a href="{{ link.url }}" class="nav-drawer__link">{{ link.title }}</a>
+        {%- for child in link.links -%}
+          <a href="{{ child.url }}" class="nav-drawer__link nav-drawer__link--child">{{ child.title }}</a>
+        {%- endfor -%}
+      {%- else -%}
+        <a href="{{ routes.all_products_collection_url }}" class="nav-drawer__link">Shop</a>
+        <a href="{{ routes.collections_url }}" class="nav-drawer__link">Collections</a>
+      {%- endfor -%}
+      <a href="{{ routes.search_url }}" class="nav-drawer__link">Search</a>
+      <a href="{{ routes.cart_url }}" class="nav-drawer__link">Cart ({{ cart.item_count }})</a>
+    </nav>
+  </div>
+</div>
 
 {% schema %}
 {
   "name": "Header",
-  "settings": []
+  "settings": [
+    { "type": "link_list", "id": "menu", "label": "Menu", "default": "main-menu" }
+  ]
 }
 {% endschema %}

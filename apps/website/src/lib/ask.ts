@@ -19,7 +19,30 @@ export type ChatMessage = { role: ChatRole; content: string };
 export type AskResult = { answer: string; source: "preset" | "groq" };
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const DEFAULT_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
+/**
+ * Groq request configuration, taken entirely from the environment.
+ *
+ * There is deliberately no model constant to fall back on. Groq withdraws
+ * models without notice, and while this file hardcoded one that had already
+ * been retired, every call returned 404 and the catch below quietly served
+ * the preset instead — the feature looked alive while producing canned output.
+ * An unset GROQ_MODEL now short-circuits to the same preset, but says so in
+ * the logs, so the failure is diagnosable rather than invisible.
+ *
+ * GROQ_REASONING_EFFORT is optional and left out of the request when unset:
+ * reasoning models need it so hidden reasoning doesn't consume max_tokens,
+ * and models that don't reason reject the field outright. Keeping it in the
+ * environment means switching model never requires a code change.
+ */
+function groqConfig(): { model: string; reasoning_effort?: string } | null {
+  const model = process.env.GROQ_MODEL?.trim();
+  if (!model) {
+    console.error("[groq] GROQ_MODEL is not set — falling back to the preset.");
+    return null;
+  }
+  const effort = process.env.GROQ_REASONING_EFFORT?.trim();
+  return effort ? { model, reasoning_effort: effort } : { model };
+}
 
 /** Extra brand facts the model can lean on beyond the FAQ list. */
 const BRAND_FACTS = [
@@ -96,7 +119,8 @@ function systemPrompt(): string {
 async function groqAnswer(messages: ChatMessage[]): Promise<AskResult | null> {
   const key = process.env.GROQ_API_KEY;
   if (!key) return null;
-  const model = process.env.GROQ_MODEL || DEFAULT_MODEL;
+  const cfg = groqConfig();
+  if (!cfg) return null;
 
   // Keep the last few turns for context; cap length.
   const history = messages
@@ -111,7 +135,7 @@ async function groqAnswer(messages: ChatMessage[]): Promise<AskResult | null> {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model,
+        ...cfg,
         temperature: 0.5,
         max_tokens: 220,
         messages: [{ role: "system", content: systemPrompt() }, ...history],

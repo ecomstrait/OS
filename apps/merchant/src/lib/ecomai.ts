@@ -4,7 +4,30 @@
  */
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const DEFAULT_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
+/**
+ * Groq request configuration, taken entirely from the environment.
+ *
+ * There is deliberately no model constant to fall back on. Groq withdraws
+ * models without notice, and while this file hardcoded one that had already
+ * been retired, every call returned 404 and the catch below quietly served
+ * the preset instead — the feature looked alive while producing canned output.
+ * An unset GROQ_MODEL now short-circuits to the same preset, but says so in
+ * the logs, so the failure is diagnosable rather than invisible.
+ *
+ * GROQ_REASONING_EFFORT is optional and left out of the request when unset:
+ * reasoning models need it so hidden reasoning doesn't consume max_tokens,
+ * and models that don't reason reject the field outright. Keeping it in the
+ * environment means switching model never requires a code change.
+ */
+function groqConfig(): { model: string; reasoning_effort?: string } | null {
+  const model = process.env.GROQ_MODEL?.trim();
+  if (!model) {
+    console.error("[groq] GROQ_MODEL is not set — falling back to the preset.");
+    return null;
+  }
+  const effort = process.env.GROQ_REASONING_EFFORT?.trim();
+  return effort ? { model, reasoning_effort: effort } : { model };
+}
 
 /** A media reference in a plan. `url` is absolute — CDN, bucket, or embed. */
 export type PlanMedia = {
@@ -75,62 +98,234 @@ export function themeForStyle(style?: string): string {
 }
 
 /** Apply a cosmetic change (colors/text) to an existing plan. */
-export async function refineStorePlan(
+/**
+ * The plan fields EcomAI is allowed to write.
+ *
+ * Everything else on a plan is either derived (`source`) or owned by the
+ * merchant through the media library — the model has no way to know an
+ * uploaded asset's URL, so anything it invented for `heroMedia` or a section
+ * would 404 on a live store.
+ */
+const EDITABLE = [
+  "storeName", "tagline", "brandColors", "heroHeadline", "heroSub", "about",
+  "collections", "seoTitle", "seoDescription", "announcement", "footerText",
+] as const;
+
+type EditableField = (typeof EDITABLE)[number];
+
+export type MerchantReply = {
+  plan: StorePlan;
+  /** What EcomAI says back. Never empty. */
+  reply: string;
+  /** Fields actually changed, for the caller to summarise or log. */
+  changed: EditableField[];
+  tokensUsed: number;
+};
+
+/** Human labels, so a fallback summary reads like a sentence. */
+const FIELD_LABEL: Record<EditableField, string> = {
+  storeName: "store name", tagline: "tagline", brandColors: "brand colours",
+  heroHeadline: "hero headline", heroSub: "hero subheading", about: "about text",
+  collections: "collections", seoTitle: "SEO title", seoDescription: "SEO description",
+  announcement: "announcement bar", footerText: "footer note",
+};
+
+function isHexList(v: unknown): v is string[] {
+  return Array.isArray(v) && v.length > 0
+    && v.every((c) => typeof c === "string" && /^#[0-9a-f]{3,8}$/i.test(c.trim()));
+}
+
+/**
+ * Copy the model's proposed changes onto the plan, field by field.
+ *
+ * A patch rather than a whole-plan replacement, because a replacement is what
+ * silently dropped merchants' media and content sections: any key the model
+ * omitted vanished. Here an omitted key simply isn't touched, and a value of
+ * the wrong shape is discarded rather than written.
+ */
+function applyChanges(
+  plan: StorePlan,
+  changes: Record<string, unknown>,
+): { plan: StorePlan; changed: EditableField[] } {
+  const next: StorePlan = { ...plan };
+  const changed: EditableField[] = [];
+
+  for (const field of EDITABLE) {
+    if (!(field in changes)) continue;
+    const value = changes[field];
+
+    if (field === "brandColors") {
+      if (!isHexList(value)) continue;
+      const colors = value.map((c) => c.trim()).slice(0, 3);
+      if (JSON.stringify(colors) === JSON.stringify(plan.brandColors)) continue;
+      next.brandColors = colors;
+      changed.push(field);
+      continue;
+    }
+
+    if (field === "collections") {
+      if (!Array.isArray(value) || !value.every((c) => typeof c === "string")) continue;
+      const list = (value as string[]).map((c) => c.trim()).filter(Boolean).slice(0, 5);
+      if (!list.length || JSON.stringify(list) === JSON.stringify(plan.collections)) continue;
+      next.collections = list;
+      changed.push(field);
+      continue;
+    }
+
+    if (typeof value !== "string") continue;
+    const text = value.trim();
+    // The announcement bar and footer note are the only fields a merchant can
+    // legitimately clear by asking, so an empty string means something there.
+    const clearable = field === "announcement" || field === "footerText";
+    if (!text && !clearable) continue;
+    if (text === (plan[field] ?? "")) continue;
+    next[field] = text;
+    changed.push(field);
+  }
+
+  return { plan: next, changed };
+}
+
+/** "the tagline and the brand colours" */
+function listFields(fields: EditableField[]): string {
+  const names = fields.map((f) => FIELD_LABEL[f]);
+  if (names.length === 1) return names[0];
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
+const MERCHANT_SYSTEM = [
+  "You are EcomAI, an ecommerce co-founder helping a merchant with their store.",
+  "",
+  "Reply with JSON only, shaped exactly:",
+  '{ "intent": "edit" | "question" | "unsupported", "reply": "...", "changes": { } }',
+  "",
+  '"edit"        they asked you to change the store. Put ONLY the fields you are',
+  "              changing in changes — omit every field you are leaving alone.",
+  '"question"    they asked something. Answer it in reply. changes must be empty.',
+  '"unsupported" they want something you cannot do from here (adding products,',
+  "              uploading images, prices, shipping, payments, domains). Say so",
+  "              plainly and point them at the right part of the dashboard.",
+  "",
+  "Fields allowed in changes:",
+  "  storeName, tagline, heroHeadline, heroSub, about, seoTitle, seoDescription,",
+  "  announcement, footerText  - strings",
+  '  brandColors               - array of 1-3 hex colours like "#0f172a"',
+  "  collections               - array of up to 5 short category names",
+  "",
+  "You cannot change images, video or content sections; the merchant manages",
+  "those under Content. If asked, say that rather than inventing a URL.",
+  "",
+  "reply is spoken to the merchant: one or two sentences, first person, and",
+  'specific about what you actually changed. Never reply with just "updated".',
+].join("\n");
+
+/**
+ * Handle a merchant's message: apply what they asked for, and say what happened.
+ *
+ * Replaces a version that always returned a whole plan and left the caller to
+ * print a fixed "Updated — check the preview." It could not answer a question,
+ * could not tell the merchant what it had done, and silently no-opped on
+ * anything outside nine cosmetic fields.
+ */
+export async function applyMerchantRequest(
   plan: StorePlan,
   instruction: string,
-): Promise<{ plan: StorePlan; tokensUsed: number }> {
+): Promise<MerchantReply> {
   const key = process.env.GROQ_API_KEY;
-  if (!key || instruction.trim().length < 2) return { plan, tokensUsed: 200 };
-  const model = process.env.GROQ_MODEL || DEFAULT_MODEL;
+  const text = instruction.trim();
+  if (text.length < 2) {
+    return { plan, reply: "Tell me what you'd like to change.", changed: [], tokensUsed: 0 };
+  }
+  const cfg = groqConfig();
+  if (!key || !cfg) {
+    return {
+      plan,
+      reply:
+        "I can't reach the AI service right now, so nothing has changed. You can still edit everything by hand under Content.",
+      changed: [],
+      tokensUsed: 200,
+    };
+  }
 
-  const system = [
-    "You are EcomAI editing an existing store plan. Apply ONLY the requested",
-    "cosmetic change (colors, wording, tone). Keep everything else the same.",
-    "Return the FULL updated JSON with these exact keys:",
-    '{ "storeName","tagline","brandColors","heroHeadline","heroSub","about","collections","seoTitle","seoDescription" }',
-  ].join("\n");
-
-  const user = `Current plan JSON:\n${JSON.stringify({ ...plan, source: undefined })}\n\nChange to apply: ${instruction}`;
+  // The model can't act on media or sections, so sending them spends context
+  // the instruction and the plan's text fields need.
+  const visible: Record<string, unknown> = {};
+  for (const f of EDITABLE) if (plan[f] !== undefined) visible[f] = plan[f];
 
   try {
     const res = await fetch(GROQ_URL, {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model,
-        temperature: 0.5,
+        ...cfg,
+        temperature: 0.4,
         max_tokens: 900,
         response_format: { type: "json_object" },
         messages: [
-          { role: "system", content: system },
-          { role: "user", content: user },
+          { role: "system", content: MERCHANT_SYSTEM },
+          { role: "user", content: `Current store:\n${JSON.stringify(visible)}\n\nMerchant says: ${text}` },
         ],
       }),
-      signal: AbortSignal.timeout(12000),
+      signal: AbortSignal.timeout(15000),
     });
-    if (!res.ok) return { plan, tokensUsed: 200 };
+    if (!res.ok) throw new Error(`groq ${res.status}`);
+
     const data = await res.json();
     const content: string | undefined = data?.choices?.[0]?.message?.content;
     const tokensUsed: number = data?.usage?.total_tokens ?? 500;
-    if (!content) return { plan, tokensUsed };
-    const p = JSON.parse(content) as Partial<StorePlan>;
+    if (!content) throw new Error("empty completion");
+
+    const parsed = JSON.parse(content) as {
+      intent?: string;
+      reply?: string;
+      changes?: Record<string, unknown>;
+    };
+
+    const intent =
+      parsed.intent === "question" || parsed.intent === "unsupported" ? parsed.intent : "edit";
+    const modelReply = typeof parsed.reply === "string" ? parsed.reply.trim() : "";
+
+    // A question must never mutate the store, whatever the model returned
+    // alongside its answer.
+    if (intent !== "edit") {
+      return {
+        plan,
+        reply: modelReply || "I'm not sure how to help with that one — could you rephrase it?",
+        changed: [],
+        tokensUsed,
+      };
+    }
+
+    const { plan: updated, changed } = applyChanges(plan, parsed.changes ?? {});
+
+    // Trust the diff over the model's account of itself. Claiming success when
+    // nothing valid came back is a lie the merchant finds in the preview.
+    if (!changed.length) {
+      const vague = !modelReply || /^(updated|done|ok)\b/i.test(modelReply);
+      return {
+        plan,
+        reply: vague
+          ? 'I couldn\'t tell what to change from that — try naming the part of the store, like "make the headline shorter" or "use a deep green".'
+          : modelReply,
+        changed: [],
+        tokensUsed,
+      };
+    }
+
     return {
-      plan: {
-        storeName: p.storeName || plan.storeName,
-        tagline: p.tagline || plan.tagline,
-        brandColors: Array.isArray(p.brandColors) && p.brandColors.length ? p.brandColors.slice(0, 3) : plan.brandColors,
-        heroHeadline: p.heroHeadline || plan.heroHeadline,
-        heroSub: p.heroSub || plan.heroSub,
-        about: p.about || plan.about,
-        collections: Array.isArray(p.collections) && p.collections.length ? p.collections.slice(0, 5) : plan.collections,
-        seoTitle: p.seoTitle || plan.seoTitle,
-        seoDescription: p.seoDescription || plan.seoDescription,
-        source: "groq",
-      },
+      plan: { ...updated, source: "groq" },
+      reply: modelReply || `Updated the ${listFields(changed)}.`,
+      changed,
       tokensUsed,
     };
   } catch {
-    return { plan, tokensUsed: 200 };
+    return {
+      plan,
+      reply:
+        "That didn't go through — the AI service didn't answer in time. Nothing was changed, so try again in a moment.",
+      changed: [],
+      tokensUsed: 200,
+    };
   }
 }
 
@@ -140,7 +335,8 @@ export async function generateStorePlan(
 ): Promise<{ plan: StorePlan; tokensUsed: number }> {
   const key = process.env.GROQ_API_KEY;
   if (!key || idea.trim().length < 2) return { plan: presetPlan(idea), tokensUsed: 400 };
-  const model = process.env.GROQ_MODEL || DEFAULT_MODEL;
+  const cfg = groqConfig();
+  if (!cfg) return { plan: presetPlan(idea), tokensUsed: 400 };
 
   const system = [
     "You are EcomAI, building an online store for an entrepreneur.",
@@ -169,7 +365,7 @@ export async function generateStorePlan(
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model,
+        ...cfg,
         temperature: 0.7,
         max_tokens: 900,
         response_format: { type: "json_object" },

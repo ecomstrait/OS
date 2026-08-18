@@ -8,7 +8,7 @@ import { assertTokenBudget, recordTokenUsage, assertCanCreateStore } from "@/lib
 import { autoSelectProducts, getSelectedProducts, productImage } from "@/lib/catalog";
 import { merchantUrl } from "@/lib/stripe";
 import { resyncShopifyTheme } from "@/lib/shopify-actions";
-import { generateStorePlan, refineStorePlan, themeForStyle, type StorePlan } from "@/lib/ecomai";
+import { generateStorePlan, applyMerchantRequest, themeForStyle, type StorePlan } from "@/lib/ecomai";
 import { normalizePlan } from "@/lib/store-plan";
 import { purgeStoreMedia } from "@/lib/draft-sweep";
 
@@ -75,16 +75,21 @@ export async function buildStore(
   return { plan, products, theme: themeForStyle(answers.style) };
 }
 
-/** Cosmetic-only refinement after the store is built. */
+/**
+ * Talk to EcomAI about a store that hasn't launched yet.
+ *
+ * Returns the assistant's own words rather than a plan alone, so the builder
+ * can say what actually happened instead of always printing "Updated".
+ */
 export async function refineStore(
   plan: StorePlan,
   instruction: string,
-): Promise<{ plan?: StorePlan; error?: string }> {
+): Promise<{ plan?: StorePlan; reply?: string; changed?: string[]; error?: string }> {
   const budget = await assertTokenBudget(500);
   if (!budget.ok) return { error: budget.error };
-  const { plan: updated, tokensUsed } = await refineStorePlan(plan, instruction);
-  await recordTokenUsage(tokensUsed);
-  return { plan: updated };
+  const res = await applyMerchantRequest(plan, instruction);
+  await recordTokenUsage(res.tokensUsed);
+  return { plan: res.plan, reply: res.reply, changed: res.changed };
 }
 
 /** Snapshots kept per store; older ones are pruned on each write. */
@@ -258,8 +263,15 @@ export async function editStore(storeId: string, instruction: string): Promise<E
   if (!budget.ok) return { error: budget.error };
 
   const current = normalizePlan(store.content);
-  const { plan, tokensUsed } = await refineStorePlan(current, instruction);
-  await recordTokenUsage(tokensUsed);
+  const ai = await applyMerchantRequest(current, instruction);
+  const plan = ai.plan;
+  await recordTokenUsage(ai.tokensUsed);
+
+  // A question or a request we can't act on must not write to the store, nor
+  // burn a version-history slot describing an edit that never happened.
+  if (!ai.changed.length) {
+    return { plan: current, synced: "live", note: ai.reply };
+  }
 
   // Capture the pre-edit look so this change can be undone.
   await snapshotStore(
@@ -280,14 +292,14 @@ export async function editStore(storeId: string, instruction: string): Promise<E
 
   // Auto-propagate to wherever the store is live.
   if (store.type === "own_platform") {
-    return { plan, synced: "live", note: "Your live storefront is updated." };
+    return { plan, synced: "live", note: `${ai.reply} Your live storefront is updated.` };
   }
   if (store.type === "shopify_liquid_theme" && store.shopify_store_id) {
     const res = await resyncShopifyTheme(storeId);
-    if (res.error) return { plan, synced: "draft", note: `Saved, but Shopify sync failed: ${res.error}` };
-    return { plan, synced: "shopify", note: "Pushed to your live Shopify store." };
+    if (res.error) return { plan, synced: "draft", note: `${ai.reply} But the Shopify sync failed: ${res.error}` };
+    return { plan, synced: "shopify", note: `${ai.reply} Pushed to your live Shopify store.` };
   }
-  return { plan, synced: "draft", note: "Saved. Provision the store to publish these changes." };
+  return { plan, synced: "draft", note: `${ai.reply} Provision the store to publish it.` };
 }
 
 /**

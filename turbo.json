@@ -9,7 +9,8 @@
     "LEAD_NOTIFY_EMAIL",
     "LEAD_NOTIFY_CC",
     "GROQ_API_KEY",
-    "GROQ_MODEL"
+    "GROQ_MODEL",
+    "GROQ_REASONING_EFFORT"
   ],
   "tasks": {
     "build": {

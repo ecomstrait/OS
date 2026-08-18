@@ -101,7 +101,30 @@ export function presetPlan(input: PlanInput): BusinessPlan {
 /* ------------------------------------------------------------------ */
 
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-const DEFAULT_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
+/**
+ * Groq request configuration, taken entirely from the environment.
+ *
+ * There is deliberately no model constant to fall back on. Groq withdraws
+ * models without notice, and while this file hardcoded one that had already
+ * been retired, every call returned 404 and the catch below quietly served
+ * the preset instead — the feature looked alive while producing canned output.
+ * An unset GROQ_MODEL now short-circuits to the same preset, but says so in
+ * the logs, so the failure is diagnosable rather than invisible.
+ *
+ * GROQ_REASONING_EFFORT is optional and left out of the request when unset:
+ * reasoning models need it so hidden reasoning doesn't consume max_tokens,
+ * and models that don't reason reject the field outright. Keeping it in the
+ * environment means switching model never requires a code change.
+ */
+function groqConfig(): { model: string; reasoning_effort?: string } | null {
+  const model = process.env.GROQ_MODEL?.trim();
+  if (!model) {
+    console.error("[groq] GROQ_MODEL is not set — falling back to the preset.");
+    return null;
+  }
+  const effort = process.env.GROQ_REASONING_EFFORT?.trim();
+  return effort ? { model, reasoning_effort: effort } : { model };
+}
 
 function systemPrompt(n: Niche): string {
   return [
@@ -116,8 +139,16 @@ function systemPrompt(n: Niche): string {
     `- margin: ${n.margin[0]}–${n.margin[1]}%`,
     `- suppliers: ${n.suppliers[0]}–${n.suppliers[1]}`,
     `- monthly revenue: ${fmtK(n.monthlyRevenue[0])}–${fmtK(n.monthlyRevenue[1])}`,
-    `- product ideas: ${n.productIdeas.join(", ")}`,
+    `- product ideas (SHAPE ONLY, do not copy): ${n.productIdeas.join(", ")}`,
     `- typical countries: ${n.countries.join(", ")}`,
+    "",
+    // Without this the model treats the reference ideas as grounding and
+    // echoes them back, so a visitor who typed "handmade ceramic mugs" was
+    // shown "Hero Product, Everyday Bestseller, Premium Bundle, Gift Set".
+    // The numbers genuinely are reference data; the product names are not.
+    "The reference product ideas show the KIND of line-up to suggest — four",
+    "tiers from hero to gift. Never repeat them. Name four products that",
+    "actually belong to what the visitor said they want to sell.",
     "",
     "Respond with ONLY a JSON object using these exact keys:",
     "{",
@@ -135,7 +166,8 @@ function systemPrompt(n: Niche): string {
 async function groqPlan(input: PlanInput): Promise<BusinessPlan | null> {
   const key = process.env.GROQ_API_KEY;
   if (!key) return null;
-  const model = process.env.GROQ_MODEL || DEFAULT_MODEL;
+  const cfg = groqConfig();
+  if (!cfg) return null;
   const n = matchNiche(input.idea);
 
   try {
@@ -143,7 +175,7 @@ async function groqPlan(input: PlanInput): Promise<BusinessPlan | null> {
       method: "POST",
       headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model,
+        ...cfg,
         temperature: 0.7,
         max_tokens: 700,
         response_format: { type: "json_object" },

@@ -1,0 +1,75 @@
+{%- liquid
+  assign list = section.settings.menu | default: 'main-menu'
+  assign menu = linklists[list]
+-%}
+<section class="section category-grid">
+  <div class="container">
+    <div class="section-head">
+      <h2 class="section-title">{{ section.settings.heading }}</h2>
+      <a href="{{ routes.collections_url }}" class="link-more">All categories &rarr;</a>
+    </div>
+
+    {%- comment -%}
+      Categories come from the merchant's menu when they have curated one, and
+      fall back to every collection otherwise. A brand-new store has no menu,
+      and an empty band where the categories should be is the thing that makes
+      a launch look unfinished.
+    {%- endcomment -%}
+    <div class="grid grid-collections">
+      {%- assign shown = 0 -%}
+      {%- for link in menu.links -%}
+        {%- if link.type == 'collection_link' and shown < section.settings.count -%}
+          {%- assign c = link.object -%}
+          {%- assign shown = shown | plus: 1 -%}
+          <a href="{{ c.url }}" class="collection-card" style="border-radius:var(--radius)">
+            {%- if c.featured_image -%}
+              <img src="{{ c.featured_image | image_url: width: 700 }}"
+                   srcset="{{ c.featured_image | image_url: width: 400 }} 400w, {{ c.featured_image | image_url: width: 700 }} 700w, {{ c.featured_image | image_url: width: 1000 }} 1000w"
+                   sizes="(max-width: 720px) 50vw, 33vw"
+                   alt="{{ c.title | escape }}" loading="lazy" width="700" height="500">
+            {%- else -%}
+              <span class="collection-card__placeholder" aria-hidden="true"></span>
+            {%- endif -%}
+            <span class="collection-card__title">
+              {{ c.title }}
+              <span class="collection-card__count">{{ c.products_count }} items</span>
+            </span>
+          </a>
+        {%- endif -%}
+      {%- endfor -%}
+
+      {%- if shown == 0 -%}
+        {%- for c in collections limit: section.settings.count -%}
+          {%- unless c.handle == 'all' -%}
+            <a href="{{ c.url }}" class="collection-card" style="border-radius:var(--radius)">
+              {%- if c.featured_image -%}
+                <img src="{{ c.featured_image | image_url: width: 700 }}"
+                     srcset="{{ c.featured_image | image_url: width: 400 }} 400w, {{ c.featured_image | image_url: width: 700 }} 700w, {{ c.featured_image | image_url: width: 1000 }} 1000w"
+                     sizes="(max-width: 720px) 50vw, 33vw"
+                     alt="{{ c.title | escape }}" loading="lazy" width="700" height="500">
+              {%- else -%}
+                <span class="collection-card__placeholder" aria-hidden="true"></span>
+              {%- endif -%}
+              <span class="collection-card__title">
+                {{ c.title }}
+                <span class="collection-card__count">{{ c.products_count }} items</span>
+              </span>
+            </a>
+          {%- endunless -%}
+        {%- endfor -%}
+      {%- endif -%}
+    </div>
+  </div>
+</section>
+
+{% schema %}
+{
+  "name": "Categories",
+  "settings": [
+    { "type": "text", "id": "heading", "label": "Heading", "default": "Shop by category" },
+    { "type": "link_list", "id": "menu", "label": "Categories from menu", "info": "Leave empty to show all collections." },
+    { "type": "range", "id": "count", "min": 2, "max": 12, "step": 1, "label": "How many", "default": 6 }
+  ],
+  "presets": [{ "name": "Categories" }]
+}
+{% endschema %}

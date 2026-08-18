@@ -31,12 +31,19 @@
         --radius: {{ settings.corner_radius }}px;
         --font-heading: {{ settings.heading_font.family }}, {{ settings.heading_font.fallback_families }};
         --font-body: {{ settings.body_font.family }}, {{ settings.body_font.fallback_families }};
+        /* Normalised so the shared nav/sidebar/product CSS has a surface and a
+           rule colour in every theme. Aurora is clean and light: a barely-there
+           tint and a hairline. */
+        --surface: color-mix(in srgb, var(--ink) 3%, var(--bg));
+        --line: color-mix(in srgb, var(--ink) 12%, transparent);
+        --muted: color-mix(in srgb, var(--ink) 55%, var(--bg));
       }
       {{ settings.heading_font | font_face: font_display: 'swap' }}
       {{ settings.body_font | font_face: font_display: 'swap' }}
     {%- endstyle -%}
 
     {{ 'theme.css' | asset_url | stylesheet_tag }}
+    {{ 'theme.js' | asset_url | script_tag }}
   </head>
 
   <body class="template-{{ template.name }}">

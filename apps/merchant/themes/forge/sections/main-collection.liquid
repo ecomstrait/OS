@@ -1,36 +1,63 @@
-<section class="section">
+<div class="collection-hero">
   <div class="container">
-    <div class="collection-head">
-      <h1 class="section-title">{{ collection.title }}</h1>
-      {%- if collection.description != blank -%}
-        <div class="rte muted">{{ collection.description }}</div>
-      {%- endif -%}
-      <p class="collection-head__count muted">{{ collection.products_count }} item{% if collection.products_count != 1 %}s{% endif %}</p>
-    </div>
-
-    {%- paginate collection.products by 15 -%}
-      <div class="grid grid-products">
-        {%- for product in collection.products -%}
-          {% render 'product-card', product: product %}
-        {%- else -%}
-          <p class="muted">No products yet.</p>
-        {%- endfor -%}
-      </div>
-
-      {%- if paginate.pages > 1 -%}
-        <nav class="pagination" aria-label="Pagination">
-          {%- for part in paginate.parts -%}
-            {%- if part.is_link -%}
-              <a href="{{ part.url }}">{{ part.title }}</a>
-            {%- else -%}
-              <span class="is-current">{{ part.title }}</span>
-            {%- endif -%}
-          {%- endfor -%}
-        </nav>
-      {%- endif -%}
-    {%- endpaginate -%}
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href="{{ routes.root_url }}">Home</a>
+      <span aria-hidden="true">/</span>
+      <a href="{{ routes.collections_url }}">Categories</a>
+      <span aria-hidden="true">/</span>
+      <span aria-current="page">{{ collection.title }}</span>
+    </nav>
+    <h1 class="collection-hero__title">{{ collection.title }}</h1>
+    {%- if collection.description != blank -%}
+      <div class="rte collection-hero__copy muted">{{ collection.description }}</div>
+    {%- endif -%}
   </div>
-</section>
+</div>
+
+<div class="section">
+  <div class="container collection-layout">
+    {% render 'collection-sidebar', collection: collection %}
+
+    <div class="collection-main">
+      {%- paginate collection.products by 12 -%}
+        <div class="collection-toolbar">
+          <p class="collection-toolbar__count muted">
+            {{ collection.products_count }} product{% if collection.products_count != 1 %}s{% endif %}
+          </p>
+        </div>
+
+        {%- if collection.products.size > 0 -%}
+          <div class="grid grid-products">
+            {%- for product in collection.products -%}
+              {% render 'product-card', product: product %}
+            {%- endfor -%}
+          </div>
+        {%- else -%}
+          {%- comment -%}
+            Distinguish "nothing here" from "your filters excluded everything" —
+            otherwise a shopper who over-filters thinks the shop is empty.
+          {%- endcomment -%}
+          <div class="collection-empty">
+            <p class="muted">No products match these filters.</p>
+            <a href="{{ collection.url }}" class="btn btn-ghost">Clear filters</a>
+          </div>
+        {%- endif -%}
+
+        {%- if paginate.pages > 1 -%}
+          <nav class="pagination" aria-label="Pagination">
+            {%- for part in paginate.parts -%}
+              {%- if part.is_link -%}
+                <a href="{{ part.url }}">{{ part.title }}</a>
+              {%- else -%}
+                <span class="is-current">{{ part.title }}</span>
+              {%- endif -%}
+            {%- endfor -%}
+          </nav>
+        {%- endif -%}
+      {%- endpaginate -%}
+    </div>
+  </div>
+</div>
 
 {% schema %}
 {
