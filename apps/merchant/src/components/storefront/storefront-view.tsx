@@ -6,6 +6,12 @@ import type { Storefront } from "@/lib/storefront";
 import { storeTokens, tokenStyle } from "@/lib/theme-tokens";
 import type { ApiProduct } from "@/lib/storefront-api";
 import { useStorefrontCart, useStorefrontProducts } from "@/components/storefront/use-storefront";
+import {
+  AboutBlock,
+  HeroVideo,
+  StoreSections,
+  heroBackdropStyle,
+} from "@/components/storefront/store-content";
 
 export function StorefrontView({
   store,
@@ -81,32 +87,9 @@ export function StorefrontView({
 
       <section
         className="relative overflow-hidden px-6 py-16 text-center text-white"
-        style={
-          hero?.kind === "image"
-            ? {
-                backgroundImage: `linear-gradient(120deg, rgba(15,23,42,.55), rgba(15,23,42,.25)), url('${hero.url}')`,
-                backgroundSize: "cover",
-                backgroundPosition: "center",
-              }
-            : { background: grad }
-        }
+        style={heroBackdropStyle(hero, grad)}
       >
-        {hero?.kind === "video" && (
-          <>
-            {/* Decorative: muted, looping and inert, so it never competes with
-                the copy or traps keyboard focus. */}
-            <video
-              src={hero.url}
-              autoPlay
-              muted
-              loop
-              playsInline
-              aria-hidden
-              className="absolute inset-0 h-full w-full object-cover"
-            />
-            <div className="absolute inset-0 bg-ink-950/45" />
-          </>
-        )}
+        <HeroVideo media={hero} />
         <div className="relative">
           <h1 className="text-3xl font-bold sm:text-4xl" style={{ fontFamily: "var(--font-heading)" }}>
             {store.plan.heroHeadline}
@@ -217,26 +200,7 @@ export function StorefrontView({
           </>
         )}
 
-        {(store.plan.about || store.plan.aboutMedia) && (
-          <div className="mt-12 grid items-center gap-6 border-t border-ink-100 pt-8 sm:grid-cols-2">
-            {store.plan.aboutMedia?.kind === "image" && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={store.plan.aboutMedia.url}
-                alt={store.plan.aboutMedia.alt ?? ""}
-                className="h-56 w-full object-cover"
-                style={{ borderRadius: "var(--radius)" }}
-              />
-            )}
-            <p
-              className={`mx-auto max-w-lg text-sm leading-relaxed opacity-70 ${
-                store.plan.aboutMedia ? "text-left" : "sm:col-span-2 text-center"
-              }`}
-            >
-              {store.plan.about}
-            </p>
-          </div>
-        )}
+        <AboutBlock plan={store.plan} />
 
         <StoreSections plan={store.plan} />
       </section>
@@ -340,99 +304,6 @@ export function StorefrontView({
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-/**
- * The merchant's custom content blocks, rendered under the catalogue.
- *
- * Unknown or empty sections are skipped rather than rendered as gaps: the plan
- * is free-form JSON and a block half-filled in the editor shouldn't leave a
- * hole on a live storefront.
- */
-function StoreSections({ plan }: { plan: Storefront["plan"] }) {
-  const sections = plan.sections ?? [];
-  if (!sections.length) return null;
-
-  return (
-    <div className="mt-12 space-y-12">
-      {sections.map((s) => {
-        const heading = s.heading?.trim();
-        const body = s.body?.trim();
-        const media = s.media ?? [];
-        const items = s.items ?? [];
-        if (!heading && !body && !media.length && !items.length) return null;
-
-        return (
-          <section key={s.id}>
-            {heading && (
-              <h2
-                className="mb-3 text-center text-xl font-bold"
-                style={{ fontFamily: "var(--font-heading)" }}
-              >
-                {heading}
-              </h2>
-            )}
-
-            {s.type === "features" ? (
-              <div className="grid gap-5 sm:grid-cols-3">
-                {items.map((it, i) => (
-                  <div key={i} className="text-center">
-                    <p className="text-sm font-semibold">{it.title}</p>
-                    <p className="mt-1 text-sm opacity-70">{it.description}</p>
-                  </div>
-                ))}
-              </div>
-            ) : s.type === "gallery" ? (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {media.map((m, i) => (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    key={`${m.url}-${i}`}
-                    src={m.url}
-                    alt={m.alt ?? ""}
-                    className="aspect-square w-full object-cover"
-                    style={{ borderRadius: "var(--radius)" }}
-                  />
-                ))}
-              </div>
-            ) : s.type === "video" ? (
-              <div className="mx-auto max-w-3xl">
-                {media[0] && (
-                  <video
-                    src={media[0].url}
-                    controls
-                    playsInline
-                    className="w-full"
-                    style={{ borderRadius: "var(--radius)" }}
-                  />
-                )}
-                {body && <p className="mt-3 text-center text-sm opacity-70">{body}</p>}
-              </div>
-            ) : s.type === "image" ? (
-              <div className="grid items-center gap-6 sm:grid-cols-2">
-                {media[0] && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={media[0].url}
-                    alt={media[0].alt ?? ""}
-                    className="h-60 w-full object-cover"
-                    style={{ borderRadius: "var(--radius)" }}
-                  />
-                )}
-                {body && <p className="text-sm leading-relaxed opacity-80">{body}</p>}
-              </div>
-            ) : (
-              body && (
-                <p className="mx-auto max-w-2xl text-center text-sm leading-relaxed opacity-80">
-                  {body}
-                </p>
-              )
-            )}
-          </section>
-        );
-      })}
     </div>
   );
 }

@@ -20,6 +20,13 @@ import {
   discardDraft,
   type PreviewProduct,
 } from "@/lib/builder-actions";
+import {
+  AboutBlock,
+  HeroVideo,
+  StoreSections,
+  heroBackdropStyle,
+} from "@/components/storefront/store-content";
+import { storeTokens, tokenStyle } from "@/lib/theme-tokens";
 import type { DraftStore } from "@/lib/drafts";
 import { draftExpiryLabel } from "@/lib/store-status";
 import type { StorePlan } from "@/lib/ecomai";
@@ -441,9 +448,9 @@ export function StoreBuilder({
     }
   }
 
-  const grad = plan
-    ? `linear-gradient(135deg, ${plan.brandColors[0] ?? "#0f172a"}, ${plan.brandColors[1] ?? "#10b981"})`
-    : undefined;
+  // Always a valid gradient: it backs the hero whenever there's no hero image,
+  // and the shared backdrop helper needs something to fall back to.
+  const grad = `linear-gradient(135deg, ${plan?.brandColors[0] ?? "#0f172a"}, ${plan?.brandColors[1] ?? "#10b981"})`;
 
   return (
     <div className="flex h-[80vh] min-h-[560px] flex-col overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-xl shadow-ink-950/5 lg:flex-row">
@@ -550,7 +557,13 @@ export function StoreBuilder({
             </div>
           ) : (
             <div className="p-4">
-              <div className="overflow-hidden rounded-xl border border-ink-100 bg-white shadow-sm">
+              {/* The theme's tokens, so the shared storefront components resolve
+                  var(--radius)/var(--brand) to the same values they will on the
+                  live store rather than to nothing. */}
+              <div
+                className="overflow-hidden rounded-xl border border-ink-100 bg-white shadow-sm"
+                style={tokenStyle(storeTokens(theme, plan.brandColors))}
+              >
                 <div className="flex items-center gap-1.5 border-b border-ink-100 bg-ink-50 px-3 py-2">
                   <span className="h-2.5 w-2.5 rounded-full bg-ink-200" />
                   <span className="h-2.5 w-2.5 rounded-full bg-ink-200" />
@@ -558,16 +571,31 @@ export function StoreBuilder({
                   <span className="ml-2 truncate text-xs text-ink-400">{name || plan.storeName}</span>
                 </div>
 
-                <div className="px-6 py-10 text-center text-white" style={{ background: grad }}>
-                  {logoUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={logoUrl} alt="Store logo" className="mx-auto mb-4 h-10 object-contain" />
-                  ) : (
-                    <p className="mb-3 text-sm font-bold uppercase tracking-wide text-white/90">{name || plan.storeName}</p>
-                  )}
-                  <p className="text-lg font-bold sm:text-2xl">{plan.heroHeadline}</p>
-                  <p className="mx-auto mt-2 max-w-md text-sm text-white/85">{plan.heroSub}</p>
-                  <span className="mt-4 inline-block rounded-full bg-white px-4 py-1.5 text-xs font-semibold text-ink-950">Shop now</span>
+                {plan.announcement && (
+                  <div
+                    className="px-4 py-2 text-center text-xs font-medium text-white"
+                    style={{ background: "var(--brand)" }}
+                  >
+                    {plan.announcement}
+                  </div>
+                )}
+
+                <div
+                  className="relative overflow-hidden px-6 py-10 text-center text-white"
+                  style={heroBackdropStyle(plan.heroMedia, grad)}
+                >
+                  <HeroVideo media={plan.heroMedia} />
+                  <div className="relative">
+                    {logoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={logoUrl} alt="Store logo" className="mx-auto mb-4 h-10 object-contain" />
+                    ) : (
+                      <p className="mb-3 text-sm font-bold uppercase tracking-wide text-white/90">{name || plan.storeName}</p>
+                    )}
+                    <p className="text-lg font-bold sm:text-2xl">{plan.heroHeadline}</p>
+                    <p className="mx-auto mt-2 max-w-md text-sm text-white/85">{plan.heroSub}</p>
+                    <span className="mt-4 inline-block rounded-full bg-white px-4 py-1.5 text-xs font-semibold text-ink-950">Shop now</span>
+                  </div>
                 </div>
 
                 <div className="flex flex-wrap justify-center gap-2 px-6 py-4">
@@ -595,8 +623,17 @@ export function StoreBuilder({
                   ))}
                 </div>
 
-                <div className="border-t border-ink-100 px-6 py-5 text-center">
-                  <p className="mx-auto max-w-md text-xs leading-relaxed text-ink-500">{plan.about}</p>
+                {/* Same components the live storefront uses, so anything the
+                    merchant adds in Content shows here exactly as it will ship. */}
+                <div className="px-6 pb-6">
+                  <AboutBlock plan={plan} />
+                  <StoreSections plan={plan} />
+                </div>
+
+                <div className="border-t border-ink-100 px-6 py-4 text-center">
+                  <p className="text-xs opacity-60">
+                    {plan.footerText || `${name || plan.storeName} · Powered by EcomStrait`}
+                  </p>
                 </div>
               </div>
             </div>
