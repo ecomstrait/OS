@@ -6,7 +6,12 @@ application_url = "https://shopify-ten-jet.vercel.app"
 embedded = true
 
 [build]
-automatically_update_urls_on_dev = true
+# `shopify app dev` rewrites application_url and redirect_urls in the Partner
+# dashboard to a temporary tunnel. Left on, a dev session silently repoints the
+# published app at a URL that dies when the session ends — which breaks the
+# install link for everyone until the next deploy. Turn it back on only if you
+# are developing against a separate dev app.
+automatically_update_urls_on_dev = false
 
 [webhooks]
 api_version = "2026-10"
@@ -37,7 +42,12 @@ api_version = "2026-10"
 scopes = "write_products,write_metaobjects,write_metaobject_definitions,read_orders,read_themes,write_themes,read_locations,write_inventory,read_publications,write_publications,read_shipping,write_shipping"
 
 [auth]
-redirect_urls = [ "https://shopify-ten-jet.vercel.app/api/auth" ]
+# /auth/callback, not /api/auth. `/api/auth` is the old Remix template's path
+# and returns 404 on this one — shopify.server.ts sets authPathPrefix = "/auth"
+# and the only auth route is app/routes/auth.$.tsx, so OAuth had nowhere to
+# come back to. Must match the redirect URLs in the Partner dashboard, which
+# only update when `shopify app deploy` is run.
+redirect_urls = [ "https://shopify-ten-jet.vercel.app/auth/callback" ]
 
 [product.metafields.app.demo_info]
 type = "single_line_text_field"
