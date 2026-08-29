@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@ecomstrait/ai": "workspace:*",
     "@ecomstrait/auth": "workspace:*",
     "@ecomstrait/db": "workspace:*",
     "@ecomstrait/ui": "workspace:*",

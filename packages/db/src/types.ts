@@ -455,6 +455,100 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["store_orders"]["Row"]>;
         Relationships: [];
       };
+      ai_embeddings: {
+        Row: {
+          id: string;
+          /** Defaults to the GLOBAL_TENANT_ID sentinel for shared content (see `@ecomstrait/ai`). */
+          tenant_id: string;
+          source_type: string;
+          source_id: string;
+          content: string;
+          embedding: number[];
+          provider: string;
+          created_at: string;
+        };
+        Insert: {
+          source_type: string;
+          source_id: string;
+          content: string;
+          embedding: number[];
+          provider: string;
+        } & Partial<Pick<Database["public"]["Tables"]["ai_embeddings"]["Row"], "tenant_id">>;
+        Update: Partial<Database["public"]["Tables"]["ai_embeddings"]["Row"]>;
+        Relationships: [];
+      };
+      ai_agent_runs: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          agent: string;
+          thread_id: string;
+          status: string;
+          input: Record<string, unknown>;
+          output: Record<string, unknown> | null;
+          tool_calls: unknown[];
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          tenant_id: string;
+          agent: string;
+          thread_id: string;
+          input: Record<string, unknown>;
+        } & Partial<
+          Omit<
+            Database["public"]["Tables"]["ai_agent_runs"]["Row"],
+            "id" | "tenant_id" | "agent" | "thread_id" | "input" | "created_at" | "updated_at"
+          >
+        >;
+        Update: Partial<Database["public"]["Tables"]["ai_agent_runs"]["Row"]>;
+        Relationships: [];
+      };
+      ai_approvals: {
+        Row: {
+          id: string;
+          /** Optional backreference — see 20260829150000_ai_approvals_context.sql. */
+          agent_run_id: string | null;
+          tenant_id: string | null;
+          thread_id: string | null;
+          action: string;
+          payload: Record<string, unknown>;
+          status: string;
+          approved_by: string | null;
+          created_at: string;
+          resolved_at: string | null;
+        };
+        Insert: {
+          action: string;
+          payload: Record<string, unknown>;
+        } & Partial<
+          Omit<Database["public"]["Tables"]["ai_approvals"]["Row"], "id" | "action" | "payload" | "created_at">
+        >;
+        Update: Partial<Database["public"]["Tables"]["ai_approvals"]["Row"]>;
+        Relationships: [];
+      };
+      ai_cost_ledger: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          role: string;
+          model: string;
+          input_tokens: number;
+          output_tokens: number;
+          cost_usd: number;
+          created_at: string;
+        };
+        Insert: {
+          tenant_id: string;
+          role: string;
+          model: string;
+          input_tokens: number;
+          output_tokens: number;
+          cost_usd: number;
+        };
+        Update: Partial<Database["public"]["Tables"]["ai_cost_ledger"]["Row"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
@@ -482,3 +576,7 @@ export type Subscription = Database["public"]["Tables"]["subscriptions"]["Row"];
 export type UsageDaily = Database["public"]["Tables"]["usage_daily"]["Row"];
 export type ShopifyStore = Database["public"]["Tables"]["shopify_stores"]["Row"];
 export type Store = Database["public"]["Tables"]["stores"]["Row"];
+export type AiEmbedding = Database["public"]["Tables"]["ai_embeddings"]["Row"];
+export type AiAgentRun = Database["public"]["Tables"]["ai_agent_runs"]["Row"];
+export type AiApproval = Database["public"]["Tables"]["ai_approvals"]["Row"];
+export type AiCostLedgerEntry = Database["public"]["Tables"]["ai_cost_ledger"]["Row"];

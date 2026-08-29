@@ -29,6 +29,10 @@ export type {
   StoreType,
   StoreStatus,
   ShopifyStoreStatus,
+  AiEmbedding,
+  AiAgentRun,
+  AiApproval,
+  AiCostLedgerEntry,
 } from "./types";
 export { createAdminClient } from "./admin";
 export {

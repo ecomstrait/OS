@@ -119,6 +119,33 @@ export async function alertListingBelowCost(
   }
 }
 
+/**
+ * Tell the team an AI restock recommendation is waiting for a decision.
+ *
+ * The approval this refers to only takes effect once someone resolves it via
+ * /api/admin/approvals/[id] — no supplier-facing approval UI exists yet, so
+ * ops is the only audience able to act on it today.
+ */
+export async function alertRestockRecommended(
+  productTitle: string,
+  quantity: number,
+  reasoning: string,
+  approvalId: string,
+): Promise<void> {
+  try {
+    await sendOpsEmail(
+      `[EcomStrait] Restock recommended: ${productTitle}`,
+      `<p>EcomAI recommends restocking <strong>${escapeHtml(productTitle)}</strong> by
+       <strong>${quantity}</strong> units.</p>
+       <p>${escapeHtml(reasoning)}</p>
+       <p>Approval id: <code>${escapeHtml(approvalId)}</code> — nothing has changed yet;
+       this needs a decision via the approvals endpoint.</p>`,
+    );
+  } catch {
+    /* best-effort */
+  }
+}
+
 /** Tell the team the pool has run dry — no merchant can provision until it's refilled. */
 export async function alertPoolEmpty(reason: string): Promise<void> {
   const admin = createAdminClient();

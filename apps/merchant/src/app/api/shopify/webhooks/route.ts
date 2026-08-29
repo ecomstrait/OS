@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { createAdminClient } from "@ecomstrait/db";
 import { verifyShopifyHmac } from "@/lib/shopify";
 import { recordCustomerOrder, type SoldItem } from "@/lib/order-sink";
+import { checkRestockAfterSale } from "@/lib/restock-check";
 
 type ShopifyLine = { title: string; quantity: number; price: string; sku?: string };
 type ShopifyOrder = {
@@ -78,6 +79,17 @@ export async function POST(req: Request) {
     shipping: fmtShippingAddr(order.shipping_address),
     items,
   });
+
+  // Phase 6 (Docs/AI-Native-Migration-Plan.md): the restock check runs
+  // in-process, not via an external workflow tool — it's one function call
+  // entirely within our own DB and Shopify integration, the same reasoning
+  // that already keeps the orchestrator calling Shopify tools directly
+  // instead of round-tripping through the MCP HTTP endpoint. `after()` — not
+  // a bare unawaited call — is what makes this safe on Vercel: a
+  // fire-and-forget promise with no `await` can be frozen or torn down the
+  // moment the response returns, since a serverless function's lifecycle
+  // isn't guaranteed to outlive its response.
+  after(() => checkRestockAfterSale(items).catch((err) => console.error("[restock-check] failed:", err)));
 
   return NextResponse.json({ ok: true });
 }

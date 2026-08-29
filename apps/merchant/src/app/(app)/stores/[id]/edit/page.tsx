@@ -10,6 +10,17 @@ import type { PreviewProduct } from "@/lib/builder-actions";
 
 export const metadata: Metadata = { title: "Edit store" };
 
+// The "Edit with EcomAI" chat calls `editStore`, which — behind
+// AI_ADVISOR_ENABLED — can invoke the LangGraph orchestrator: several
+// sequential tool calls, each a full model round trip. Measured 8-90s in
+// testing (Docs/AI-Native-Migration-Plan.md, Phase 4). A Server Action's
+// duration is governed by the route segment it's bound to, not the action
+// file — this must live here, not in builder-actions.ts. Note the platform
+// ceiling: Vercel Hobby hard-caps at 60s regardless of this value; Pro
+// allows up to 300s (800s with Fluid Compute). Raise the plan before raising
+// this number.
+export const maxDuration = 120;
+
 export default async function EditStorePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createClient();
