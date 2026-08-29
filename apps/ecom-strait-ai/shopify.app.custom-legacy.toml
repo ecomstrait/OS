@@ -1,7 +1,7 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
-client_id = "98a510664b832c62228ed7638c659e28"
-name = "EcomStrait"
+client_id = "1d521ee801696eab8c65fcebdb2136cf"
+name = "EcomStraitAI"
 application_url = "https://shopify-ten-jet.vercel.app"
 embedded = true
 
@@ -25,19 +25,13 @@ api_version = "2026-10"
   topics = [ "app/uninstalled" ]
 
   # Orders sync → EcomStrait platform. Requires Protected Customer Data access.
-  # Disabled 2026-08-29: new Public app (client_id 98a5106...) isn't approved
-  # for Protected Customer Data yet, so read_orders + this webhook block
-  # `shopify app deploy` with "Version couldn't be created." Re-enable both
-  # once Shopify approves the request in Partners > App setup > Customer data.
-  # [[webhooks.subscriptions]]
-  # uri = "https://os-merchant.vercel.app/api/shopify/webhooks"
-  # topics = [ "orders/create" ]
+  [[webhooks.subscriptions]]
+  uri = "https://os-merchant.vercel.app/api/shopify/webhooks"
+  topics = [ "orders/create" ]
 
 [access_scopes]
 # Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
-# read_orders → orders/create webhook (Protected Customer Data). Removed
-# 2026-08-29, see the webhooks.subscriptions comment above — add back once
-# Protected Customer Data access is approved for this app.
+# read_orders → orders/create webhook (Protected Customer Data).
 # read_themes/write_themes → Liquid theme upload.
 # read_locations/write_inventory → sync supplier stock levels onto variants.
 # read_publications/write_publications → publish products to the Online Store
@@ -45,7 +39,7 @@ api_version = "2026-10"
 # the storefront (publishedAt stays null).
 # read_shipping/write_shipping → create a default delivery rate at provision,
 # and read it back for the launch checklist.
-scopes = "write_products,write_metaobjects,write_metaobject_definitions,read_themes,write_themes,read_locations,write_inventory,read_publications,write_publications,read_shipping,write_shipping"
+scopes = "write_products,write_metaobjects,write_metaobject_definitions,read_orders,read_themes,write_themes,read_locations,write_inventory,read_publications,write_publications,read_shipping,write_shipping"
 
 [auth]
 # /auth/callback, not /api/auth. `/api/auth` is the old Remix template's path
