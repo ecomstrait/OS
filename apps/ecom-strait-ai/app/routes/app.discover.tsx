@@ -109,6 +109,12 @@ function money(v: number | null) {
   return v != null ? `$${v.toFixed(2)}` : "—";
 }
 
+/** Two-letter initials for a supplier avatar, e.g. "Acme Supply" -> "AS". */
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return (parts[0]?.[0] ?? "") + (parts.length > 1 ? parts[parts.length - 1][0] : "");
+}
+
 /** Per-card add button — each row submits on its own so the grid stays live. */
 function AddButton({ product }: { product: Product }) {
   const fetcher = useFetcher<{ status?: string; error?: string; alreadyListed?: boolean }>();
@@ -120,20 +126,26 @@ function AddButton({ product }: { product: Product }) {
     return <s-text tone="critical">{result.error}</s-text>;
   }
   if (status === "approved") {
-    return <s-badge tone="success">Added to store</s-badge>;
+    return <s-badge tone="success" icon="check-circle">Added to store</s-badge>;
   }
   if (status === "pending") {
-    return <s-badge tone="caution">Awaiting supplier</s-badge>;
+    return <s-badge tone="caution" icon="clock">Awaiting supplier</s-badge>;
   }
   if (status === "declined") {
-    return <s-badge tone="critical">Declined</s-badge>;
+    return <s-badge tone="critical" icon="alert-circle">Declined</s-badge>;
   }
 
   return (
     <fetcher.Form method="post">
       <input type="hidden" name="productId" value={product.id} />
-      <s-button type="submit" variant="primary" disabled={busy || product.available <= 0}>
-        {busy ? "Adding…" : product.available > 0 ? "Add to store" : "Out of stock"}
+      <s-button
+        type="submit"
+        variant="primary"
+        icon="plus-circle"
+        loading={busy}
+        disabled={product.available <= 0}
+      >
+        {product.available > 0 ? "Add to store" : "Out of stock"}
       </s-button>
     </fetcher.Form>
   );
@@ -205,38 +217,43 @@ export default function DiscoverPage() {
             value={term}
             onChange={(e: { currentTarget: { value: string } }) => setTerm(e.currentTarget.value)}
           />
-          <s-button onClick={() => apply({ q: term })}>Search</s-button>
+          <s-button icon="search" onClick={() => apply({ q: term })}>
+            Search
+          </s-button>
         </s-stack>
 
-        <s-stack direction="inline" gap="small-300">
-          <s-button
-            variant={!category && !supplier ? "primary" : "secondary"}
+        <s-divider />
+
+        <s-stack direction="inline" gap="small-300" alignItems="center">
+          <s-icon type="categories" tone="neutral" />
+          <s-clickable-chip
+            color={!category && !supplier ? "strong" : "base"}
             onClick={() => apply({ category: "", supplier: "" })}
           >
             All
-          </s-button>
+          </s-clickable-chip>
           {(data?.facets?.categories ?? []).map((c) => (
-            <s-button
+            <s-clickable-chip
               key={c}
-              variant={category === c ? "primary" : "secondary"}
+              color={category === c ? "strong" : "base"}
               onClick={() => apply({ category: c, supplier: "" })}
             >
               {c}
-            </s-button>
+            </s-clickable-chip>
           ))}
         </s-stack>
 
         {(data?.facets?.suppliers?.length ?? 0) > 0 && (
-          <s-stack direction="inline" gap="small-300">
-            <s-text tone="neutral">Suppliers:</s-text>
+          <s-stack direction="inline" gap="small-300" alignItems="center">
+            <s-icon type="store" tone="neutral" />
             {(data?.facets?.suppliers ?? []).map((s) => (
-              <s-button
+              <s-clickable-chip
                 key={s.id}
-                variant={supplier === s.id ? "primary" : "secondary"}
+                color={supplier === s.id ? "strong" : "base"}
                 onClick={() => apply({ supplier: s.id, category: "" })}
               >
                 {s.name}
-              </s-button>
+              </s-clickable-chip>
             ))}
           </s-stack>
         )}
@@ -244,21 +261,34 @@ export default function DiscoverPage() {
 
       <s-section heading={data ? `${data.total} product${data.total === 1 ? "" : "s"}` : "Products"}>
         {products.length === 0 ? (
-          <s-paragraph>No products match those filters yet.</s-paragraph>
+          <s-box padding="large" background="subdued" borderRadius="base">
+            <s-stack direction="block" gap="small-300" alignItems="center">
+              <s-icon type="search" tone="neutral" size="base" />
+              <s-paragraph>No products match those filters yet.</s-paragraph>
+            </s-stack>
+          </s-box>
         ) : (
           <s-grid gridTemplateColumns="repeat(auto-fill, minmax(220px, 1fr))" gap="base">
             {products.map((p) => (
               <s-box key={p.id} padding="base" borderWidth="base" borderRadius="base">
                 <s-stack direction="block" gap="small-300">
                   {p.image ? (
-                    <s-image src={p.image} alt={p.title} aspectRatio="1" />
+                    <s-thumbnail src={p.image} alt={p.title} size="large-100" />
                   ) : (
                     <s-box padding="large" background="subdued" borderRadius="base">
                       <s-text tone="neutral">No image</s-text>
                     </s-box>
                   )}
-                  <s-text tone="neutral">{p.supplierName}</s-text>
+                  <s-stack direction="inline" gap="small-300" alignItems="center">
+                    <s-avatar initials={initials(p.supplierName)} alt={p.supplierName} size="small" />
+                    <s-text tone="neutral">{p.supplierName}</s-text>
+                  </s-stack>
                   <s-heading>{p.title}</s-heading>
+                  {p.category && (
+                    <s-badge tone="neutral" icon="categories">
+                      {p.category}
+                    </s-badge>
+                  )}
                   <s-text>
                     {money(p.price)} retail
                     {p.margin != null ? ` · ${p.margin}% margin` : ""}

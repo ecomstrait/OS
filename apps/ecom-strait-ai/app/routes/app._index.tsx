@@ -32,11 +32,27 @@ const HOW_IT_WORKS = [
 ];
 
 /** Mirrors the services section on the marketing site. */
-const SERVICES: [string, string][] = [
-  ["AI Website Builder", "A complete, on-brand store from a single prompt — pages, collections and copy."],
-  ["Supplier network", "Verified suppliers with central catalogs and automated publishing."],
-  ["Launch specialist", "We configure payments, shipping, taxes and domains so you can sell on day one."],
-  ["Shopify development", "Custom themes and apps, wired into the EcomStrait supplier network."],
+const SERVICES: { icon: "wand" | "team" | "rocket" | "code"; title: string; body: string }[] = [
+  {
+    icon: "wand",
+    title: "AI Website Builder",
+    body: "A complete, on-brand store from a single prompt — pages, collections and copy.",
+  },
+  {
+    icon: "team",
+    title: "Supplier network",
+    body: "Verified suppliers with central catalogs and automated publishing.",
+  },
+  {
+    icon: "rocket",
+    title: "Launch specialist",
+    body: "We configure payments, shipping, taxes and domains so you can sell on day one.",
+  },
+  {
+    icon: "code",
+    title: "Shopify development",
+    body: "Custom themes and apps, wired into the EcomStrait supplier network.",
+  },
 ];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -97,40 +113,60 @@ export default function AppHome() {
         </s-section>
       ) : (
         <s-section heading={data.store?.name ?? "Your store"}>
-          <s-stack direction="inline" gap="large">
-            <s-stack direction="block" gap="small-300">
-              <s-text tone="neutral">Live products</s-text>
-              <s-heading>{counts.approved}</s-heading>
-            </s-stack>
-            <s-stack direction="block" gap="small-300">
-              <s-text tone="neutral">Awaiting supplier</s-text>
-              <s-heading>{counts.pending}</s-heading>
-            </s-stack>
-            <s-stack direction="block" gap="small-300">
-              <s-text tone="neutral">Available to add</s-text>
-              <s-heading>{data.catalogSize}</s-heading>
-            </s-stack>
-          </s-stack>
+          <s-grid gridTemplateColumns="repeat(auto-fit, minmax(150px, 1fr))" gap="base">
+            <s-box padding="base" borderWidth="base" borderRadius="base">
+              <s-stack direction="block" gap="small-300">
+                <s-badge tone="success" size="large-100" icon="check-circle">
+                  {String(counts.approved)}
+                </s-badge>
+                <s-text tone="neutral">Live products</s-text>
+              </s-stack>
+            </s-box>
+            <s-box padding="base" borderWidth="base" borderRadius="base">
+              <s-stack direction="block" gap="small-300">
+                <s-badge tone="caution" size="large-100" icon="clock">
+                  {String(counts.pending)}
+                </s-badge>
+                <s-text tone="neutral">Awaiting supplier</s-text>
+              </s-stack>
+            </s-box>
+            <s-box padding="base" borderWidth="base" borderRadius="base">
+              <s-stack direction="block" gap="small-300">
+                <s-badge tone="info" size="large-100" icon="categories">
+                  {String(data.catalogSize)}
+                </s-badge>
+                <s-text tone="neutral">Available to add</s-text>
+              </s-stack>
+            </s-box>
+          </s-grid>
 
           {counts.pending > 0 && (
-            <s-paragraph>
-              {counts.pending} product{counts.pending === 1 ? " is" : "s are"} waiting on supplier
-              approval. They appear in this shop automatically once approved.
-            </s-paragraph>
+            <s-stack direction="inline" gap="small-300" alignItems="center">
+              <s-icon type="clock" tone="caution" />
+              <s-paragraph>
+                {counts.pending} product{counts.pending === 1 ? " is" : "s are"} waiting on supplier
+                approval. They appear in this shop automatically once approved.
+              </s-paragraph>
+            </s-stack>
           )}
           {counts.declined > 0 && (
-            <s-paragraph>
-              {counts.declined} request{counts.declined === 1 ? " was" : "s were"} declined — your
-              dashboard shows the supplier&apos;s reason.
-            </s-paragraph>
+            <s-stack direction="inline" gap="small-300" alignItems="center">
+              <s-icon type="alert-circle" tone="critical" />
+              <s-paragraph>
+                {counts.declined} request{counts.declined === 1 ? " was" : "s were"} declined — your
+                dashboard shows the supplier&apos;s reason.
+              </s-paragraph>
+            </s-stack>
           )}
 
           <s-stack direction="inline" gap="base">
             <Link to="/app/discover">
-              <s-button variant="primary">Discover products</s-button>
+              <s-button variant="primary" icon="search">
+                Discover products
+              </s-button>
             </Link>
             {dashboard && (
-              <s-button href={dashboard} target="_blank">
+              <s-button href={dashboard} target="_blank" icon="external">
                 Open dashboard
               </s-button>
             )}
@@ -143,13 +179,17 @@ export default function AppHome() {
           We connect verified suppliers to store owners, and let AI do the heavy lifting in between —
           from building the store to enriching every product.
         </s-paragraph>
-        <s-unordered-list>
-          {SERVICES.map(([title, description]) => (
-            <s-list-item key={title}>
-              <s-text>{title}</s-text> — {description}
-            </s-list-item>
+        <s-grid gridTemplateColumns="repeat(auto-fit, minmax(220px, 1fr))" gap="base">
+          {SERVICES.map((service) => (
+            <s-box key={service.title} padding="base" borderWidth="base" borderRadius="base">
+              <s-stack direction="block" gap="small-300">
+                <s-icon type={service.icon} tone="info" />
+                <s-text>{service.title}</s-text>
+                <s-text tone="neutral">{service.body}</s-text>
+              </s-stack>
+            </s-box>
           ))}
-        </s-unordered-list>
+        </s-grid>
       </s-section>
 
       <s-section slot="aside" heading="How it works">
@@ -166,7 +206,7 @@ export default function AppHome() {
           ready to sell.
         </s-paragraph>
         {data?.merchantUrl && (
-          <s-button href={data.merchantUrl} target="_blank">
+          <s-button href={data.merchantUrl} target="_blank" icon="chat">
             Talk to us
           </s-button>
         )}
