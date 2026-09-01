@@ -1,34 +1,16 @@
+import "server-only";
+
 /**
  * Product enrichment for suppliers — same posture as the website's EcomAI
- * engine: Groq-hosted Llama when a key is present, otherwise a deterministic
- * template. Server-only. Output is a suggestion the supplier can edit/accept.
+ * engine: the "workhorse" role via the AI gateway (`@ecomstrait/ai`) when
+ * configured, otherwise a deterministic template. Server-only. Output is a
+ * suggestion the supplier can edit/accept.
+ *
+ * Goes through the gateway — this file never names a vendor or a model. See
+ * `Docs/AI-Native-Migration-Plan.md`.
  */
 
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-/**
- * Groq request configuration, taken entirely from the environment.
- *
- * There is deliberately no model constant to fall back on. Groq withdraws
- * models without notice, and while this file hardcoded one that had already
- * been retired, every call returned 404 and the catch below quietly served
- * the preset instead — the feature looked alive while producing canned output.
- * An unset GROQ_MODEL now short-circuits to the same preset, but says so in
- * the logs, so the failure is diagnosable rather than invisible.
- *
- * GROQ_REASONING_EFFORT is optional and left out of the request when unset:
- * reasoning models need it so hidden reasoning doesn't consume max_tokens,
- * and models that don't reason reject the field outright. Keeping it in the
- * environment means switching model never requires a code change.
- */
-function groqConfig(): { model: string; reasoning_effort?: string } | null {
-  const model = process.env.GROQ_MODEL?.trim();
-  if (!model) {
-    console.error("[groq] GROQ_MODEL is not set — falling back to the preset.");
-    return null;
-  }
-  const effort = process.env.GROQ_REASONING_EFFORT?.trim();
-  return effort ? { model, reasoning_effort: effort } : { model };
-}
+import { chat, isGatewayConfigured } from "@ecomstrait/ai";
 
 export type EnrichInput = {
   title: string;
@@ -60,10 +42,7 @@ function presetEnrichment(input: EnrichInput): Enrichment {
 }
 
 export async function enrichProduct(input: EnrichInput): Promise<Enrichment> {
-  const key = process.env.GROQ_API_KEY;
-  if (!key || !input.title.trim()) return presetEnrichment(input);
-  const cfg = groqConfig();
-  if (!cfg) return presetEnrichment(input);
+  if (!isGatewayConfigured() || !input.title.trim()) return presetEnrichment(input);
 
   const system = [
     "You are EcomAI, helping a wholesale supplier list a product.",
@@ -82,25 +61,14 @@ export async function enrichProduct(input: EnrichInput): Promise<Enrichment> {
   }`;
 
   try {
-    const res = await fetch(GROQ_URL, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...cfg,
-        temperature: 0.6,
-        max_tokens: 500,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: user },
-        ],
-      }),
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!res.ok) return presetEnrichment(input);
-    const data = await res.json();
-    const content: string | undefined = data?.choices?.[0]?.message?.content;
-    if (!content) return presetEnrichment(input);
+    const { content } = await chat(
+      "workhorse",
+      [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+      { temperature: 0.6, maxTokens: 500, responseFormatJson: true, timeoutMs: 8000 },
+    );
     const p = JSON.parse(content) as Partial<Enrichment> & { suggestedRetailPrice?: number };
     const base = presetEnrichment(input);
     const price =

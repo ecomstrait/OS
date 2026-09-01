@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { createAdminClient } from "@ecomstrait/db";
 import { verifyShopifyHmac } from "@/lib/shopify";
 import { recordCustomerOrder, type SoldItem } from "@/lib/order-sink";
+import { checkRestockAfterSale } from "@/lib/restock-check";
 
 type ShopifyLine = { title: string; quantity: number; price: string; sku?: string };
 type ShopifyOrder = {
@@ -10,7 +11,25 @@ type ShopifyOrder = {
   customer?: { first_name?: string; last_name?: string; email?: string };
   email?: string;
   shipping_address?: Record<string, string | null>;
+  financial_status?: string;
+  payment_gateway_names?: string[];
 };
+
+/**
+ * Shopify has no explicit "is this COD" flag. A merchant-enabled Cash on
+ * Delivery method shows up as a gateway name — that's the decisive signal,
+ * matched loosely ("cash on delivery" / "cod") since gateway names aren't a
+ * fixed enum and different COD apps/plugins name theirs differently.
+ * `financial_status` alone is deliberately NOT used as a trigger: it also
+ * reads `pending` for other reasons (manual payment terms, bank transfer),
+ * so treating "pending" as "COD" would misroute a merchant's wallet debit
+ * onto the supplier's for an order that was never COD.
+ */
+function derivePaymentType(order: ShopifyOrder): "prepaid" | "cod" {
+  const gateways = (order.payment_gateway_names ?? []).map((g) => g.toLowerCase());
+  const looksLikeCod = gateways.some((g) => g.includes("cash on delivery") || g.includes("cod"));
+  return looksLikeCod ? "cod" : "prepaid";
+}
 
 function fmtShippingAddr(a?: Record<string, string | null>): string | null {
   if (!a) return null;
@@ -73,11 +92,23 @@ export async function POST(req: Request) {
   await recordCustomerOrder(admin, {
     storeId: store.id,
     externalId: `shopify:${order.id}`,
+    paymentType: derivePaymentType(order),
     customerName: name,
     customerEmail: order.customer?.email ?? order.email ?? null,
     shipping: fmtShippingAddr(order.shipping_address),
     items,
   });
+
+  // Phase 6 (Docs/AI-Native-Migration-Plan.md): the restock check runs
+  // in-process, not via an external workflow tool — it's one function call
+  // entirely within our own DB and Shopify integration, the same reasoning
+  // that already keeps the orchestrator calling Shopify tools directly
+  // instead of round-tripping through the MCP HTTP endpoint. `after()` — not
+  // a bare unawaited call — is what makes this safe on Vercel: a
+  // fire-and-forget promise with no `await` can be frozen or torn down the
+  // moment the response returns, since a serverless function's lifecycle
+  // isn't guaranteed to outlive its response.
+  after(() => checkRestockAfterSale(items).catch((err) => console.error("[restock-check] failed:", err)));
 
   return NextResponse.json({ ok: true });
 }

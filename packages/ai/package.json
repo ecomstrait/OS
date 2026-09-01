@@ -1,0 +1,29 @@
+{
+  "name": "@ecomstrait/ai",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./gateway": "./src/gateway.ts",
+    "./roles": "./src/roles.ts",
+    "./types": "./src/types.ts",
+    "./rag": "./src/rag/index.ts",
+    "./mcp": "./src/mcp/index.ts",
+    "./agents": "./src/agents/index.ts",
+    "./guardrails": "./src/guardrails/index.ts"
+  },
+  "dependencies": {
+    "@ecomstrait/db": "workspace:*",
+    "@langchain/core": "^1.2.9",
+    "@langchain/langgraph": "^1.4.13",
+    "@langchain/openai": "^1.5.10",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "pg": "^8.23.0",
+    "server-only": "^0.0.1",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.23.1"
+  }
+}

@@ -1,14 +1,21 @@
+import "server-only";
+
 /**
  * EcomAI engine — turns a business idea into a structured, LABELED "build plan".
  *
  * One facade, two implementations behind it:
- *   - `presetPlan`  — deterministic, grounded in the niche KB. Always on.
- *   - `groqPlan`    — Groq-hosted Llama (dynamic). Falls back to preset on any
- *                     error / missing key / timeout.
+ *   - `presetPlan` — deterministic, grounded in the niche KB. Always on.
+ *   - `aiPlan`     — the "workhorse" role via the AI gateway (`@ecomstrait/ai`).
+ *                    Falls back to preset on any error / missing config / timeout.
+ *
+ * The gateway means this file never names a vendor or a model — see
+ * `Docs/AI-Native-Migration-Plan.md`. Swapping providers is a config change
+ * on the gateway, not a code change here.
  *
  * Output is illustrative (a simulated preview) — never presented as live data.
  */
 
+import { chat, isGatewayConfigured } from "@ecomstrait/ai";
 import { matchNiche, type Niche } from "@/content/niches";
 
 export type PlanInput = { idea: string; country?: string; budget?: string };
@@ -97,34 +104,8 @@ export function presetPlan(input: PlanInput): BusinessPlan {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Groq / Llama engine                                                */
+/*  AI engine (workhorse role, via the gateway)                        */
 /* ------------------------------------------------------------------ */
-
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-/**
- * Groq request configuration, taken entirely from the environment.
- *
- * There is deliberately no model constant to fall back on. Groq withdraws
- * models without notice, and while this file hardcoded one that had already
- * been retired, every call returned 404 and the catch below quietly served
- * the preset instead — the feature looked alive while producing canned output.
- * An unset GROQ_MODEL now short-circuits to the same preset, but says so in
- * the logs, so the failure is diagnosable rather than invisible.
- *
- * GROQ_REASONING_EFFORT is optional and left out of the request when unset:
- * reasoning models need it so hidden reasoning doesn't consume max_tokens,
- * and models that don't reason reject the field outright. Keeping it in the
- * environment means switching model never requires a code change.
- */
-function groqConfig(): { model: string; reasoning_effort?: string } | null {
-  const model = process.env.GROQ_MODEL?.trim();
-  if (!model) {
-    console.error("[groq] GROQ_MODEL is not set — falling back to the preset.");
-    return null;
-  }
-  const effort = process.env.GROQ_REASONING_EFFORT?.trim();
-  return effort ? { model, reasoning_effort: effort } : { model };
-}
 
 function systemPrompt(n: Niche): string {
   return [
@@ -163,41 +144,24 @@ function systemPrompt(n: Niche): string {
   ].join("\n");
 }
 
-async function groqPlan(input: PlanInput): Promise<BusinessPlan | null> {
-  const key = process.env.GROQ_API_KEY;
-  if (!key) return null;
-  const cfg = groqConfig();
-  if (!cfg) return null;
+async function aiPlan(input: PlanInput): Promise<BusinessPlan | null> {
+  if (!isGatewayConfigured()) return null;
   const n = matchNiche(input.idea);
 
   try {
-    const res = await fetch(GROQ_URL, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...cfg,
-        temperature: 0.7,
-        max_tokens: 700,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: systemPrompt(n) },
-          {
-            role: "user",
-            content: `I want to sell: ${input.idea}${
-              input.country ? ` · country: ${input.country}` : ""
-            }${input.budget ? ` · budget: ${input.budget}` : ""}`,
-          },
-        ],
-      }),
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!res.ok) {
-      console.error("[groq]", res.status, await res.text().catch(() => ""));
-      return null;
-    }
-    const data = await res.json();
-    const content: string | undefined = data?.choices?.[0]?.message?.content;
-    if (!content) return null;
+    const { content } = await chat(
+      "workhorse",
+      [
+        { role: "system", content: systemPrompt(n) },
+        {
+          role: "user",
+          content: `I want to sell: ${input.idea}${
+            input.country ? ` · country: ${input.country}` : ""
+          }${input.budget ? ` · budget: ${input.budget}` : ""}`,
+        },
+      ],
+      { temperature: 0.7, maxTokens: 700, responseFormatJson: true, timeoutMs: 8000 },
+    );
     const p = JSON.parse(content) as Partial<BusinessPlan>;
 
     // Coerce into a full, safe BusinessPlan (fall back to preset per-field).
@@ -217,7 +181,7 @@ async function groqPlan(input: PlanInput): Promise<BusinessPlan | null> {
       source: "groq",
     };
   } catch (err) {
-    console.error("[groq] threw:", err);
+    console.error("[ai] chat threw:", err);
     return null;
   }
 }
@@ -227,6 +191,6 @@ async function groqPlan(input: PlanInput): Promise<BusinessPlan | null> {
 /* ------------------------------------------------------------------ */
 
 export async function generateBusinessPlan(input: PlanInput): Promise<BusinessPlan> {
-  const viaGroq = await groqPlan(input);
-  return viaGroq ?? presetPlan(input);
+  const viaAi = await aiPlan(input);
+  return viaAi ?? presetPlan(input);
 }

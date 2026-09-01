@@ -1,48 +1,29 @@
+import "server-only";
+
 /**
  * "Ask EcomAI" engine — a conversational FAQ assistant.
  *
  * Two implementations behind one facade:
  *   - `presetAnswer` — deterministic best-match over the FAQ knowledge base.
  *                      Always on, instant, zero-dependency.
- *   - `groqAnswer`   — Groq-hosted Llama for natural conversation, grounded in
- *                      the same KB. Falls back to preset on any error/timeout.
+ *   - `aiAnswer`     — the "workhorse" role via the AI gateway
+ *                      (`@ecomstrait/ai`), grounded in the same KB. Falls
+ *                      back to preset on any error/timeout/missing config.
+ *
+ * The gateway means this file never names a vendor or a model — see
+ * `Docs/AI-Native-Migration-Plan.md`.
  *
  * Answers are on-brand and honest — features roll out in beta, numbers are
  * example ranges, never presented as live data.
  */
 
+import { chat, isGatewayConfigured } from "@ecomstrait/ai";
 import { homeFaqs } from "@/content/faqs";
 import { siteConfig } from "@/lib/site";
 
 export type ChatRole = "user" | "assistant";
 export type ChatMessage = { role: ChatRole; content: string };
 export type AskResult = { answer: string; source: "preset" | "groq" };
-
-const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
-/**
- * Groq request configuration, taken entirely from the environment.
- *
- * There is deliberately no model constant to fall back on. Groq withdraws
- * models without notice, and while this file hardcoded one that had already
- * been retired, every call returned 404 and the catch below quietly served
- * the preset instead — the feature looked alive while producing canned output.
- * An unset GROQ_MODEL now short-circuits to the same preset, but says so in
- * the logs, so the failure is diagnosable rather than invisible.
- *
- * GROQ_REASONING_EFFORT is optional and left out of the request when unset:
- * reasoning models need it so hidden reasoning doesn't consume max_tokens,
- * and models that don't reason reject the field outright. Keeping it in the
- * environment means switching model never requires a code change.
- */
-function groqConfig(): { model: string; reasoning_effort?: string } | null {
-  const model = process.env.GROQ_MODEL?.trim();
-  if (!model) {
-    console.error("[groq] GROQ_MODEL is not set — falling back to the preset.");
-    return null;
-  }
-  const effort = process.env.GROQ_REASONING_EFFORT?.trim();
-  return effort ? { model, reasoning_effort: effort } : { model };
-}
 
 /** Extra brand facts the model can lean on beyond the FAQ list. */
 const BRAND_FACTS = [
@@ -94,7 +75,7 @@ export function presetAnswer(question: string): AskResult {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Groq / Llama engine                                                */
+/*  AI engine (workhorse role, via the gateway)                        */
 /* ------------------------------------------------------------------ */
 
 function systemPrompt(): string {
@@ -116,11 +97,8 @@ function systemPrompt(): string {
   ].join("\n");
 }
 
-async function groqAnswer(messages: ChatMessage[]): Promise<AskResult | null> {
-  const key = process.env.GROQ_API_KEY;
-  if (!key) return null;
-  const cfg = groqConfig();
-  if (!cfg) return null;
+async function aiAnswer(messages: ChatMessage[]): Promise<AskResult | null> {
+  if (!isGatewayConfigured()) return null;
 
   // Keep the last few turns for context; cap length.
   const history = messages
@@ -131,27 +109,15 @@ async function groqAnswer(messages: ChatMessage[]): Promise<AskResult | null> {
     }));
 
   try {
-    const res = await fetch(GROQ_URL, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...cfg,
-        temperature: 0.5,
-        max_tokens: 220,
-        messages: [{ role: "system", content: systemPrompt() }, ...history],
-      }),
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!res.ok) {
-      console.error("[ask/groq]", res.status, await res.text().catch(() => ""));
-      return null;
-    }
-    const data = await res.json();
-    const content: string | undefined = data?.choices?.[0]?.message?.content;
-    if (!content || !content.trim()) return null;
+    const { content } = await chat(
+      "workhorse",
+      [{ role: "system", content: systemPrompt() }, ...history],
+      { temperature: 0.5, maxTokens: 220, timeoutMs: 8000 },
+    );
+    if (!content.trim()) return null;
     return { answer: content.trim(), source: "groq" };
   } catch (err) {
-    console.error("[ask/groq] threw:", err);
+    console.error("[ask/ai] chat threw:", err);
     return null;
   }
 }
@@ -162,15 +128,6 @@ async function groqAnswer(messages: ChatMessage[]): Promise<AskResult | null> {
 
 export async function askEcomAI(messages: ChatMessage[]): Promise<AskResult> {
   const lastUser = [...messages].reverse().find((m) => m.role === "user");
-  const viaGroq = await groqAnswer(messages);
-  return viaGroq ?? presetAnswer(lastUser?.content ?? "");
+  const viaAi = await aiAnswer(messages);
+  return viaAi ?? presetAnswer(lastUser?.content ?? "");
 }
-
-/** Starter prompts surfaced as chips in the UI. */
-export const ASK_SUGGESTIONS = [
-  "How does EcomAI build my store?",
-  "Do I need inventory or suppliers?",
-  "Can I use my own domain?",
-  "How much does it cost?",
-  "How long until I can launch?",
-];

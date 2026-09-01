@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { createAdminClient } from "@ecomstrait/db";
 import { getStripe, planForPrice, mapStripeStatus, periodEndIso } from "@/lib/stripe";
+import { creditWallet, releaseHeldOrders } from "@ecomstrait/db/wallet";
 
 /**
  * Optional — the Billing page reconciles from Stripe on load, so a webhook isn't
@@ -40,6 +41,17 @@ export async function POST(req: Request) {
   switch (event.type) {
     case "checkout.session.completed": {
       const s = event.data.object as Stripe.Checkout.Session;
+      if (s.metadata?.purpose === "wallet_topup" && s.metadata.user_id && s.amount_total) {
+        const amount = s.amount_total / 100;
+        await creditWallet(admin, amount, {
+          accountType: "merchant",
+          accountId: s.metadata.user_id,
+          kind: "topup",
+          note: `Stripe checkout ${s.id}`,
+        });
+        await releaseHeldOrders(admin, "merchant", s.metadata.user_id);
+        break;
+      }
       if (s.subscription && s.customer) await apply(String(s.subscription), String(s.customer));
       break;
     }

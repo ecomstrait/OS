@@ -11,6 +11,7 @@ import { resyncShopifyTheme } from "@/lib/shopify-actions";
 import { generateStorePlan, applyMerchantRequest, themeForStyle, type StorePlan } from "@/lib/ecomai";
 import { normalizePlan } from "@/lib/store-plan";
 import { purgeStoreMedia } from "@/lib/draft-sweep";
+import { askBusinessAdvisor } from "@/lib/agents/business-advisor";
 
 export type BuilderAnswers = {
   niche: string;
@@ -270,7 +271,21 @@ export async function editStore(storeId: string, instruction: string): Promise<E
   // A question or a request we can't act on must not write to the store, nor
   // burn a version-history slot describing an edit that never happened.
   if (!ai.changed.length) {
-    return { plan: current, synced: "live", note: ai.reply };
+    // Phase 4 (Docs/AI-Native-Migration-Plan.md): a question — never an edit,
+    // so still nothing written above — gets a RAG+tool-grounded answer from
+    // the new orchestrator instead of the inline model reply, behind a flag.
+    // Falls back to the inline reply on any failure; a broken advisor call
+    // must never turn "I don't know" into a dead end.
+    let reply = ai.reply;
+    if (process.env.AI_ADVISOR_ENABLED === "true") {
+      try {
+        const advisor = await askBusinessAdvisor({ tenantId: user.id, storeId, message: instruction });
+        reply = advisor.reply;
+      } catch (err) {
+        console.error("[ai] business advisor failed, falling back to the inline reply:", err);
+      }
+    }
+    return { plan: current, synced: "live", note: reply };
   }
 
   // Capture the pre-edit look so this change can be undone.

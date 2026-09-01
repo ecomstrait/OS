@@ -28,6 +28,14 @@ export async function setOrderStatus(
     .eq("supplier_id", ctx.supplierId);
   if (error) return { error: error.message };
 
+  // Docs/Credits-Settlement-Plan.md: a COD order's margin+fee was already
+  // deducted from this supplier's wallet up front. If it never delivers,
+  // reverse that — a no-op for anything not an already-deducted COD order,
+  // so this is safe to call on every cancellation unconditionally.
+  if (status === "cancelled") {
+    await ctx.supabase.rpc("reverse_cod_deduction", { p_order_id: orderId });
+  }
+
   if (order.store_owner_email) {
     await sendStoreOwnerEmail({
       to: order.store_owner_email,

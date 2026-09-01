@@ -13,7 +13,10 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1101.0",
+    "@ecomstrait/ai": "workspace:*",
     "@ecomstrait/auth": "workspace:*",
+    "@langchain/core": "^1.2.9",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@ecomstrait/db": "workspace:*",
     "@ecomstrait/ui": "workspace:*",
     "@supabase/ssr": "^0.7.0",
@@ -24,7 +27,8 @@
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "stripe": "^18.5.0",
-    "tailwind-merge": "^3.6.0"
+    "tailwind-merge": "^3.6.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@ecomstrait/config": "workspace:*",
