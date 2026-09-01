@@ -9,6 +9,21 @@
         <a href="{{ link.url }}">{{ link.title }}</a>
       {%- endfor -%}
     </nav>
+    {%- comment -%}
+      Set only by EcomStrait (own_platform and Shopify-liquid stores both get
+      these — see settingsFromPlan). Absent entirely for a hand-built theme
+      or a store that predates this, so the section just never renders.
+    {%- endcomment -%}
+    {%- if settings.ecomstrait_store_id != blank and settings.ecomstrait_api_origin != blank -%}
+      <div class="newsletter" data-newsletter data-store-id="{{ settings.ecomstrait_store_id }}" data-api-origin="{{ settings.ecomstrait_api_origin }}">
+        <p class="newsletter__label">Stay in the loop</p>
+        <form class="newsletter__form" data-newsletter-form>
+          <input type="email" name="email" required placeholder="Your email" aria-label="Email address" class="newsletter__input">
+          <button type="submit" class="btn btn-primary newsletter__submit">Join</button>
+        </form>
+        <p class="newsletter__message" data-newsletter-message hidden></p>
+      </div>
+    {%- endif -%}
   </div>
   <div class="container site-footer__legal muted">
     &copy; {{ 'now' | date: '%Y' }} {{ shop.name }}. All rights reserved.

@@ -32,6 +32,17 @@
               {% render 'product-card', product: product %}
             {%- endfor -%}
           </div>
+          <script type="application/ld+json">
+            {
+              "@context": "https://schema.org",
+              "@type": "ItemList",
+              "itemListElement": [
+                {%- for product in collection.products -%}
+                  { "@type": "ListItem", "position": {{ forloop.index }}, "name": {{ product.title | json }}, "url": {{ shop.url | append: product.url | json }} }{% unless forloop.last %},{% endunless %}
+                {%- endfor -%}
+              ]
+            }
+          </script>
         {%- else -%}
           {%- comment -%}
             Distinguish "nothing here" from "your filters excluded everything" —

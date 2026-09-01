@@ -20,6 +20,24 @@
       <meta name="description" content="{{ page_description | escape }}">
     {%- endif -%}
 
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        "name": {{ settings.store_name | default: shop.name | json }},
+        "url": {{ shop.url | json }}{% if settings.logo %},
+        "logo": {{ settings.logo | image_url: width: 512 | json }}{% endif %}
+      }
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": {{ settings.store_name | default: shop.name | json }},
+        "url": {{ shop.url | json }}
+      }
+    </script>
+
     {{ content_for_header }}
 
     {%- style -%}

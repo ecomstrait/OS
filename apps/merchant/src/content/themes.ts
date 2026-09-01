@@ -7,6 +7,14 @@ export type StoreTheme = {
   gradient: string;
 };
 
+/**
+ * The one premium theme currently on offer — the gallery (browsing all six)
+ * is hidden for the time being, but every other theme's code stays intact
+ * for when it reopens. Anywhere that used to fall back to `storeThemes[0].id`
+ * (Aurora, by array order) should use this instead.
+ */
+export const DEFAULT_THEME_ID = "noir";
+
 export const storeThemes: StoreTheme[] = [
   { id: "aurora", name: "Aurora", tagline: "Modern & minimal", style: "Clean, spacious, conversion-first", gradient: "linear-gradient(135deg,#10b981,#3b82f6)" },
   { id: "noir", name: "Noir", tagline: "Luxury & bold", style: "Dark, premium, high-contrast", gradient: "linear-gradient(135deg,#0f172a,#334155)" },

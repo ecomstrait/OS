@@ -1,5 +1,9 @@
 import { shopifyGraphql, SHOPIFY_API_VERSION } from "@/lib/shopify";
 import { themeTokens } from "@/lib/theme-tokens";
+import { siteUrl } from "@/lib/site-url";
+
+/** How many hero slides Noir's carousel section supports — matches the numbered settings below. */
+const MAX_HERO_SLIDES = 4;
 
 /** Theme settings we override per store (written to config/settings_data.json). */
 export type ThemeSettings = Record<string, string | number>;
@@ -205,17 +209,31 @@ export function settingsFromPlan(
   storeName?: string | null,
   /** Which theme these settings are for; drives the non-brand defaults. */
   themeId?: string | null,
+  /** Our own row id for this store — only Noir reads this (newsletter signup posts back to our API by id). */
+  storeId?: string | null,
 ): ThemeSettings {
   const colors = plan?.brandColors ?? [];
   const brand = (storeName ?? plan?.storeName ?? "").trim();
   const t = themeTokens(themeId);
+  const heroMedia = plan?.heroMedia ?? [];
   // Media lives on our CDN, so it can't go through Shopify's image_picker —
   // the themes read these URL settings instead and fall back to the picker.
-  // Liquid themes don't render a carousel (yet), so only the first hero
-  // image and first hero video export — same single-hero behavior as before
-  // the custom storefront grew a carousel.
-  const heroImage = plan?.heroMedia?.find((m) => m.kind === "image")?.url ?? "";
-  const heroVideo = plan?.heroMedia?.find((m) => m.kind === "video")?.url ?? "";
+  // Kept for every theme except Noir, which reads the numbered slides below
+  // instead — a theme that never grows carousel support just keeps using
+  // its first image/video exactly as before.
+  const heroImage = heroMedia.find((m) => m.kind === "image")?.url ?? "";
+  const heroVideo = heroMedia.find((m) => m.kind === "video")?.url ?? "";
+
+  // Up to MAX_HERO_SLIDES numbered slots, for Noir's hero carousel — a fixed
+  // set of settings rather than a JSON array, because stock Liquid has no
+  // filter to parse JSON back out of a text setting. Themes that don't read
+  // these (everything but Noir) simply never look at them.
+  const heroSlideSettings: ThemeSettings = {};
+  heroMedia.slice(0, MAX_HERO_SLIDES).forEach((m, i) => {
+    heroSlideSettings[`hero_media_${i + 1}_url`] = m.url;
+    heroSlideSettings[`hero_media_${i + 1}_kind`] = m.kind;
+  });
+
   return {
     // Without these the header fell back to `shop.name` (the dev-store handle)
     // and rendered the logo with an invalid `width:px`.
@@ -235,8 +253,12 @@ export function settingsFromPlan(
     announcement: plan?.announcement ?? "",
     hero_image_url: heroImage,
     hero_video_url: heroVideo,
+    ...heroSlideSettings,
     about_heading: plan?.about ? "About us" : "",
     about_body: plan?.about ?? "",
     about_image_url: plan?.aboutMedia?.kind === "image" ? plan.aboutMedia.url : "",
+    // Newsletter signup (Noir only) posts to our own API from the merchant's
+    // Shopify domain — it needs both which store this is and where we live.
+    ...(storeId ? { ecomstrait_store_id: storeId, ecomstrait_api_origin: siteUrl() } : {}),
   };
 }

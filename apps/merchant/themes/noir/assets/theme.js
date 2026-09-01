@@ -160,12 +160,101 @@
     if (apply) apply.remove();
   }
 
+  /* --------------------------------------------------------- hero carousel --
+   * Every hero already renders at least one `.hero__slide` (see hero.liquid),
+   * even the single-image/video case — this only does anything once there's
+   * more than one, so a merchant with just one slide gets identical behaviour
+   * to before this existed.
+   */
+  function initHeroCarousel() {
+    var hero = $("[data-hero]");
+    if (!hero) return;
+    var slides = $$("[data-hero-slide]", hero);
+    if (slides.length < 2) return;
+    var dots = $$("[data-hero-dot]", hero);
+    var active = 0;
+    var timer = null;
+
+    function show(i) {
+      active = i;
+      slides.forEach(function (s, idx) { s.classList.toggle("is-active", idx === i); });
+      dots.forEach(function (d, idx) { d.classList.toggle("is-active", idx === i); });
+    }
+
+    dots.forEach(function (d, idx) {
+      on(d, "click", function () {
+        show(idx);
+        if (timer) { clearInterval(timer); timer = null; }
+      });
+    });
+
+    if (!window.matchMedia || !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      timer = setInterval(function () { show((active + 1) % slides.length); }, 5500);
+    }
+  }
+
+  /* ----------------------------------------------------------- newsletter --
+   * Posts straight to the merchant app's own API (see settingsFromPlan /
+   * newsletter route) — the store's Shopify domain is a different origin
+   * from where that API lives, hence fetch() rather than a same-site form.
+   */
+  function initNewsletter() {
+    var wrap = $("[data-newsletter]");
+    if (!wrap) return;
+    var form = $("[data-newsletter-form]", wrap);
+    var message = $("[data-newsletter-message]", wrap);
+    var storeId = wrap.dataset.storeId;
+    var apiOrigin = wrap.dataset.apiOrigin;
+    if (!form || !storeId || !apiOrigin) return;
+
+    function setMessage(text, isError) {
+      if (!message) return;
+      message.hidden = false;
+      message.textContent = text;
+      message.classList.toggle("is-error", Boolean(isError));
+    }
+
+    on(form, "submit", function (e) {
+      e.preventDefault();
+      var email = form.email ? form.email.value : "";
+      var button = $("button", form);
+      if (button) button.disabled = true;
+
+      fetch(apiOrigin + "/api/storefront/" + storeId + "/newsletter", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email }),
+      })
+        .then(function (res) {
+          return res.json().catch(function () { return {}; }).then(function (body) {
+            return { ok: res.ok, body: body };
+          });
+        })
+        .then(function (result) {
+          if (result.ok) {
+            setMessage("You're on the list.", false);
+            form.reset();
+          } else {
+            setMessage((result.body && result.body.error) || "That didn't go through.", true);
+          }
+        })
+        .catch(function () {
+          setMessage("That didn't go through — try again in a moment.", true);
+        })
+        .finally(function () {
+          if (button) button.disabled = false;
+        });
+    });
+  }
+
   function init() {
     initNav();
     initVariants();
     initGallery();
     initQuantity();
     initFilters();
+    initHeroCarousel();
+    initNewsletter();
   }
 
   if (document.readyState === "loading") {

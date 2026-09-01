@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Search,
-  LayoutGrid,
+  // LayoutGrid, // only used by the hidden Gallery nav entry below
   Sparkles,
   PackageOpen,
   Store,
@@ -26,7 +26,9 @@ import { signOut } from "@/lib/actions";
 const NAV = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
   { href: "/find-suppliers", label: "Find Suppliers", icon: Search },
-  { href: "/gallery", label: "Store Gallery", icon: LayoutGrid },
+  // Gallery hidden while we offer a single premium theme — restore this row
+  // when there's more than one to browse. See app/(app)/gallery/page.tsx.
+  // { href: "/gallery", label: "Store Gallery", icon: LayoutGrid },
   { href: "/builder", label: "Store Builder", icon: Sparkles },
   { href: "/inventory", label: "Selected Inventory", icon: PackageOpen },
   { href: "/stores", label: "Stores", icon: Store },

@@ -5,7 +5,11 @@
     {%- else -%}
       <div class="product-card__placeholder"></div>
     {%- endif -%}
-    {%- unless product.available -%}<span class="badge badge--soldout">Sold out</span>{%- endunless -%}
+    {%- if product.available and product.compare_at_price > product.price -%}
+      <span class="badge badge--sale">Sale</span>
+    {%- elsif product.available == false -%}
+      <span class="badge badge--soldout">Sold out</span>
+    {%- endif -%}
   </div>
   <div class="product-card__body">
     <span class="product-card__title">{{ product.title }}</span>

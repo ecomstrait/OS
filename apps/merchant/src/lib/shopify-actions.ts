@@ -230,7 +230,7 @@ export async function provisionShopifyStore(storeId: string): Promise<{ error?: 
         // The merchant's content blocks are rendered into the package here —
         // they can't be theme settings, because Liquid can't read a JSON array.
         files: themeFilesWithContent(liquid.files, plan),
-        settings: settingsFromPlan(plan, store.name, store.theme),
+        settings: settingsFromPlan(plan, store.name, store.theme, store.id),
         logo: logoAssetFrom(store.logo_url),
       });
     } catch (e) {
@@ -323,7 +323,7 @@ export async function resyncShopifyTheme(storeId: string): Promise<{ error?: str
     shopRow.shop_domain,
     shopRow.access_token,
     shopRow.theme_id,
-    settingsFromPlan(plan, store.name, store.theme),
+    settingsFromPlan(plan, store.name, store.theme, store.id),
     {
       logo: logoAssetFrom(store.logo_url),
       files: { [CUSTOM_CONTENT_FILE]: customContentSection(plan) },

@@ -121,6 +121,27 @@
         ]
       </script>
     </div>
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "Product",
+        "name": {{ product.title | json }}
+        {%- if product.description != blank %},
+        "description": {{ product.description | strip_html | json }}{% endif %}
+        {%- if product.featured_image %},
+        "image": [{{ product.featured_image | image_url: width: 1200 | json }}]{% endif %}
+        {%- if product.vendor != blank %},
+        "brand": { "@type": "Brand", "name": {{ product.vendor | json }} }{% endif %},
+        "offers": {
+          "@type": "Offer",
+          "url": {{ shop.url | append: product.url | json }},
+          "priceCurrency": {{ shop.currency | json }},
+          "price": {{ current.price | divided_by: 100.0 }},
+          "availability": "https://schema.org/{% if current.available %}InStock{% else %}OutOfStock{% endif %}"
+        }
+      }
+    </script>
   </div>
 </section>
 

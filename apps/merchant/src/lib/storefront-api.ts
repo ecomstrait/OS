@@ -95,6 +95,32 @@ export async function resolveStore(storeId: string): Promise<StoreSummary | null
   };
 }
 
+/**
+ * Looser than `resolveStore`: also accepts a provisioned Shopify-theme
+ * store, for the one thing both selling paths share — newsletter capture.
+ * Everything else public (products, cart, checkout) stays own_platform-only,
+ * since a Shopify store's catalog and checkout are Shopify's, not ours.
+ *
+ * A Shopify-theme store's `status` never reaches "live" through the normal
+ * launch flow (it tracks the builder draft, not the Shopify publish state —
+ * see createStore in builder-actions.ts), so `isPublicStatus` isn't the
+ * right gate here; "has it actually been provisioned" is.
+ */
+export async function resolveStoreForNewsletter(storeId: string): Promise<{ id: string; name: string } | null> {
+  const db = admin();
+  if (!db) return null;
+  const { data } = await db
+    .from("stores")
+    .select("id, name, type, status, shopify_store_id")
+    .eq("id", storeId)
+    .maybeSingle();
+  if (!data) return null;
+  const isPublicOwn = data.type === "own_platform" && isPublicStatus(data.status);
+  const isProvisionedShopify = data.type === "shopify_liquid_theme" && Boolean(data.shopify_store_id);
+  if (!isPublicOwn && !isProvisionedShopify) return null;
+  return { id: data.id, name: data.name ?? "Store" };
+}
+
 type ListingRow = { product_id: string; price: number | null };
 
 /** Approved listings for a store, keyed by product id. */

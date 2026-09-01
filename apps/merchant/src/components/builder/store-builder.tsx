@@ -7,7 +7,7 @@ import { Sparkles, Loader2, Send, Store, Globe, ShoppingBag, ImageOff, ImagePlus
 import { cn } from "@ecomstrait/ui";
 import { createClient } from "@ecomstrait/auth/client";
 import type { StoreType } from "@ecomstrait/db";
-import { storeThemes } from "@/content/themes";
+import { DEFAULT_THEME_ID } from "@/content/themes";
 import { ContentEditor } from "@/components/builder/content-editor";
 import {
   converseBuilderTurn,
@@ -188,7 +188,7 @@ export function StoreBuilder({
   const [name, setName] = useState(existing?.name ?? resumed?.name ?? "");
   const [type, setType] = useState<StoreType>(existing?.type ?? resumed?.type ?? "own_platform");
   const [theme, setTheme] = useState(
-    existing?.theme || resumed?.theme || context?.presetTheme || initialTheme || storeThemes[0].id,
+    existing?.theme || resumed?.theme || context?.presetTheme || initialTheme || DEFAULT_THEME_ID,
   );
   const [logoUrl, setLogoUrl] = useState<string | null>(
     existing?.logoUrl ?? resumed?.logoUrl ?? null,

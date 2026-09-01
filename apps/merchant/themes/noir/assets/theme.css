@@ -65,6 +65,7 @@ h1,h2,h3{font-family:var(--font-heading);line-height:1.15;margin:0;font-weight:4
 .product-card__price{font-size:.88rem;font-weight:600;color:var(--brand);letter-spacing:.02em}
 .badge{position:absolute;top:14px;left:14px;padding:5px 11px;font-size:.62rem;font-weight:600;text-transform:uppercase;letter-spacing:.16em}
 .badge--soldout{background:var(--bg);color:var(--ink);border:1px solid var(--line)}
+.badge--sale{background:var(--brand);color:#0B0B0C}
 .price--sale .price__was{color:var(--muted);margin-right:8px;font-weight:400}
 
 /* Product page */
@@ -120,14 +121,29 @@ h1,h2,h3{font-family:var(--font-heading);line-height:1.15;margin:0;font-weight:4
 .site-footer__nav a:hover{color:var(--ink)}
 .site-footer__legal{margin-top:40px;padding-top:24px;border-top:1px solid var(--line);font-size:.74rem;letter-spacing:.06em}
 
+/* Newsletter — footer signup */
+.newsletter{display:flex;flex-direction:column;align-items:flex-start;gap:12px;min-width:240px}
+.newsletter__label{margin:0;font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.16em;color:var(--muted)}
+.newsletter__form{display:flex;gap:10px;width:100%;max-width:320px}
+.newsletter__input{flex:1;min-width:0;padding:.75rem .9rem;background:var(--bg);border:1px solid var(--line);border-radius:var(--radius);color:var(--ink);font-family:var(--font-body);font-size:.85rem}
+.newsletter__input:focus-visible{outline:1px solid var(--brand);outline-offset:1px}
+.newsletter__submit{padding:.75rem 1.3rem}
+.newsletter__message{margin:0;font-size:.78rem;color:var(--brand)}
+.newsletter__message.is-error{color:#e08a8a}
+
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
 /* --- EcomStrait content blocks --- */
 .announcement-bar{background:var(--brand);color:#fff;text-align:center;font-size:.82rem;font-weight:600;padding:.55rem 1rem}
 .hero{position:relative;overflow:hidden}
+.hero__slide{position:absolute;inset:0;background-size:cover;background-position:center;opacity:0;transition:opacity 1.1s ease;z-index:0}
+.hero__slide.is-active{opacity:1}
 .hero__video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}
 .hero__scrim{position:absolute;inset:0;background:rgba(0,0,0,.45);z-index:1}
 .hero__inner{position:relative;z-index:2}
+.hero__dots{position:absolute;left:0;right:0;bottom:22px;z-index:3;display:flex;justify-content:center;gap:8px}
+.hero__dot{width:7px;height:7px;padding:0;border:0;border-radius:50%;background:rgba(255,255,255,.5);cursor:pointer;transition:background .2s ease,width .2s ease}
+.hero__dot.is-active{background:#fff;width:20px;border-radius:4px}
 .about-section{padding:3rem 0}
 .about-section__inner{display:grid;gap:2rem;align-items:center}
 @media(min-width:760px){.about-section__inner{grid-template-columns:1fr 1fr}}
@@ -338,3 +354,23 @@ h1,h2,h3{font-family:var(--font-heading);line-height:1.15;margin:0;font-weight:4
   .link-more{white-space:normal}
   .breadcrumb{font-size:.68rem}
 }
+
+/* Blog + article — Shopify's native content, same editorial treatment as
+   everything else in the theme. */
+.blog-list{display:flex;flex-direction:column;gap:48px}
+.blog-card{display:block}
+.blog-card--media{display:grid;grid-template-columns:220px 1fr;gap:28px;align-items:start}
+@media (max-width:640px){.blog-card--media{grid-template-columns:1fr;gap:16px}}
+.blog-card__media img{aspect-ratio:4/3}
+.blog-card__date{margin:0;font-size:.72rem;font-weight:600;text-transform:uppercase;letter-spacing:.14em}
+.blog-card__title{margin:10px 0 0;font-size:1.15rem;transition:opacity .2s ease}
+.blog-card:hover .blog-card__title{opacity:.7}
+.blog-card__excerpt{margin:10px 0 0;font-size:.92rem;line-height:1.6}
+
+.article__meta{margin:0 0 10px;font-size:.78rem;letter-spacing:.06em}
+.article__title{font-size:clamp(1.9rem,3.6vw,2.8rem);letter-spacing:-.01em;margin-bottom:28px}
+.article__media{margin-bottom:32px}
+.article__media img{width:100%}
+.article__content{display:flex;flex-direction:column;gap:20px;font-size:1rem;line-height:1.75}
+.article__content p{margin:0}
+.article__back{display:inline-block;margin-top:48px}

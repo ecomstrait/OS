@@ -158,6 +158,58 @@
         "info": "Plays muted behind the hero. Overrides the hero image."
       },
       {
+        "type": "paragraph",
+        "content": "Up to 4 hero slides — set by EcomStrait when a store's hero has more than one image or video. Ignored (falls back to the single hero image/video above) when none of these are set."
+      },
+      {
+        "type": "text",
+        "id": "hero_media_1_url",
+        "label": "Hero slide 1 URL",
+        "info": "Set by EcomStrait."
+      },
+      {
+        "type": "text",
+        "id": "hero_media_1_kind",
+        "label": "Hero slide 1 kind",
+        "info": "\"image\" or \"video\". Set by EcomStrait."
+      },
+      {
+        "type": "text",
+        "id": "hero_media_2_url",
+        "label": "Hero slide 2 URL",
+        "info": "Set by EcomStrait."
+      },
+      {
+        "type": "text",
+        "id": "hero_media_2_kind",
+        "label": "Hero slide 2 kind",
+        "info": "\"image\" or \"video\". Set by EcomStrait."
+      },
+      {
+        "type": "text",
+        "id": "hero_media_3_url",
+        "label": "Hero slide 3 URL",
+        "info": "Set by EcomStrait."
+      },
+      {
+        "type": "text",
+        "id": "hero_media_3_kind",
+        "label": "Hero slide 3 kind",
+        "info": "\"image\" or \"video\". Set by EcomStrait."
+      },
+      {
+        "type": "text",
+        "id": "hero_media_4_url",
+        "label": "Hero slide 4 URL",
+        "info": "Set by EcomStrait."
+      },
+      {
+        "type": "text",
+        "id": "hero_media_4_kind",
+        "label": "Hero slide 4 kind",
+        "info": "\"image\" or \"video\". Set by EcomStrait."
+      },
+      {
         "type": "text",
         "id": "about_heading",
         "label": "About heading"
@@ -171,6 +223,18 @@
         "type": "text",
         "id": "about_image_url",
         "label": "About image URL"
+      },
+      {
+        "type": "text",
+        "id": "ecomstrait_store_id",
+        "label": "EcomStrait store id",
+        "info": "Powers the newsletter signup in the footer. Set by EcomStrait — do not edit."
+      },
+      {
+        "type": "text",
+        "id": "ecomstrait_api_origin",
+        "label": "EcomStrait API origin",
+        "info": "Where the newsletter signup form submits to. Set by EcomStrait — do not edit."
       }
     ]
   }

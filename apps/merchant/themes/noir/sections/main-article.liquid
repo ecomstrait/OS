@@ -1,0 +1,48 @@
+<article class="section">
+  <div class="container" style="max-width:720px">
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href="{{ routes.root_url }}">Home</a>
+      <span aria-hidden="true">/</span>
+      <a href="{{ blog.url }}">{{ blog.title }}</a>
+      <span aria-hidden="true">/</span>
+      <span aria-current="page">{{ article.title }}</span>
+    </nav>
+
+    <p class="muted article__meta">
+      {{ article.published_at | date: '%B %-d, %Y' }}{% if article.author != blank %} · {{ article.author }}{% endif %}
+    </p>
+    <h1 class="article__title">{{ article.title }}</h1>
+
+    {%- if article.image -%}
+      <div class="article__media">
+        <img src="{{ article.image | image_url: width: 1600 }}" alt="{{ article.image.alt | escape }}" width="1600" height="900" loading="eager" style="border-radius:var(--radius)">
+      </div>
+    {%- endif -%}
+
+    <div class="rte article__content">{{ article.content }}</div>
+
+    <a href="{{ blog.url }}" class="link-more article__back">&larr; Back to {{ blog.title }}</a>
+  </div>
+</article>
+
+<script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": {{ article.title | json }}
+    {%- if article.excerpt != blank %},
+    "description": {{ article.excerpt | strip_html | json }}{% endif %}
+    {%- if article.image %},
+    "image": [{{ article.image | image_url: width: 1600 | json }}]{% endif %},
+    "datePublished": {{ article.published_at | date: '%Y-%m-%dT%H:%M:%S%z' | json }},
+    "author": { "@type": "Organization", "name": {{ settings.store_name | default: shop.name | json }} },
+    "publisher": { "@type": "Organization", "name": {{ settings.store_name | default: shop.name | json }} }
+  }
+</script>
+
+{% schema %}
+{
+  "name": "Article",
+  "settings": []
+}
+{% endschema %}

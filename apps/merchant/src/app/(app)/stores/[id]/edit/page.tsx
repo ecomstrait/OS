@@ -4,7 +4,7 @@ import { createClient } from "@ecomstrait/auth/server";
 import { productImage } from "@/lib/catalog";
 import { normalizePlan } from "@/lib/store-plan";
 import { getEntitlements } from "@/lib/entitlements";
-import { storeThemes } from "@/content/themes";
+import { DEFAULT_THEME_ID } from "@/content/themes";
 import { StoreBuilder, type ExistingStore } from "@/components/builder/store-builder";
 import type { PreviewProduct } from "@/lib/builder-actions";
 
@@ -65,9 +65,9 @@ export default async function EditStorePage({ params }: { params: Promise<{ id: 
     id: store.id,
     name,
     type: store.type,
-    // A store saved before the theme picker existed has no theme — fall back to
-    // the first gallery entry so the select isn't blank.
-    theme: store.theme ?? storeThemes[0].id,
+    // A store saved before the theme picker existed has no theme — fall back
+    // to the one premium theme currently on offer.
+    theme: store.theme ?? DEFAULT_THEME_ID,
     logoUrl: store.logo_url,
     liveUrl: store.live_url,
     plan: normalizePlan(store.content, name),
