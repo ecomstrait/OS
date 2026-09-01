@@ -1,3 +1,5 @@
+import "server-only";
+
 import { createAdminClient } from "@ecomstrait/db";
 import type { ModelRole } from "../types";
 

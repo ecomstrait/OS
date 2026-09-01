@@ -1,3 +1,5 @@
+import "server-only";
+
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { createChatModel } from "./model";
 import { supabaseQueryTool } from "./tools/supabase-query-tool";

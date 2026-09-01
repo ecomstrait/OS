@@ -1,3 +1,5 @@
+import "server-only";
+
 import { ChatOpenAI } from "@langchain/openai";
 import { resolveModel } from "../roles";
 import type { ModelRole } from "../types";

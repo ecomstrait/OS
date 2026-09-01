@@ -1,3 +1,5 @@
+import "server-only";
+
 /**
  * EcomAI engine — turns a business idea into a structured, LABELED "build plan".
  *

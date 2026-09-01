@@ -1,3 +1,5 @@
+import "server-only";
+
 /**
  * "Ask EcomAI" engine — a conversational FAQ assistant.
  *
@@ -129,12 +131,3 @@ export async function askEcomAI(messages: ChatMessage[]): Promise<AskResult> {
   const viaAi = await aiAnswer(messages);
   return viaAi ?? presetAnswer(lastUser?.content ?? "");
 }
-
-/** Starter prompts surfaced as chips in the UI. */
-export const ASK_SUGGESTIONS = [
-  "How does EcomAI build my store?",
-  "Do I need inventory or suppliers?",
-  "Can I use my own domain?",
-  "How much does it cost?",
-  "How long until I can launch?",
-];

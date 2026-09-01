@@ -44,10 +44,14 @@ export default async function OrdersPage({
     // `orders.status` is plain text, so "active first" can't be an ORDER BY.
     // Pull just the sort keys for every matching row, order them here, then
     // hydrate only the current page — the nested order_items stay paginated.
+    // Held orders (credit_status != 'deducted') are awaiting the supplier's
+    // own wallet to cover a COD margin+fee deduction — they stay invisible
+    // here until that clears, per Docs/Credits-Settlement-Plan.md.
     let keyQuery = supabase
       .from("orders")
       .select("id, status")
-      .eq("supplier_id", supplier.supplierId);
+      .eq("supplier_id", supplier.supplierId)
+      .eq("credit_status", "deducted");
     if (q) {
       keyQuery = keyQuery.or(
         `store_name.ilike.${likeTerm(q)},store_owner_name.ilike.${likeTerm(q)}`,

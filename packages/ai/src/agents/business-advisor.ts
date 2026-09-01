@@ -1,3 +1,5 @@
+import "server-only";
+
 import type { StructuredToolInterface } from "@langchain/core/tools";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import { createChatModel } from "./model";

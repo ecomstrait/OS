@@ -1,3 +1,5 @@
+import "server-only";
+
 import { Annotation, StateGraph, START, END, MessagesAnnotation } from "@langchain/langgraph";
 import { AIMessage, HumanMessage, SystemMessage, ToolMessage, type BaseMessage } from "@langchain/core/messages";
 import type { StructuredToolInterface } from "@langchain/core/tools";

@@ -5,7 +5,8 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowUp, RotateCcw, Sparkles } from "lucide-react";
 import { AiAvatar } from "@/components/ecomai/ai-avatar";
 import { Button } from "@/components/ui/button";
-import { ASK_SUGGESTIONS, type ChatMessage } from "@/lib/ask";
+import type { ChatMessage } from "@/lib/ask";
+import { ASK_SUGGESTIONS } from "@/content/ask-suggestions";
 import { cn } from "@/lib/utils";
 
 const EASE = [0.22, 1, 0.36, 1] as const;

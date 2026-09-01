@@ -1,3 +1,5 @@
+import "server-only";
+
 import { tool } from "@langchain/core/tools";
 import { z } from "zod";
 import { retrieve } from "../../rag/retrieve";

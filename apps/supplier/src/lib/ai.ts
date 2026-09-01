@@ -1,3 +1,5 @@
+import "server-only";
+
 /**
  * Product enrichment for suppliers — same posture as the website's EcomAI
  * engine: the "workhorse" role via the AI gateway (`@ecomstrait/ai`) when

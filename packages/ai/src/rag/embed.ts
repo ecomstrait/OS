@@ -1,3 +1,5 @@
+import "server-only";
+
 import { embed as gatewayEmbed } from "../gateway";
 import type { EmbeddingResult } from "../types";
 

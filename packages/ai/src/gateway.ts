@@ -1,3 +1,5 @@
+import "server-only";
+
 /**
  * The one place in the whole system that makes an AI HTTP call.
  *

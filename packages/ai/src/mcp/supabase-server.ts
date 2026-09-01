@@ -1,3 +1,5 @@
+import "server-only";
+
 /**
  * Read-only SQL, exposed over MCP.
  *

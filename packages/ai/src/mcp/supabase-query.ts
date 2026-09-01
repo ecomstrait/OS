@@ -1,3 +1,5 @@
+import "server-only";
+
 /**
  * The read-only SQL guard, factored out so it has exactly one implementation
  * shared by the Supabase MCP server tool (./supabase-server.ts) and the

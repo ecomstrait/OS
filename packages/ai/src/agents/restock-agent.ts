@@ -1,3 +1,5 @@
+import "server-only";
+
 import { chat } from "../gateway";
 
 export type RestockInput = {

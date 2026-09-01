@@ -1,3 +1,5 @@
+import "server-only";
+
 /**
  * EcomAI store-plan generator. AI gateway "workhorse" role, with a
  * deterministic preset fallback. Returns a plan plus the token count (for
