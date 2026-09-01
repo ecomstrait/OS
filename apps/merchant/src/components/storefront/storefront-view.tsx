@@ -34,10 +34,13 @@ export function StorefrontView({
   store,
   navLinks,
   categoryBands,
+  basePath,
 }: {
   store: Storefront;
   navLinks: StorefrontNavLink[];
   categoryBands: CategoryBand[];
+  /** `/store/<uuid>` on the id-path route, `""` on a connected domain. */
+  basePath: string;
 }) {
   const t = storeTokens(store.theme, store.plan.brandColors);
   const heroMedia = store.plan.heroMedia ?? [];
@@ -62,7 +65,7 @@ export function StorefrontView({
         fontFamily: "var(--font-body)",
       }}
     >
-      <StorefrontChrome store={store} navLinks={navLinks}>
+      <StorefrontChrome store={store} navLinks={navLinks} basePath={basePath}>
         {/* ---- Hero — a real editorial moment, not a banner strip ---- */}
         <section className="relative flex min-h-[68vh] items-center overflow-hidden px-6 py-20 text-center text-white sm:min-h-[80vh]">
           <HeroCarousel media={heroMedia} gradient={grad} />
@@ -113,7 +116,7 @@ export function StorefrontView({
                 <p className="mt-4 text-base leading-relaxed opacity-75">{spotlight.description}</p>
                 <PriceTag product={spotlight} className="mt-6 text-lg" />
                 <Link
-                  href={`/store/${store.id}/products/${spotlight.id}`}
+                  href={`${basePath}/products/${spotlight.id}`}
                   className="mt-6 inline-flex h-11 items-center justify-center px-7 text-xs font-semibold uppercase text-white transition hover:opacity-85"
                   style={{ background: "var(--brand)", borderRadius: "var(--radius)", letterSpacing: "0.08em" }}
                 >
@@ -130,7 +133,7 @@ export function StorefrontView({
               and the nav) is for. ---- */}
           <div className="flex flex-col gap-24">
             {categoryBands.map((band) => (
-              <CategoryBand key={band.category} storeId={store.id} band={band} line={line} surface={surface} />
+              <CategoryBand key={band.category} basePath={basePath} band={band} line={line} surface={surface} />
             ))}
           </div>
 
@@ -139,7 +142,7 @@ export function StorefrontView({
               <p className="mb-10 text-center text-xs font-semibold uppercase opacity-60" style={{ letterSpacing: "0.2em" }}>
                 On sale
               </p>
-              <ProductGrid products={onSale} storeId={store.id} surface={surface} />
+              <ProductGrid products={onSale} basePath={basePath} surface={surface} />
             </div>
           )}
 
@@ -159,17 +162,17 @@ export function StorefrontView({
 }
 
 function CategoryBand({
-  storeId,
+  basePath,
   band,
   line,
   surface,
 }: {
-  storeId: string;
+  basePath: string;
   band: CategoryBand;
   line: string;
   surface: string;
 }) {
-  const href = `/store/${storeId}/products?category=${encodeURIComponent(band.category)}`;
+  const href = `${basePath}/products?category=${encodeURIComponent(band.category)}`;
   const label = categoryLabel(band.category);
   const cardImage = band.products.find((p) => p.image)?.image ?? null;
 
@@ -206,7 +209,7 @@ function CategoryBand({
         </div>
       </Link>
 
-      <ProductGrid products={band.products} storeId={storeId} surface={surface} />
+      <ProductGrid products={band.products} basePath={basePath} surface={surface} />
 
       {band.total > band.products.length && (
         <div className="mt-8 text-center">
@@ -237,11 +240,11 @@ export function PriceTag({ product, className = "" }: { product: ApiProduct; cla
 
 export function ProductGrid({
   products,
-  storeId,
+  basePath,
   surface,
 }: {
   products: ApiProduct[];
-  storeId: string;
+  basePath: string;
   surface: string;
 }) {
   const { add, busy } = useStorefrontCartContext();
@@ -254,7 +257,7 @@ export function ProductGrid({
     <div className="grid gap-x-6 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
       {products.map((p) => (
         <div key={p.id} className="group flex flex-col">
-          <Link href={`/store/${storeId}/products/${p.id}`} className="block">
+          <Link href={`${basePath}/products/${p.id}`} className="block">
             <div className="relative aspect-[4/5] shrink-0 overflow-hidden" style={{ background: surface, borderRadius: "var(--radius)" }}>
               {p.image ? (
                 // eslint-disable-next-line @next/next/no-img-element

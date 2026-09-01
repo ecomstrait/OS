@@ -29,10 +29,13 @@ export type NavLink = { label: string; href: string };
 export function StorefrontChrome({
   store,
   navLinks,
+  basePath,
   children,
 }: {
   store: Storefront;
   navLinks: NavLink[];
+  /** `/store/<uuid>` on the id-path route, `""` on a connected domain. */
+  basePath: string;
   children: React.ReactNode;
 }) {
   const cartApi = useStorefrontCart(store.id);
@@ -57,7 +60,7 @@ export function StorefrontChrome({
         style={{ background: "color-mix(in srgb, var(--bg) 90%, transparent)", borderColor: line }}
       >
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-          <Link href={`/store/${store.id}`} className="shrink-0">
+          <Link href={basePath || "/"} className="shrink-0">
             {store.logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={store.logoUrl} alt={store.name} className="h-7 object-contain" />

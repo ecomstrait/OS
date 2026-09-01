@@ -257,19 +257,32 @@ const MAX_NAV_CATEGORIES = 6;
  * One function so the homepage, the product page, and the listing page all
  * build the identical nav from the identical data — never three
  * independently-drifting copies of "which categories fit."
+ *
+ * `basePath` defaults to the `/store/<uuid>` prefix every link has always
+ * used; a store reached through its own connected domain passes `""` so the
+ * nav (and every link built from it) stays on the clean domain-relative path
+ * instead of exposing the internal store id. See storefront-pages.tsx.
  */
 export async function getStorefrontNav(
   storeId: string,
-  opts: { about: boolean },
+  opts: { about: boolean; basePath?: string },
 ): Promise<StorefrontNavLink[]> {
+  const base = opts.basePath ?? `/store/${storeId}`;
+  // Sale/About are anchors on the home page only. On the id-path route
+  // `base` is already an absolute `/store/<uuid>` prefix, so `${base}#sale`
+  // lands on home regardless of which page the link was clicked from. On a
+  // connected domain `base` is `""` — `${base}#sale` would then resolve
+  // relative to whatever page it's clicked from (e.g. `/products#sale`
+  // instead of `/#sale`), so those two anchors need the actual home path.
+  const home = base || "/";
   const categories = await listStoreCategories(storeId);
   const links: StorefrontNavLink[] = categories.slice(0, MAX_NAV_CATEGORIES).map((c) => ({
     label: categoryLabel(c.category),
-    href: `/store/${storeId}/products?category=${encodeURIComponent(c.category)}`,
+    href: `${base}/products?category=${encodeURIComponent(c.category)}`,
   }));
-  links.push({ label: "Shop all", href: `/store/${storeId}/products` });
-  links.push({ label: "Sale", href: `/store/${storeId}#sale` });
-  if (opts.about) links.push({ label: "About", href: `/store/${storeId}#about` });
+  links.push({ label: "Shop all", href: `${base}/products` });
+  links.push({ label: "Sale", href: `${home}#sale` });
+  if (opts.about) links.push({ label: "About", href: `${home}#about` });
   return links;
 }
 

@@ -24,6 +24,7 @@ export function ProductsListingView({
   initialTotal,
   initialCategory,
   initialQuery,
+  basePath,
 }: {
   store: Storefront;
   navLinks: StorefrontNavLink[];
@@ -32,6 +33,8 @@ export function ProductsListingView({
   initialTotal: number;
   initialCategory: string;
   initialQuery: string;
+  /** `/store/<uuid>` on the id-path route, `""` on a connected domain. */
+  basePath: string;
 }) {
   const t = storeTokens(store.theme, store.plan.brandColors);
   const line = "color-mix(in srgb, var(--ink) 12%, transparent)";
@@ -54,7 +57,7 @@ export function ProductsListingView({
     if (category) params.set("category", category);
     if (queryInput) params.set("q", queryInput);
     const qs = params.toString();
-    router.replace(`/store/${store.id}/products${qs ? `?${qs}` : ""}`, { scroll: false });
+    router.replace(`${basePath}/products${qs ? `?${qs}` : ""}`, { scroll: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [category, queryInput]);
 
@@ -74,7 +77,7 @@ export function ProductsListingView({
         fontFamily: "var(--font-body)",
       }}
     >
-      <StorefrontChrome store={store} navLinks={navLinks}>
+      <StorefrontChrome store={store} navLinks={navLinks} basePath={basePath}>
         <section className="mx-auto max-w-6xl px-6 py-14 sm:py-20">
           <h1
             className="text-2xl font-semibold sm:text-3xl"
@@ -134,7 +137,7 @@ export function ProductsListingView({
           </p>
 
           <div className="mt-6">
-            <ProductGrid products={products} storeId={store.id} surface={surface} />
+            <ProductGrid products={products} basePath={basePath} surface={surface} />
           </div>
 
           {hasMore && (

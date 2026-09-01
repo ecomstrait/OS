@@ -321,6 +321,8 @@ export type Database = {
           name: string | null;
           status: StoreStatus;
           domain: string | null;
+          /** Set only once DNS was proven to point at us — see storefront-by-domain routing. Null means "not routed," regardless of what `domain` holds. */
+          domain_verified_at: string | null;
           subdomain: string | null;
           theme: string | null;
           shopify_store_id: string | null;

@@ -23,7 +23,7 @@ export default async function SettingsPage() {
 
   const { data: stores } = await supabase
     .from("stores")
-    .select("id, name, type, domain")
+    .select("id, name, type, domain, domain_verified_at")
     .eq("user_id", user!.id)
     .order("created_at", { ascending: false });
 
@@ -59,6 +59,7 @@ export default async function SettingsPage() {
                 storeName={s.name ?? "Untitled store"}
                 storeType={s.type}
                 initialDomain={s.domain}
+                initialVerifiedAt={s.domain_verified_at}
                 target={domainTarget(s.type as StoreType)}
               />
             ))

@@ -38,17 +38,20 @@ export function DomainCard({
   storeName,
   storeType,
   initialDomain,
+  initialVerifiedAt,
   target,
 }: {
   storeId: string;
   storeName: string;
   storeType: string;
   initialDomain: string | null;
+  initialVerifiedAt: string | null;
   target: DomainTarget;
 }) {
   const router = useRouter();
   const [domain, setDomain] = useState(initialDomain ?? "");
   const [saved, setSaved] = useState(initialDomain);
+  const [verifiedAt, setVerifiedAt] = useState(initialVerifiedAt);
   const [error, setError] = useState<string | null>(null);
   const [check, setCheck] = useState<DomainCheck | null>(null);
   const [savingT, saving] = useTransition();
@@ -62,6 +65,7 @@ export function DomainCard({
       if (res.error) setError(res.error);
       else {
         setSaved(res.domain ?? null);
+        setVerifiedAt(null); // a changed/cleared domain always starts unverified
         if (res.domain !== undefined) setDomain(res.domain ?? "");
         router.refresh();
       }
@@ -73,7 +77,10 @@ export function DomainCard({
     checking(async () => {
       const res = await checkStoreDomain(storeId);
       if ("error" in res) setError(res.error);
-      else setCheck(res);
+      else {
+        setCheck(res);
+        setVerifiedAt(res.verifiedAt);
+      }
     });
   }
 
@@ -145,8 +152,8 @@ export function DomainCard({
               {checkingT ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
               Check DNS
             </button>
-            {check &&
-              (check.connected ? (
+            {check ? (
+              check.connected ? (
                 <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-600">
                   <CheckCircle2 className="h-4 w-4" /> Connected
                 </span>
@@ -155,8 +162,25 @@ export function DomainCard({
                   <Clock className="h-4 w-4" /> Pending — DNS not resolving to {check.expectedA} yet
                   {check.resolvedA.length ? ` (found ${check.resolvedA.join(", ")})` : ""}
                 </span>
-              ))}
+              )
+            ) : verifiedAt ? (
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-600">
+                <CheckCircle2 className="h-4 w-4" /> Connected — last confirmed{" "}
+                {new Date(verifiedAt).toLocaleDateString()}
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-ink-400">
+                <Clock className="h-4 w-4" /> Not connected yet
+              </span>
+            )}
           </div>
+          {storeType === "own_platform" && (
+            <p className="mt-2 text-[11px] text-ink-400">
+              {verifiedAt
+                ? "Your store is live at this domain."
+                : "Your store starts serving at this domain as soon as it checks as connected."}
+            </p>
+          )}
         </div>
       )}
     </div>

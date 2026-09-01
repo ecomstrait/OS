@@ -39,15 +39,31 @@ export async function setStoreDomain(
 
   const raw = input.trim();
   if (!raw) {
-    await s.supabase.from("stores").update({ domain: null }).eq("id", storeId);
+    // domain_verified_at clears with it — nothing routes to a domain the
+    // store no longer claims.
+    await s.supabase.from("stores").update({ domain: null, domain_verified_at: null }).eq("id", storeId);
     revalidatePath("/settings");
     return { domain: null };
   }
   const domain = normalizeDomain(raw);
   if (!isValidDomain(domain)) return { error: "Enter a valid domain, e.g. yourbrand.com" };
 
-  const { error } = await s.supabase.from("stores").update({ domain }).eq("id", storeId);
-  if (error) return { error: error.message };
+  // Changing the domain invalidates any previous verification — traffic for
+  // the old value should stop routing the instant the merchant repoints it,
+  // not linger until the next DNS check happens to run.
+  const { error } = await s.supabase
+    .from("stores")
+    .update({ domain, domain_verified_at: null })
+    .eq("id", storeId);
+  if (error) {
+    // RLS scopes this client to the caller's own stores, so a SELECT could
+    // never see another merchant's row to check for a collision up front —
+    // only the DB's unique index (across every store, RLS or not) actually
+    // catches that. Translate its constraint-violation error into something
+    // a merchant can act on.
+    if (error.code === "23505") return { error: "That domain is already connected to another store." };
+    return { error: error.message };
+  }
   revalidatePath("/settings");
   return { domain };
 }
@@ -57,9 +73,21 @@ export type DomainCheck = {
   resolvedA: string[];
   resolvedCname: string[];
   expectedA: string;
+  verifiedAt: string | null;
 };
 
-/** Live DNS lookup: does the domain point at the expected storefront host? */
+/**
+ * Live DNS lookup: does the domain point at the expected storefront host?
+ *
+ * A pointed-at-us apex A record is the same proof of control every host in
+ * this business relies on (Vercel, Netlify, Shopify all verify custom
+ * domains this way) — only whoever controls the domain's DNS zone can make
+ * that true. The result is persisted (`domain_verified_at`), because for an
+ * `own_platform` store this is also the switch that turns on host-based
+ * routing (see `resolveStoreByDomain`): traffic for the domain only serves
+ * this store once that column is set, and stops the moment a re-check finds
+ * it's no longer pointed at us.
+ */
 export async function checkStoreDomain(storeId: string): Promise<DomainCheck | { error: string }> {
   const s = await ownStore(storeId);
   if (!s.ok) return { error: s.error };
@@ -82,5 +110,8 @@ export async function checkStoreDomain(storeId: string): Promise<DomainCheck | {
   }
 
   const connected = resolvedA.includes(target.expectedA);
-  return { connected, resolvedA, resolvedCname, expectedA: target.expectedA };
+  const verifiedAt = connected ? new Date().toISOString() : null;
+  await s.supabase.from("stores").update({ domain_verified_at: verifiedAt }).eq("id", storeId);
+  revalidatePath("/settings");
+  return { connected, resolvedA, resolvedCname, expectedA: target.expectedA, verifiedAt };
 }

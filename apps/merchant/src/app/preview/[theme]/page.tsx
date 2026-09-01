@@ -113,6 +113,7 @@ export default async function ThemePreviewPage({
           { label: "About", href: "#" },
         ]}
         categoryBands={DEMO_BANDS}
+        basePath={`/store/preview-${theme}`}
       />
     </div>
   );

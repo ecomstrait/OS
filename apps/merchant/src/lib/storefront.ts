@@ -75,3 +75,28 @@ export async function getStorefront(id: string): Promise<Storefront | null> {
     products,
   };
 }
+
+/**
+ * The store id routed to a custom domain, or null.
+ *
+ * Only `domain_verified_at` stores resolve — set exclusively by a successful
+ * `checkStoreDomain()` DNS lookup (see domain-actions.ts). `stores.domain`
+ * alone is never enough: a merchant can type any string in Settings before
+ * ever proving they control it, and the column has no application-level
+ * lock (only a DB unique index) against two stores claiming the same value.
+ * Gating on the verified timestamp is what keeps host-based routing
+ * (proxy.ts) from ever serving a domain nobody has actually proven control
+ * of.
+ */
+export async function resolveStoreIdByDomain(domain: string): Promise<string | null> {
+  const admin = createAdminClient();
+  if (!admin) return null;
+  const { data } = await admin
+    .from("stores")
+    .select("id")
+    .ilike("domain", domain)
+    .eq("type", "own_platform")
+    .not("domain_verified_at", "is", null)
+    .maybeSingle();
+  return data?.id ?? null;
+}

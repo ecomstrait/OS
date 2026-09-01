@@ -1,8 +1,6 @@
-import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { getStorefront } from "@/lib/storefront";
-import { getStorefrontNav, listStoreCategories, listStoreProducts } from "@/lib/storefront-api";
-import { ProductsListingView } from "@/components/storefront/products-listing-view";
+import { StorefrontProducts } from "@/lib/storefront-pages";
 
 export async function generateMetadata({
   params,
@@ -29,25 +27,5 @@ export default async function ProductsPage({
 }) {
   const { id } = await params;
   const { category = "", q = "" } = await searchParams;
-  const store = await getStorefront(id);
-  if (!store) notFound();
-
-  const hasAbout = Boolean(store.plan.about || store.plan.aboutMedia);
-  const [navLinks, categories, initial] = await Promise.all([
-    getStorefrontNav(id, { about: hasAbout }),
-    listStoreCategories(id),
-    listStoreProducts(id, { category: category || undefined, q, page: 1 }),
-  ]);
-
-  return (
-    <ProductsListingView
-      store={store}
-      navLinks={navLinks}
-      categories={categories}
-      initialProducts={initial.products}
-      initialTotal={initial.total}
-      initialCategory={category}
-      initialQuery={q}
-    />
-  );
+  return <StorefrontProducts storeId={id} category={category} q={q} />;
 }
