@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import { ShoppingBag, Plus, Minus, Loader2, ImageOff, X, Search, Trash2 } from "lucide-react";
+import { Plus, ImageOff } from "lucide-react";
+import Link from "next/link";
 import type { Storefront } from "@/lib/storefront";
 import { storeTokens, tokenStyle } from "@/lib/theme-tokens";
-import type { ApiProduct } from "@/lib/storefront-api";
-import { useStorefrontCart, useStorefrontProducts } from "@/components/storefront/use-storefront";
+import type { ApiProduct, StorefrontNavLink } from "@/lib/storefront-api";
+import { categoryLabel } from "@/lib/storefront-shared";
+import { StorefrontChrome, useStorefrontCartContext } from "@/components/storefront/storefront-chrome";
 import {
   AboutBlock,
   HeroVideo,
@@ -13,30 +14,44 @@ import {
   heroBackdropStyle,
 } from "@/components/storefront/store-content";
 
+/**
+ * Every color below comes from the theme tokens — `var(--ink)`/`var(--bg)`/
+ * `var(--brand)` or a `color-mix()` tint of one of them — never a hardcoded
+ * Tailwind color utility. See storefront-chrome.tsx for why.
+ *
+ * The landing page is deliberately not a search/browse surface anymore —
+ * that's what /store/[id]/products is for. This page's job is to sell the
+ * store's categories, not to be a second, worse copy of the listing page.
+ */
+
+export type CategoryBand = {
+  category: string;
+  /** Preview only — "View all" on the card goes to the full, filterable listing. */
+  products: ApiProduct[];
+  total: number;
+};
+
 export function StorefrontView({
   store,
-  initialProducts,
-  initialTotal,
+  navLinks,
+  categoryBands,
 }: {
   store: Storefront;
-  initialProducts: ApiProduct[];
-  initialTotal: number;
+  navLinks: StorefrontNavLink[];
+  categoryBands: CategoryBand[];
 }) {
-  const [open, setOpen] = useState(false);
-  const { cart, busy, error, add, setQuantity, remove, checkout } = useStorefrontCart(store.id);
-  const { products, total, loading, search, loadMore, hasMore } = useStorefrontProducts(
-    store.id,
-    initialProducts,
-    initialTotal,
-  );
-  const [term, setTerm] = useState("");
-
-  // The theme sets the surface, typography and radius; the merchant's brand
-  // colours override the accent. Without this every theme rendered the same
-  // white storefront, and picking Noir or Forge changed nothing here.
   const t = storeTokens(store.theme, store.plan.brandColors);
   const hero = store.plan.heroMedia ?? null;
   const grad = `linear-gradient(135deg, ${t.brand}, ${t.accent})`;
+  const line = "color-mix(in srgb, var(--ink) 12%, transparent)";
+  const surface = "color-mix(in srgb, var(--ink) 4%, var(--bg))";
+
+  // Derived from whatever's already on the homepage (the category previews)
+  // rather than a separate query — an approximation (a markdown outside
+  // every preview window won't surface here), documented rather than hidden.
+  const previewed = categoryBands.flatMap((b) => b.products);
+  const onSale = previewed.filter((p) => p.compareAtPrice != null);
+  const spotlight = previewed.find((p) => p.description && p.image) ?? null;
 
   return (
     <div
@@ -48,262 +63,249 @@ export function StorefrontView({
         fontFamily: "var(--font-body)",
       }}
     >
-      {store.plan.announcement && (
-        <div
-          className="px-4 py-2 text-center text-xs font-medium text-white"
-          style={{ background: "var(--brand)" }}
+      <StorefrontChrome store={store} navLinks={navLinks}>
+        {/* ---- Hero — a real editorial moment, not a banner strip ---- */}
+        <section
+          className="relative flex min-h-[68vh] items-center overflow-hidden px-6 py-20 text-center text-white sm:min-h-[80vh]"
+          style={heroBackdropStyle(hero, grad)}
         >
-          {store.plan.announcement}
-        </div>
-      )}
+          <HeroVideo media={hero} />
+          <div className="relative mx-auto max-w-2xl">
+            {store.plan.tagline && (
+              <p className="mb-5 text-xs font-semibold uppercase text-white/80" style={{ letterSpacing: "0.28em" }}>
+                {store.plan.tagline}
+              </p>
+            )}
+            <h1
+              className="text-balance font-semibold"
+              style={{
+                fontFamily: "var(--font-heading)",
+                fontSize: "clamp(2.25rem, 5.5vw, 4rem)",
+                lineHeight: 1.08,
+                letterSpacing: "-0.02em",
+              }}
+            >
+              {store.plan.heroHeadline}
+            </h1>
+            <p className="mx-auto mt-5 max-w-lg text-base text-white/85 sm:text-lg">{store.plan.heroSub}</p>
+            <a
+              href="#categories"
+              className="mt-9 inline-flex h-12 items-center justify-center px-8 text-sm font-semibold uppercase transition hover:opacity-85"
+              style={{ background: "#fff", color: "#0a0a0c", borderRadius: "var(--radius)", letterSpacing: "0.1em" }}
+            >
+              Shop now
+            </a>
+          </div>
+        </section>
 
-      <header
-        className="sticky top-0 z-20 flex items-center justify-between border-b px-5 py-3 backdrop-blur"
-        style={{ background: "color-mix(in srgb, var(--bg) 90%, transparent)", borderColor: "color-mix(in srgb, var(--ink) 12%, transparent)" }}
-      >
-        <div className="flex items-center gap-2">
-          {store.logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={store.logoUrl} alt={store.name} className="h-7 object-contain" />
-          ) : (
-            <span className="text-lg font-bold" style={{ fontFamily: "var(--font-heading)" }}>
-              {store.name}
-            </span>
+        <section id="categories" className="mx-auto max-w-6xl px-6 py-20 sm:py-28">
+          {/* ---- Spotlight — one product, shown big, with its full
+              description. ---- */}
+          {spotlight && (
+            <div className="mb-24 grid items-center gap-10 border-y py-14 sm:grid-cols-2 sm:gap-16" style={{ borderColor: line }}>
+              <div className="aspect-[4/5] w-full overflow-hidden" style={{ background: surface, borderRadius: "var(--radius)" }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={spotlight.image!} alt={spotlight.title} className="h-full w-full object-cover" />
+              </div>
+              <div>
+                <p className="mb-4 text-xs font-semibold uppercase opacity-60" style={{ letterSpacing: "0.2em" }}>
+                  Featured
+                </p>
+                <h2 className="text-2xl font-semibold" style={{ fontFamily: "var(--font-heading)", letterSpacing: "-0.01em" }}>
+                  {spotlight.title}
+                </h2>
+                <p className="mt-4 text-base leading-relaxed opacity-75">{spotlight.description}</p>
+                <PriceTag product={spotlight} className="mt-6 text-lg" />
+                <Link
+                  href={`/store/${store.id}/products/${spotlight.id}`}
+                  className="mt-6 inline-flex h-11 items-center justify-center px-7 text-xs font-semibold uppercase text-white transition hover:opacity-85"
+                  style={{ background: "var(--brand)", borderRadius: "var(--radius)", letterSpacing: "0.08em" }}
+                >
+                  View product
+                </Link>
+              </div>
+            </div>
           )}
-        </div>
-        <button
-          onClick={() => setOpen(true)}
-          className="relative grid h-9 w-9 place-items-center rounded-lg hover:bg-ink-100"
-          aria-label={`Cart, ${cart.itemCount} item${cart.itemCount === 1 ? "" : "s"}`}
-        >
-          <ShoppingBag className="h-5 w-5 text-ink-700" />
-          {cart.itemCount > 0 && (
-            <span className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-brand-500 px-1 text-[10px] font-bold text-white">
-              {cart.itemCount}
-            </span>
-          )}
-        </button>
-      </header>
 
-      <section
-        className="relative overflow-hidden px-6 py-16 text-center text-white"
-        style={heroBackdropStyle(hero, grad)}
-      >
-        <HeroVideo media={hero} />
-        <div className="relative">
-          <h1 className="text-3xl font-bold sm:text-4xl" style={{ fontFamily: "var(--font-heading)" }}>
-            {store.plan.heroHeadline}
-          </h1>
-          <p className="mx-auto mt-3 max-w-xl text-white/85">{store.plan.heroSub}</p>
-        </div>
-      </section>
-
-      <section className="mx-auto max-w-5xl px-5 py-10">
-        {store.plan.collections?.length ? (
-          <div className="mb-6 flex flex-wrap justify-center gap-2">
-            {store.plan.collections.map((c) => (
-              <span key={c} className="rounded-full bg-ink-100 px-3 py-1 text-xs font-medium text-ink-600">
-                {c}
-              </span>
+          {/* ---- One band per category: a card, then that category's
+              products underneath it. This is the entire browse surface on
+              the landing page — no search, no filter pills here on
+              purpose; that's what the listing page (linked from the card
+              and the nav) is for. ---- */}
+          <div className="flex flex-col gap-24">
+            {categoryBands.map((band) => (
+              <CategoryBand key={band.category} storeId={store.id} band={band} line={line} surface={surface} />
             ))}
           </div>
-        ) : null}
 
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            search(term);
-          }}
-          className="mx-auto mb-8 flex max-w-md items-center gap-2 rounded-full border border-ink-200 px-4 py-1.5"
-        >
-          <Search className="h-4 w-4 shrink-0 text-ink-400" />
-          <input
-            value={term}
-            onChange={(e) => setTerm(e.target.value)}
-            placeholder="Search products…"
-            aria-label="Search products"
-            className="min-w-0 flex-1 bg-transparent py-1.5 text-sm outline-none placeholder:text-ink-400"
-          />
-          {term && (
-            <button
-              type="button"
-              onClick={() => {
-                setTerm("");
-                search("");
-              }}
-              aria-label="Clear search"
-              className="text-ink-400 hover:text-ink-700"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
-        </form>
-
-        {products.length === 0 ? (
-          <p className="py-10 text-center text-sm text-ink-400">
-            {loading ? "Loading…" : "No products found."}
-          </p>
-        ) : (
-          <>
-            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {products.map((p) => (
-                <div
-                  key={p.id}
-                  className="flex flex-col overflow-hidden border"
-                  style={{ borderRadius: "var(--radius)", borderColor: "color-mix(in srgb, var(--ink) 12%, transparent)" }}
-                >
-                  <div className="relative aspect-square shrink-0 overflow-hidden bg-ink-50">
-                    {p.image ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={p.image} alt={p.title} className="absolute inset-0 h-full w-full object-cover" />
-                    ) : (
-                      <div className="grid h-full w-full place-items-center text-ink-300">
-                        <ImageOff className="h-8 w-8" />
-                      </div>
-                    )}
-                    {!p.inStock && (
-                      <span className="absolute left-3 top-3 rounded-full bg-ink-950/85 px-2.5 py-1 text-[11px] font-semibold text-white">
-                        Sold out
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex flex-1 flex-col gap-1 p-4">
-                    <p className="line-clamp-2 text-sm font-semibold">{p.title}</p>
-                    <p className="text-sm font-bold">
-                      {p.price != null ? `$${p.price}` : "—"}
-                    </p>
-                    <button
-                      onClick={() => add(p.id, 1)}
-                      disabled={busy || !p.inStock}
-                      className="mt-auto inline-flex h-9 items-center justify-center gap-1.5 text-sm font-semibold text-white disabled:opacity-50"
-                      style={{ background: "var(--brand)", borderRadius: "var(--radius)" }}
-                    >
-                      <Plus className="h-4 w-4" /> {p.inStock ? "Add to cart" : "Sold out"}
-                    </button>
-                  </div>
-                </div>
-              ))}
+          {onSale.length > 0 && (
+            <div id="sale" className="mt-24 scroll-mt-24">
+              <p className="mb-10 text-center text-xs font-semibold uppercase opacity-60" style={{ letterSpacing: "0.2em" }}>
+                On sale
+              </p>
+              <ProductGrid products={onSale} storeId={store.id} surface={surface} />
             </div>
+          )}
 
-            {hasMore && (
-              <div className="mt-8 text-center">
-                <button
-                  onClick={loadMore}
-                  disabled={loading}
-                  className="inline-flex h-10 items-center gap-2 rounded-xl border border-ink-200 px-5 text-sm font-semibold text-ink-700 hover:bg-ink-50 disabled:opacity-50"
-                >
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                  Load more ({products.length} of {total})
-                </button>
-              </div>
-            )}
+          <div id="about" className="mt-24 scroll-mt-24">
+            <AboutBlock plan={store.plan} />
+          </div>
+
+          {store.plan.sections?.length ? (
+            <div className="mt-24">
+              <StoreSections plan={store.plan} />
+            </div>
+          ) : null}
+        </section>
+      </StorefrontChrome>
+    </div>
+  );
+}
+
+function CategoryBand({
+  storeId,
+  band,
+  line,
+  surface,
+}: {
+  storeId: string;
+  band: CategoryBand;
+  line: string;
+  surface: string;
+}) {
+  const href = `/store/${storeId}/products?category=${encodeURIComponent(band.category)}`;
+  const label = categoryLabel(band.category);
+  const cardImage = band.products.find((p) => p.image)?.image ?? null;
+
+  return (
+    <div>
+      {/* The category card — one per band, the entry point into that
+          category's full, filterable listing. */}
+      <Link
+        href={href}
+        className="group relative mb-8 block aspect-[21/9] w-full overflow-hidden sm:aspect-[3/1]"
+        style={{ background: cardImage ? undefined : "linear-gradient(135deg, var(--brand), var(--accent))", borderRadius: "var(--radius)" }}
+      >
+        {cardImage && (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={cardImage}
+              alt={label}
+              className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+            />
+            <div className="absolute inset-0" style={{ background: "linear-gradient(0deg, rgba(0,0,0,.55), rgba(0,0,0,.1))" }} />
           </>
         )}
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-center text-white">
+          <h2
+            className="text-2xl font-semibold sm:text-3xl"
+            style={{ fontFamily: "var(--font-heading)", letterSpacing: "-0.01em" }}
+          >
+            {label}
+          </h2>
+          <span className="text-xs font-semibold uppercase" style={{ letterSpacing: "0.14em" }}>
+            Shop {label} ({band.total}) →
+          </span>
+        </div>
+      </Link>
 
-        <AboutBlock plan={store.plan} />
+      <ProductGrid products={band.products} storeId={storeId} surface={surface} />
 
-        <StoreSections plan={store.plan} />
-      </section>
-
-      <footer
-        className="border-t px-6 py-6 text-center text-xs opacity-60"
-        style={{ borderColor: "color-mix(in srgb, var(--ink) 12%, transparent)" }}
-      >
-        {store.plan.footerText || `${store.name} · Powered by EcomStrait`}
-      </footer>
-
-      {open && (
-        <div className="fixed inset-0 z-40">
-          <div className="absolute inset-0 bg-ink-950/40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-0 flex h-full w-full max-w-sm flex-col bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-ink-100 px-5 py-4">
-              <p className="text-base font-bold text-ink-950">Your cart</p>
-              <button onClick={() => setOpen(false)} aria-label="Close">
-                <X className="h-5 w-5 text-ink-500" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-5">
-              {/* The server drops lines that went unavailable — say so rather
-                  than letting them vanish silently. */}
-              {cart.removed.length > 0 && (
-                <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  {cart.removed.length} item{cart.removed.length === 1 ? " was" : "s were"} removed —
-                  no longer available.
-                </p>
-              )}
-              {cart.adjusted.length > 0 && (
-                <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  Quantities reduced to the stock on hand.
-                </p>
-              )}
-
-              {cart.lines.length === 0 ? (
-                <p className="text-sm text-ink-400">Your cart is empty.</p>
-              ) : (
-                <ul className="flex flex-col gap-4">
-                  {cart.lines.map((l) => (
-                    <li key={l.productId} className="flex items-center gap-3">
-                      <span className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-ink-50">
-                        {l.image ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={l.image} alt="" className="h-full w-full object-cover" />
-                        ) : null}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="line-clamp-1 text-sm font-medium text-ink-900">{l.title}</p>
-                        <p className="text-xs text-ink-500">${l.unitPrice.toFixed(2)}</p>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => setQuantity(l.productId, l.quantity - 1)}
-                          disabled={busy}
-                          aria-label="Decrease quantity"
-                          className="grid h-7 w-7 place-items-center rounded-md border border-ink-200 text-ink-500 disabled:opacity-50"
-                        >
-                          <Minus className="h-3.5 w-3.5" />
-                        </button>
-                        <span className="w-6 text-center text-sm">{l.quantity}</span>
-                        <button
-                          onClick={() => setQuantity(l.productId, l.quantity + 1)}
-                          disabled={busy || l.quantity >= l.available}
-                          aria-label="Increase quantity"
-                          className="grid h-7 w-7 place-items-center rounded-md border border-ink-200 text-ink-500 disabled:opacity-40"
-                        >
-                          <Plus className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          onClick={() => remove(l.productId)}
-                          disabled={busy}
-                          aria-label={`Remove ${l.title}`}
-                          className="ml-1 grid h-7 w-7 place-items-center rounded-md text-ink-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <div className="border-t border-ink-100 p-5">
-              <div className="mb-3 flex items-center justify-between text-sm">
-                <span className="text-ink-500">Subtotal</span>
-                <span className="font-bold text-ink-950">${cart.subtotal.toFixed(2)}</span>
-              </div>
-              {error && <p className="mb-2 text-sm text-red-600">{error}</p>}
-              <button
-                onClick={checkout}
-                disabled={busy || cart.lines.length === 0}
-                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-brand-500 text-sm font-semibold text-white hover:bg-brand-600 disabled:opacity-50"
-              >
-                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Checkout"}
-              </button>
-            </div>
-          </div>
+      {band.total > band.products.length && (
+        <div className="mt-8 text-center">
+          <Link
+            href={href}
+            className="inline-flex h-11 items-center gap-2 border px-6 text-xs font-semibold uppercase transition hover:opacity-70"
+            style={{ borderRadius: "var(--radius)", borderColor: line, letterSpacing: "0.08em" }}
+          >
+            View all {band.total} in {label}
+          </Link>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Price, with a struck-through "compare at" when this listing is a real markdown. */
+export function PriceTag({ product, className = "" }: { product: ApiProduct; className?: string }) {
+  return (
+    <p className={`flex items-baseline gap-2 font-semibold ${className}`}>
+      <span>{product.price != null ? `$${product.price}` : "—"}</span>
+      {product.compareAtPrice != null && (
+        <span className="text-sm font-normal opacity-45 line-through">${product.compareAtPrice}</span>
+      )}
+    </p>
+  );
+}
+
+export function ProductGrid({
+  products,
+  storeId,
+  surface,
+}: {
+  products: ApiProduct[];
+  storeId: string;
+  surface: string;
+}) {
+  const { add, busy } = useStorefrontCartContext();
+
+  if (!products.length) {
+    return <p className="py-10 text-center text-sm opacity-50">No products here yet.</p>;
+  }
+
+  return (
+    <div className="grid gap-x-6 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
+      {products.map((p) => (
+        <div key={p.id} className="group flex flex-col">
+          <Link href={`/store/${storeId}/products/${p.id}`} className="block">
+            <div className="relative aspect-[4/5] shrink-0 overflow-hidden" style={{ background: surface, borderRadius: "var(--radius)" }}>
+              {p.image ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={p.image}
+                  alt={p.title}
+                  className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
+                />
+              ) : (
+                <div className="grid h-full w-full place-items-center opacity-30">
+                  <ImageOff className="h-8 w-8" />
+                </div>
+              )}
+              <div className="absolute left-3 top-3 flex flex-col gap-1.5">
+                {!p.inStock && (
+                  <span
+                    className="px-2.5 py-1 text-[10px] font-semibold uppercase"
+                    style={{ background: "var(--bg)", color: "var(--ink)", letterSpacing: "0.08em", borderRadius: "var(--radius)" }}
+                  >
+                    Sold out
+                  </span>
+                )}
+                {p.compareAtPrice != null && (
+                  <span
+                    className="px-2.5 py-1 text-[10px] font-semibold uppercase text-white"
+                    style={{ background: "var(--brand)", letterSpacing: "0.08em", borderRadius: "var(--radius)" }}
+                  >
+                    Sale
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-1 flex-col gap-2 pt-4">
+              <p className="line-clamp-2 text-sm font-medium">{p.title}</p>
+              <PriceTag product={p} className="text-sm" />
+            </div>
+          </Link>
+          <button
+            onClick={() => add(p.id, 1)}
+            disabled={busy || !p.inStock}
+            className="mt-3 inline-flex h-10 items-center justify-center gap-1.5 text-xs font-semibold uppercase text-white transition hover:opacity-85 disabled:opacity-40"
+            style={{ background: "var(--brand)", borderRadius: "var(--radius)", letterSpacing: "0.08em" }}
+          >
+            <Plus className="h-3.5 w-3.5" /> {p.inStock ? "Add to cart" : "Sold out"}
+          </button>
+        </div>
+      ))}
     </div>
   );
 }

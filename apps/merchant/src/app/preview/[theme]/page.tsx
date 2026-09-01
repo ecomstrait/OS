@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { StorefrontView } from "@/components/storefront/storefront-view";
+import { StorefrontView, type CategoryBand } from "@/components/storefront/storefront-view";
 import { THEME_TOKENS } from "@/lib/theme-tokens";
 import { normalizePlan } from "@/lib/store-plan";
 import type { ApiProduct } from "@/lib/storefront-api";
@@ -21,24 +21,46 @@ export function generateStaticParams() {
   return Object.keys(THEME_TOKENS).map((theme) => ({ theme }));
 }
 
+// Demo catalog for the gallery — there's no real store behind this page, so
+// every field (including category) is made up here, but only here: the
+// bands below are grouped from these products' own `category`, the same way
+// `listStoreCategories` groups a real catalog, not from a separate list.
 const DEMO_PRODUCTS: ApiProduct[] = [
-  "Everyday Essential",
-  "The Weekend Piece",
-  "Signature Edition",
-  "Classic Staple",
-  "Limited Run",
-  "The Daily Carry",
-].map((title, i) => ({
+  {
+    title: "Everyday Essential",
+    category: "Apparel",
+    price: 48,
+    compareAtPrice: null,
+    description:
+      "Made from a heavyweight cotton blend, cut for a relaxed fit that holds its shape wash after wash.",
+  },
+  { title: "The Weekend Piece", category: "Apparel", price: 120, compareAtPrice: 150, description: null },
+  { title: "Signature Edition", category: "Accessories", price: 86, compareAtPrice: null, description: null },
+  { title: "Classic Staple", category: "Accessories", price: 64, compareAtPrice: 80, description: null },
+  { title: "Limited Run", category: "Footwear", price: 145, compareAtPrice: null, description: null },
+  { title: "The Daily Carry", category: "Footwear", price: 38, compareAtPrice: null, description: null },
+].map((p, i) => ({
   id: `demo-${i}`,
-  title,
-  description: null,
-  category: null,
+  title: p.title,
+  description: p.description,
+  category: p.category,
   image: null,
   images: [],
-  price: [48, 120, 86, 64, 145, 38][i] ?? 50,
+  price: p.price,
+  // A couple marked down, so the gallery preview also demonstrates the Sale
+  // badge/section rather than leaving it permanently invisible here.
+  compareAtPrice: p.compareAtPrice,
   available: 10,
   inStock: true,
 }));
+
+// Grouped the same way the real homepage groups categories — one band per
+// category found on the products above, so this preview demonstrates the
+// actual page shape without a second, hand-maintained list of categories.
+const DEMO_BANDS: CategoryBand[] = [...new Set(DEMO_PRODUCTS.map((p) => p.category!))].map((category) => {
+  const products = DEMO_PRODUCTS.filter((p) => p.category === category);
+  return { category, products, total: products.length };
+});
 
 export default async function ThemePreviewPage({
   params,
@@ -83,8 +105,14 @@ export default async function ThemePreviewPage({
           plan,
           products: [],
         }}
-        initialProducts={DEMO_PRODUCTS}
-        initialTotal={DEMO_PRODUCTS.length}
+        navLinks={[
+          // Same categories as DEMO_BANDS — not a second hardcoded list.
+          ...DEMO_BANDS.map((b) => ({ label: b.category, href: "#" })),
+          { label: "Shop all", href: "#" },
+          { label: "Sale", href: "#" },
+          { label: "About", href: "#" },
+        ]}
+        categoryBands={DEMO_BANDS}
       />
     </div>
   );

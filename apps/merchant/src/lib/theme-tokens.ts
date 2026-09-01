@@ -27,7 +27,12 @@ export type ThemeTokens = {
   dark?: boolean;
 };
 
-const BODY = "'Assistant', ui-sans-serif, system-ui, sans-serif";
+// These names only resolve on the custom storefront (app/store/layout.tsx
+// loads the actual font files via next/font/google — see that file for why).
+// The Shopify Liquid path resolves its own `font_picker` settings through
+// Shopify's platform instead, so it was never affected by this.
+const BODY = "var(--font-assistant), ui-sans-serif, system-ui, sans-serif";
+const POPPINS = "var(--font-poppins), ui-sans-serif, system-ui, sans-serif";
 
 export const THEME_TOKENS: Record<string, ThemeTokens> = {
   aurora: {
@@ -47,7 +52,7 @@ export const THEME_TOKENS: Record<string, ThemeTokens> = {
     ink: "#F4F1EC",
     bg: "#0B0B0C",
     radius: 2,
-    headingFont: "'Playfair Display', Georgia, serif",
+    headingFont: "var(--font-playfair), Georgia, serif",
     bodyFont: BODY,
     dark: true,
   },
@@ -57,8 +62,8 @@ export const THEME_TOKENS: Record<string, ThemeTokens> = {
     ink: "#2E1A47",
     bg: "#FFFCFD",
     radius: 20,
-    headingFont: "'Poppins', ui-sans-serif, system-ui, sans-serif",
-    bodyFont: "'Poppins', ui-sans-serif, system-ui, sans-serif",
+    headingFont: POPPINS,
+    bodyFont: POPPINS,
   },
   cove: {
     brand: "#38BDF8",
@@ -66,7 +71,7 @@ export const THEME_TOKENS: Record<string, ThemeTokens> = {
     ink: "#16233A",
     bg: "#FBFCFD",
     radius: 6,
-    headingFont: "'Lora', Georgia, serif",
+    headingFont: "var(--font-lora), Georgia, serif",
     bodyFont: BODY,
   },
   forge: {
@@ -75,7 +80,7 @@ export const THEME_TOKENS: Record<string, ThemeTokens> = {
     ink: "#17181A",
     bg: "#F4F4F2",
     radius: 0,
-    headingFont: "'Oswald', Impact, sans-serif",
+    headingFont: "var(--font-oswald), Impact, sans-serif",
     bodyFont: BODY,
   },
   marble: {
@@ -84,7 +89,7 @@ export const THEME_TOKENS: Record<string, ThemeTokens> = {
     ink: "#2A2E35",
     bg: "#F7F7F5",
     radius: 4,
-    headingFont: "'Montserrat', ui-sans-serif, system-ui, sans-serif",
+    headingFont: "var(--font-montserrat), ui-sans-serif, system-ui, sans-serif",
     bodyFont: BODY,
   },
 };

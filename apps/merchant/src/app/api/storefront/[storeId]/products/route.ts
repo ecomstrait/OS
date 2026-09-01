@@ -4,7 +4,7 @@ import { listStoreProducts, resolveStore } from "@/lib/storefront-api";
 export const runtime = "nodejs";
 
 /**
- * GET /api/storefront/:storeId/products?q=&page=&limit=
+ * GET /api/storefront/:storeId/products?q=&category=&page=&limit=
  *
  * Public product listing for a custom-website store. Supplier-approved and
  * published only.
@@ -23,6 +23,7 @@ export async function GET(
 
   const result = await listStoreProducts(storeId, {
     q: url.searchParams.get("q") ?? "",
+    category: url.searchParams.get("category") ?? undefined,
     page: Number.isFinite(page) ? page : 1,
     limit: Number.isFinite(limit) ? limit : 24,
   });

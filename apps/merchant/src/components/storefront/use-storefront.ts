@@ -111,22 +111,35 @@ export function useStorefrontCart(storeId: string) {
   return { cart, busy, error, add, setQuantity, remove, checkout };
 }
 
-/** Search + paging over the storefront's product API. */
-export function useStorefrontProducts(storeId: string, initial: ApiProduct[], initialTotal: number) {
+/**
+ * Search + category filter + paging over the storefront's product API.
+ *
+ * `category` lives in this hook's own state rather than being re-derived
+ * from the URL on every render — the listing page still keeps the URL in
+ * sync (so a category link is shareable/bookmarkable), but the fetch itself
+ * only needs to know "what to ask the API for right now."
+ */
+export function useStorefrontProducts(
+  storeId: string,
+  initial: ApiProduct[],
+  initialTotal: number,
+  initialCategory?: string,
+) {
   const base = `/api/storefront/${storeId}`;
   const [products, setProducts] = useState(initial);
   const [total, setTotal] = useState(initialTotal);
   const [page, setPage] = useState(1);
   const [query, setQuery] = useState("");
+  const [category, setCategoryState] = useState(initialCategory ?? "");
   const [loading, setLoading] = useState(false);
 
   const fetchPage = useCallback(
-    async (nextPage: number, q: string, append: boolean) => {
+    async (nextPage: number, q: string, cat: string, append: boolean) => {
       setLoading(true);
       try {
-        const res = await call<{ products: ApiProduct[]; total: number }>(
-          `${base}/products?page=${nextPage}&q=${encodeURIComponent(q)}`,
-        );
+        const params = new URLSearchParams({ page: String(nextPage), q });
+        if (cat) params.set("category", cat);
+        const res = await call<{ products: ApiProduct[]; total: number }>(`${base}/products?${params}`);
         setProducts((prev) => (append ? [...prev, ...res.products] : res.products));
         setTotal(res.total);
         setPage(nextPage);
@@ -139,12 +152,23 @@ export function useStorefrontProducts(storeId: string, initial: ApiProduct[], in
     [base],
   );
 
-  const search = useCallback((q: string) => {
-    setQuery(q);
-    void fetchPage(1, q, false);
-  }, [fetchPage]);
+  const search = useCallback(
+    (q: string) => {
+      setQuery(q);
+      void fetchPage(1, q, category, false);
+    },
+    [fetchPage, category],
+  );
 
-  const loadMore = useCallback(() => void fetchPage(page + 1, query, true), [fetchPage, page, query]);
+  const setCategory = useCallback(
+    (cat: string) => {
+      setCategoryState(cat);
+      void fetchPage(1, query, cat, false);
+    },
+    [fetchPage, query],
+  );
 
-  return { products, total, loading, query, search, loadMore, hasMore: products.length < total };
+  const loadMore = useCallback(() => void fetchPage(page + 1, query, category, true), [fetchPage, page, query, category]);
+
+  return { products, total, loading, query, category, search, setCategory, loadMore, hasMore: products.length < total };
 }

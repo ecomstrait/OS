@@ -2,6 +2,11 @@ import { cookies } from "next/headers";
 import { createAdminClient } from "@ecomstrait/db";
 import { productImage } from "@/lib/catalog";
 import { isPublicStatus } from "@/lib/store-status";
+import { UNCATEGORIZED, categoryLabel } from "@/lib/storefront-shared";
+
+// Re-exported so existing importers of this module keep working — the real
+// definitions live in storefront-shared.ts (see its header comment for why).
+export { UNCATEGORIZED, categoryLabel };
 
 /**
  * Data layer for the public storefront API.
@@ -22,6 +27,13 @@ export type ApiProduct = {
   image: string | null;
   images: string[];
   price: number | null;
+  /**
+   * The supplier's retail price, shown struck through as "compare at" —
+   * ONLY when the merchant's listed price actually undercuts it. This is a
+   * real markdown computed from real data, never an invented "was" price:
+   * a merchant who lists at (or above) retail simply has no compareAtPrice.
+   */
+  compareAtPrice: number | null;
   /** Units a customer can actually buy right now. */
   available: number;
   inStock: boolean;
@@ -111,6 +123,13 @@ function toApiProduct(
   listedPrice: number | null,
 ): ApiProduct {
   const available = Math.max(0, (p.stock ?? 0) - (p.reserved ?? 0));
+  const price = listedPrice ?? p.retail_price;
+  // A real markdown, not a fabricated "was" price: only set when the
+  // merchant's own listed price genuinely undercuts the supplier's retail.
+  const compareAtPrice =
+    listedPrice != null && p.retail_price != null && listedPrice < p.retail_price
+      ? p.retail_price
+      : null;
   return {
     id: p.id,
     title: p.title,
@@ -118,7 +137,8 @@ function toApiProduct(
     category: p.category,
     image: productImage(p.images?.[0]),
     images: (p.images ?? []).map((i) => productImage(i)).filter((u): u is string => Boolean(u)),
-    price: listedPrice ?? p.retail_price,
+    price,
+    compareAtPrice,
     available,
     inStock: available > 0,
   };
@@ -126,12 +146,17 @@ function toApiProduct(
 
 const PRODUCT_COLUMNS = "id, title, description, category, images, retail_price, stock, reserved, status";
 
-export type ProductQuery = { q?: string; page?: number; limit?: number };
+export type ProductQuery = { q?: string; category?: string; page?: number; limit?: number };
 
-/** Paged product listing for a storefront. */
+/**
+ * Paged product listing for a storefront. `category` is an exact match
+ * against `products.category` (case-insensitive) — the same string
+ * `listStoreCategories` groups by, so a category card's link and this query
+ * always agree on what belongs to it.
+ */
 export async function listStoreProducts(
   storeId: string,
-  { q = "", page = 1, limit = 24 }: ProductQuery,
+  { q = "", category, page = 1, limit = 24 }: ProductQuery,
 ): Promise<{ products: ApiProduct[]; total: number; page: number; limit: number }> {
   const db = admin();
   if (!db) return { products: [], total: 0, page, limit };
@@ -150,6 +175,8 @@ export async function listStoreProducts(
       .in("id", ids)
       .eq("status", "published");
     if (term) query = query.ilike("title", `%${term}%`);
+    if (category === UNCATEGORIZED) query = query.is("category", null);
+    else if (category) query = query.ilike("category", category);
     return query.order("title");
   };
 
@@ -163,6 +190,87 @@ export async function listStoreProducts(
     page: Math.max(1, page),
     limit: size,
   };
+}
+
+export type CategorySummary = {
+  /** `UNCATEGORIZED` for the "no category set" group — a real page value, not a display label. */
+  category: string;
+  count: number;
+  /** First product's primary image in this category, for the category card. */
+  image: string | null;
+};
+
+/**
+ * Every category present in a store's sellable catalog, with a count and a
+ * representative image — the data behind the category nav and the
+ * homepage's per-category bands.
+ *
+ * Fetches every approved+published listing's `category`/`images` and groups
+ * in JS rather than a DB-side GROUP BY: the same bounded, no-pagination read
+ * `approvedListings` already does for this store, just carried one step
+ * further. A store's live catalog is small enough (tens to low hundreds of
+ * products) that this is one query, not N.
+ */
+export async function listStoreCategories(storeId: string): Promise<CategorySummary[]> {
+  const db = admin();
+  if (!db) return [];
+
+  const listed = await approvedListings(db, storeId);
+  const ids = [...listed.keys()];
+  if (!ids.length) return [];
+
+  const { data } = await db
+    .from("products")
+    .select("category, images")
+    .in("id", ids)
+    .eq("status", "published");
+
+  const groups = new Map<string, { count: number; image: string | null }>();
+  for (const p of data ?? []) {
+    const key = p.category?.trim() || UNCATEGORIZED;
+    const existing = groups.get(key);
+    const image = productImage(p.images?.[0]);
+    if (existing) {
+      existing.count += 1;
+      if (!existing.image && image) existing.image = image;
+    } else {
+      groups.set(key, { count: 1, image });
+    }
+  }
+
+  // Uncategorized last — it's a fallback bucket, not a merchandised category.
+  return [...groups.entries()]
+    .sort(([a], [b]) => (a === UNCATEGORIZED ? 1 : b === UNCATEGORIZED ? -1 : a.localeCompare(b)))
+    .map(([category, g]) => ({ category, count: g.count, image: g.image }));
+}
+
+export type StorefrontNavLink = { label: string; href: string };
+
+const MAX_NAV_CATEGORIES = 6;
+
+/**
+ * The category nav — up to a handful of real categories plus a "Shop all"
+ * catch-all, always joined by a "Sale" link (the homepage's Sale band
+ * self-hides when nothing's actually marked down, so this never needs its
+ * own existence check) and "About" when the store has about content.
+ *
+ * One function so the homepage, the product page, and the listing page all
+ * build the identical nav from the identical data — never three
+ * independently-drifting copies of "which categories fit."
+ */
+export async function getStorefrontNav(
+  storeId: string,
+  opts: { about: boolean },
+): Promise<StorefrontNavLink[]> {
+  const categories = await listStoreCategories(storeId);
+  const links: StorefrontNavLink[] = categories.slice(0, MAX_NAV_CATEGORIES).map((c) => ({
+    label: categoryLabel(c.category),
+    href: `/store/${storeId}/products?category=${encodeURIComponent(c.category)}`,
+  }));
+  links.push({ label: "Shop all", href: `/store/${storeId}/products` });
+  links.push({ label: "Sale", href: `/store/${storeId}#sale` });
+  if (opts.about) links.push({ label: "About", href: `/store/${storeId}#about` });
+  return links;
 }
 
 /** A single storefront product, or null if it isn't approved/published here. */

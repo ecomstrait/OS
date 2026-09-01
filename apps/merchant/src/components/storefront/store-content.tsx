@@ -13,6 +13,14 @@ import type { PlanMedia, StorePlan } from "@/lib/ecomai";
  *
  * Anything that renders plan content belongs here, so the preview and the live
  * storefront cannot disagree about what a store looks like.
+ *
+ * Every color here comes from the inherited `var(--ink)` (via opacity, never
+ * a literal color class) or an explicit `var(--brand)`/`color-mix()` — so it
+ * reads correctly on every theme, dark ones included. See
+ * Docs/AI-Native-Migration-Plan.md-adjacent notes in storefront-view.tsx for
+ * the bug this fixes: hardcoded `ink-*`/`white` Tailwind classes silently
+ * broke every dark theme (Noir) — half the page still rendered light-mode
+ * colors on a black background.
  */
 
 /**
@@ -28,7 +36,7 @@ export function heroBackdropStyle(
 ): React.CSSProperties {
   if (media?.kind === "image") {
     return {
-      backgroundImage: `linear-gradient(120deg, rgba(15,23,42,.55), rgba(15,23,42,.25)), url('${media.url}')`,
+      backgroundImage: `linear-gradient(180deg, rgba(10,10,12,.35), rgba(10,10,12,.62)), url('${media.url}')`,
       backgroundSize: "cover",
       backgroundPosition: "center",
     };
@@ -56,7 +64,7 @@ export function HeroVideo({ media }: { media: PlanMedia | null | undefined }) {
         aria-hidden
         className="absolute inset-0 h-full w-full object-cover"
       />
-      <div className="absolute inset-0 bg-ink-950/45" />
+      <div className="absolute inset-0" style={{ background: "rgba(10,10,12,.5)" }} />
     </>
   );
 }
@@ -72,23 +80,28 @@ export function AboutBlock({ plan }: { plan: StorePlan }) {
   if (!plan.about && !media) return null;
 
   return (
-    <div className="mt-12 grid items-center gap-6 border-t border-ink-100 pt-8 sm:grid-cols-2">
+    <div
+      className="grid items-center gap-10 border-t pt-16 sm:grid-cols-2 sm:gap-16"
+      style={{ borderColor: "color-mix(in srgb, var(--ink) 10%, transparent)" }}
+    >
       {media?.kind === "image" && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={media.url}
           alt={media.alt ?? ""}
-          className="h-56 w-full object-cover"
+          className="h-72 w-full object-cover sm:h-96"
           style={{ borderRadius: "var(--radius)" }}
         />
       )}
-      <p
-        className={`mx-auto max-w-lg text-sm leading-relaxed opacity-70 ${
-          media ? "text-left" : "sm:col-span-2 text-center"
-        }`}
-      >
-        {plan.about}
-      </p>
+      <div className={media ? "" : "sm:col-span-2 mx-auto max-w-xl text-center"}>
+        <p
+          className="mb-4 text-xs font-semibold uppercase opacity-60"
+          style={{ letterSpacing: "0.2em" }}
+        >
+          Our story
+        </p>
+        <p className="text-base leading-relaxed opacity-80">{plan.about}</p>
+      </div>
     </div>
   );
 }
@@ -105,7 +118,7 @@ export function StoreSections({ plan }: { plan: StorePlan }) {
   if (!sections.length) return null;
 
   return (
-    <div className="mt-12 space-y-12">
+    <div className="flex flex-col gap-20">
       {sections.map((s) => {
         const heading = s.heading?.trim();
         const body = s.body?.trim();
@@ -117,19 +130,19 @@ export function StoreSections({ plan }: { plan: StorePlan }) {
           <section key={s.id}>
             {heading && (
               <h2
-                className="mb-3 text-center text-xl font-bold"
-                style={{ fontFamily: "var(--font-heading)" }}
+                className="mb-8 text-center text-2xl font-semibold"
+                style={{ fontFamily: "var(--font-heading)", letterSpacing: "-0.01em" }}
               >
                 {heading}
               </h2>
             )}
 
             {s.type === "features" ? (
-              <div className="grid gap-5 sm:grid-cols-3">
+              <div className="grid gap-8 sm:grid-cols-3">
                 {items.map((it, i) => (
                   <div key={i} className="text-center">
                     <p className="text-sm font-semibold">{it.title}</p>
-                    <p className="mt-1 text-sm opacity-70">{it.description}</p>
+                    <p className="mt-2 text-sm leading-relaxed opacity-70">{it.description}</p>
                   </div>
                 ))}
               </div>
@@ -157,24 +170,24 @@ export function StoreSections({ plan }: { plan: StorePlan }) {
                     style={{ borderRadius: "var(--radius)" }}
                   />
                 )}
-                {body && <p className="mt-3 text-center text-sm opacity-70">{body}</p>}
+                {body && <p className="mt-4 text-center text-sm leading-relaxed opacity-70">{body}</p>}
               </div>
             ) : s.type === "image" ? (
-              <div className="grid items-center gap-6 sm:grid-cols-2">
+              <div className="grid items-center gap-10 sm:grid-cols-2">
                 {media[0] && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={media[0].url}
                     alt={media[0].alt ?? ""}
-                    className="h-60 w-full object-cover"
+                    className="h-72 w-full object-cover"
                     style={{ borderRadius: "var(--radius)" }}
                   />
                 )}
-                {body && <p className="text-sm leading-relaxed opacity-80">{body}</p>}
+                {body && <p className="text-base leading-relaxed opacity-80">{body}</p>}
               </div>
             ) : (
               body && (
-                <p className="mx-auto max-w-2xl text-center text-sm leading-relaxed opacity-80">
+                <p className="mx-auto max-w-2xl text-center text-base leading-relaxed opacity-80">
                   {body}
                 </p>
               )
