@@ -73,6 +73,13 @@ export function storefrontMetadata({
   };
 }
 
+/** Trims AI-written copy to something a meta description tag can hold, without cutting mid-word. */
+export function truncateForMeta(text: string, max = 160): string {
+  const clean = text.trim();
+  if (clean.length <= max) return clean;
+  return `${clean.slice(0, max).replace(/\s+\S*$/, "")}…`;
+}
+
 type JsonLd = Record<string, unknown>;
 
 /** Renders a JSON-LD block. Data only ever comes from the store's own catalog/plan — never user input echoed unescaped elsewhere. */

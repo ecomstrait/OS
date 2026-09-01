@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { getStorefront } from "@/lib/storefront";
 import { StorefrontProducts } from "@/lib/storefront-pages";
 import { categoryLabel } from "@/lib/storefront-shared";
-import { requestOrigin, storefrontMetadata } from "@/lib/storefront-seo";
+import { requestOrigin, storefrontMetadata, truncateForMeta } from "@/lib/storefront-seo";
+import { getCachedCategoryDescription } from "@/lib/category-content";
 
 export async function generateMetadata({
   params,
@@ -19,9 +20,16 @@ export async function generateMetadata({
   const origin = await requestOrigin();
   const label = category ? categoryLabel(category) : "Shop all";
   const canonicalPath = category ? `/store/${id}/products?category=${encodeURIComponent(category)}` : `/store/${id}/products`;
+  // The AI-written category blurb, once one exists, is real page content —
+  // a better meta description than the generic template below it.
+  const generated = category ? await getCachedCategoryDescription(id, category) : null;
   const meta = storefrontMetadata({
     title: `${label} · ${s.name}`,
-    description: category ? `Shop ${label} at ${s.name}.` : `Browse everything at ${s.name}.`,
+    description: generated
+      ? truncateForMeta(generated)
+      : category
+        ? `Shop ${label} at ${s.name}.`
+        : `Browse everything at ${s.name}.`,
     canonical: `${origin}${canonicalPath}`,
     storeName: s.name,
     image: s.logoUrl,

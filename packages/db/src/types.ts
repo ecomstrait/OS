@@ -287,6 +287,32 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["usage_daily"]["Row"]>;
         Relationships: [];
       };
+      /** Supplier-side counterpart of `subscriptions` — keyed by `supplier_id`
+       *  (the business), not `user_id`, matching `supplier_wallets`' pooled
+       *  balance model. See supabase/migrations/20260901160000_supplier_subscriptions.sql. */
+      supplier_subscriptions: {
+        Row: {
+          supplier_id: string;
+          plan: PlanTier;
+          status: SubscriptionStatus;
+          stripe_customer_id: string | null;
+          stripe_subscription_id: string | null;
+          current_period_end: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: { supplier_id: string } & Partial<
+          Omit<Database["public"]["Tables"]["supplier_subscriptions"]["Row"], "supplier_id">
+        >;
+        Update: Partial<Database["public"]["Tables"]["supplier_subscriptions"]["Row"]>;
+        Relationships: [];
+      };
+      supplier_usage_daily: {
+        Row: { supplier_id: string; day: string; tokens_used: number };
+        Insert: { supplier_id: string; day?: string; tokens_used?: number };
+        Update: Partial<Database["public"]["Tables"]["supplier_usage_daily"]["Row"]>;
+        Relationships: [];
+      };
       shopify_stores: {
         Row: {
           id: string;
@@ -444,6 +470,22 @@ export type Database = {
           label?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["store_theme_versions"]["Row"]>;
+        Relationships: [];
+      };
+      store_category_content: {
+        Row: {
+          id: string;
+          store_id: string;
+          category: string;
+          description: string;
+          created_at: string;
+        };
+        Insert: {
+          store_id: string;
+          category: string;
+          description: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["store_category_content"]["Row"]>;
         Relationships: [];
       };
       store_assets: {
@@ -716,6 +758,8 @@ export type Order = Database["public"]["Tables"]["orders"]["Row"];
 export type OrderItem = Database["public"]["Tables"]["order_items"]["Row"];
 export type Subscription = Database["public"]["Tables"]["subscriptions"]["Row"];
 export type UsageDaily = Database["public"]["Tables"]["usage_daily"]["Row"];
+export type SupplierSubscription = Database["public"]["Tables"]["supplier_subscriptions"]["Row"];
+export type SupplierUsageDaily = Database["public"]["Tables"]["supplier_usage_daily"]["Row"];
 export type ShopifyStore = Database["public"]["Tables"]["shopify_stores"]["Row"];
 export type Store = Database["public"]["Tables"]["stores"]["Row"];
 export type AiEmbedding = Database["public"]["Tables"]["ai_embeddings"]["Row"];

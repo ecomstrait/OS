@@ -25,6 +25,7 @@ export function ProductsListingView({
   initialCategory,
   initialQuery,
   basePath,
+  categoryDescription,
 }: {
   store: Storefront;
   navLinks: StorefrontNavLink[];
@@ -35,6 +36,14 @@ export function ProductsListingView({
   initialQuery: string;
   /** `/store/<uuid>` on the id-path route, `""` on a connected domain. */
   basePath: string;
+  /**
+   * AI-written blurb for `initialCategory`, server-fetched for this page
+   * load only — switching categories via the pills below is client-side
+   * state, not a fresh page render, so this is hidden the moment the
+   * selection no longer matches what it was written for rather than risk
+   * showing the wrong category's copy.
+   */
+  categoryDescription: string | null;
 }) {
   const t = storeTokens(store.theme, store.plan.brandColors);
   const line = "color-mix(in srgb, var(--ink) 12%, transparent)";
@@ -85,6 +94,9 @@ export function ProductsListingView({
           >
             {category ? categoryLabel(category) : "Shop all"}
           </h1>
+          {categoryDescription && category === initialCategory && (
+            <p className="mt-3 max-w-2xl text-sm leading-relaxed opacity-70">{categoryDescription}</p>
+          )}
 
           <div className="mt-8 flex flex-col gap-6 border-b pb-8" style={{ borderColor: line }}>
             <div className="relative max-w-sm">

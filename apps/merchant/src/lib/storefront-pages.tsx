@@ -1,7 +1,9 @@
+import { after } from "next/server";
 import { notFound } from "next/navigation";
 import { getStorefront } from "@/lib/storefront";
 import { getStorefrontNav, getStoreProduct, listStoreCategories, listStoreProducts } from "@/lib/storefront-api";
 import { categoryLabel } from "@/lib/storefront-shared";
+import { ensureCategoryDescription, getCachedCategoryDescription } from "@/lib/category-content";
 import { StorefrontView, type CategoryBand } from "@/components/storefront/storefront-view";
 import { ProductsListingView } from "@/components/storefront/products-listing-view";
 import { ProductDetailView } from "@/components/storefront/product-detail-view";
@@ -97,6 +99,19 @@ export async function StorefrontProducts({
       : [{ name: "Shop all", url: `${origin}${basePath}/products` }]),
   ];
 
+  // Real, unique copy for a category page instead of a bare grid — cached
+  // after the first generation, and never blocking this page on an AI call:
+  // a category with nothing cached yet just renders without a description,
+  // and `after()` queues the generation for whoever visits next.
+  let categoryDescription: string | null = null;
+  if (category) {
+    categoryDescription = await getCachedCategoryDescription(storeId, category);
+    if (!categoryDescription) {
+      const productTitles = initial.products.map((p) => p.title);
+      after(() => ensureCategoryDescription({ storeId, storeName: store.name, category, productTitles }));
+    }
+  }
+
   return (
     <>
       <JsonLdScript data={breadcrumbJsonLd(crumbs)} />
@@ -109,6 +124,7 @@ export async function StorefrontProducts({
         initialCategory={category}
         initialQuery={q}
         basePath={basePath}
+        categoryDescription={categoryDescription}
       />
     </>
   );
