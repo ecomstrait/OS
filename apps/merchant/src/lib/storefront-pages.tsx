@@ -4,17 +4,27 @@ import { getStorefront } from "@/lib/storefront";
 import { getStorefrontNav, getStoreProduct, listStoreCategories, listStoreProducts } from "@/lib/storefront-api";
 import { categoryLabel } from "@/lib/storefront-shared";
 import { ensureCategoryDescription, getCachedCategoryDescription } from "@/lib/category-content";
+import { listPublishedPosts, getPublishedPost } from "@/lib/blog-api";
 import { StorefrontView, type CategoryBand } from "@/components/storefront/storefront-view";
 import { ProductsListingView } from "@/components/storefront/products-listing-view";
 import { ProductDetailView } from "@/components/storefront/product-detail-view";
+import { BlogListView } from "@/components/storefront/blog-list-view";
+import { BlogPostView } from "@/components/storefront/blog-post-view";
 import {
   JsonLdScript,
+  articleJsonLd,
   breadcrumbJsonLd,
+  itemListJsonLd,
   organizationJsonLd,
   productJsonLd,
   requestOrigin,
   websiteJsonLd,
 } from "@/lib/storefront-seo";
+
+/** Whether the nav should offer a "Blog" link — never to a page with nothing on it. */
+async function hasPublishedPosts(storeId: string): Promise<boolean> {
+  return (await listPublishedPosts(storeId)).length > 0;
+}
 
 /**
  * The three storefront pages' actual bodies, each taking an already-resolved
@@ -43,8 +53,9 @@ export async function StorefrontHome({
   if (!store) notFound();
 
   const hasAbout = Boolean(store.plan.about || store.plan.aboutMedia);
+  const hasBlog = await hasPublishedPosts(storeId);
   const [navLinks, categories] = await Promise.all([
-    getStorefrontNav(storeId, { about: hasAbout, basePath }),
+    getStorefrontNav(storeId, { about: hasAbout, blog: hasBlog, basePath }),
     listStoreCategories(storeId),
   ]);
 
@@ -84,8 +95,9 @@ export async function StorefrontProducts({
   if (!store) notFound();
 
   const hasAbout = Boolean(store.plan.about || store.plan.aboutMedia);
+  const hasBlog = await hasPublishedPosts(storeId);
   const [navLinks, categories, initial] = await Promise.all([
-    getStorefrontNav(storeId, { about: hasAbout, basePath }),
+    getStorefrontNav(storeId, { about: hasAbout, blog: hasBlog, basePath }),
     listStoreCategories(storeId),
     listStoreProducts(storeId, { category: category || undefined, q, page: 1 }),
   ]);
@@ -112,9 +124,17 @@ export async function StorefrontProducts({
     }
   }
 
+  // Skipped for a search view (`q` set) — same reasoning as its noindex in
+  // generateMetadata: a query's results are ephemeral and thin, not a
+  // canonical list worth describing to a crawler.
+  const itemList = q
+    ? null
+    : itemListJsonLd(initial.products.map((p) => ({ name: p.title, url: `${origin}${basePath}/products/${p.id}` })));
+
   return (
     <>
       <JsonLdScript data={breadcrumbJsonLd(crumbs)} />
+      {itemList && <JsonLdScript data={itemList} />}
       <ProductsListingView
         store={store}
         navLinks={navLinks}
@@ -144,6 +164,7 @@ export async function StorefrontProductDetail({
 
   const navLinks = await getStorefrontNav(storeId, {
     about: Boolean(store.plan.about || store.plan.aboutMedia),
+    blog: await hasPublishedPosts(storeId),
     basePath,
   });
 
@@ -163,6 +184,71 @@ export async function StorefrontProductDetail({
       <JsonLdScript data={productJsonLd({ product, url: productUrl })} />
       <JsonLdScript data={breadcrumbJsonLd(crumbs)} />
       <ProductDetailView store={store} product={product} navLinks={navLinks} basePath={basePath} />
+    </>
+  );
+}
+
+export async function StorefrontBlogList({
+  storeId,
+  basePath = `/store/${storeId}`,
+}: {
+  storeId: string;
+  basePath?: string;
+}) {
+  const store = await getStorefront(storeId);
+  if (!store) notFound();
+
+  const posts = await listPublishedPosts(storeId);
+  const navLinks = await getStorefrontNav(storeId, {
+    about: Boolean(store.plan.about || store.plan.aboutMedia),
+    blog: posts.length > 0,
+    basePath,
+  });
+
+  return <BlogListView store={store} navLinks={navLinks} posts={posts} basePath={basePath} />;
+}
+
+export async function StorefrontBlogPost({
+  storeId,
+  slug,
+  basePath = `/store/${storeId}`,
+}: {
+  storeId: string;
+  slug: string;
+  basePath?: string;
+}) {
+  const [store, post] = await Promise.all([getStorefront(storeId), getPublishedPost(storeId, slug)]);
+  if (!store || !post) notFound();
+
+  const navLinks = await getStorefrontNav(storeId, {
+    about: Boolean(store.plan.about || store.plan.aboutMedia),
+    blog: true, // this page's own existence proves at least one post is published
+    basePath,
+  });
+
+  const origin = await requestOrigin();
+  const home = basePath || "/";
+  const postUrl = `${origin}${basePath}/blog/${slug}`;
+  const crumbs = [
+    { name: store.name, url: `${origin}${home}` },
+    { name: "Blog", url: `${origin}${basePath}/blog` },
+    { name: post.title, url: postUrl },
+  ];
+
+  return (
+    <>
+      <JsonLdScript
+        data={articleJsonLd({
+          title: post.title,
+          description: post.excerpt,
+          url: postUrl,
+          image: post.coverImage,
+          publishedAt: post.publishedAt,
+          authorName: store.name,
+        })}
+      />
+      <JsonLdScript data={breadcrumbJsonLd(crumbs)} />
+      <BlogPostView store={store} navLinks={navLinks} post={post} basePath={basePath} />
     </>
   );
 }

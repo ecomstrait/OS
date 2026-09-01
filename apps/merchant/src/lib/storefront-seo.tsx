@@ -114,6 +114,20 @@ export function websiteJsonLd({ name, origin }: { name: string; origin: string }
   };
 }
 
+/** The current page's products, in the order shown — not a whole category, just what's actually on this page. */
+export function itemListJsonLd(items: { name: string; url: string }[]): JsonLd {
+  return {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    itemListElement: items.map((item, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name: item.name,
+      url: item.url,
+    })),
+  };
+}
+
 export function breadcrumbJsonLd(items: { name: string; url: string }[]): JsonLd {
   return {
     "@context": "https://schema.org",
@@ -151,5 +165,32 @@ export function productJsonLd({
       ...(product.price != null ? { price: product.price } : {}),
       availability: product.inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock",
     },
+  };
+}
+
+export function articleJsonLd({
+  title,
+  description,
+  url,
+  image,
+  publishedAt,
+  authorName,
+}: {
+  title: string;
+  description?: string | null;
+  url: string;
+  image?: string | null;
+  publishedAt: string;
+  authorName: string;
+}): JsonLd {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    headline: title,
+    ...(description ? { description } : {}),
+    ...(image ? { image: [image] } : {}),
+    datePublished: publishedAt,
+    author: { "@type": "Organization", name: authorName },
+    mainEntityOfPage: { "@type": "WebPage", "@id": url },
   };
 }

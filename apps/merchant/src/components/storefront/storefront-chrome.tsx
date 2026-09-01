@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ShoppingBag, Plus, Minus, Loader2, X } from "lucide-react";
 import type { Storefront } from "@/lib/storefront";
 import { useStorefrontCart } from "@/components/storefront/use-storefront";
+import { NewsletterForm } from "@/components/storefront/newsletter-form";
 
 /**
  * Header, cart drawer, and footer — the chrome every storefront page shares
@@ -125,6 +126,12 @@ export function StorefrontChrome({
               ))}
             </nav>
           )}
+          <div className="flex flex-col items-center gap-3">
+            <p className="text-xs font-semibold uppercase opacity-70" style={{ letterSpacing: "0.1em" }}>
+              Stay in the loop
+            </p>
+            <NewsletterForm storeId={store.id} />
+          </div>
           <p className="text-xs opacity-50" style={{ letterSpacing: "0.04em" }}>
             {store.plan.footerText || `${store.name} · Powered by EcomStrait`}
           </p>

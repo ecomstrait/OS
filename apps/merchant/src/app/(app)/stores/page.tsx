@@ -181,6 +181,11 @@ export default async function StoresPage() {
                   <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${STATUS_STYLE[s.status]}`}>
                     {s.status.replace(/_/g, " ")}
                   </span>
+                  {s.type === "own_platform" && (
+                    <Link href={`/stores/${s.id}/blog`} className="text-sm font-semibold text-ink-600 hover:text-ink-900">
+                      Blog
+                    </Link>
+                  )}
                   <StoreActions
                     storeId={s.id}
                     storeName={s.name ?? "Untitled store"}

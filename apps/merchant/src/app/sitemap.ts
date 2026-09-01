@@ -5,6 +5,7 @@ import { createAdminClient } from "@ecomstrait/db";
 import { siteUrl } from "@/lib/site-url";
 import { isPublicStatus } from "@/lib/store-status";
 import { listStoreCategories, listStoreProducts } from "@/lib/storefront-api";
+import { listPublishedPosts } from "@/lib/blog-api";
 
 // Otherwise Next prerenders this once at build time — a store launched (or a
 // product added) afterward would stay invisible to crawlers until the next
@@ -59,6 +60,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     const { products } = await listStoreProducts(store.id, { limit: 60 });
     for (const p of products) {
       entries.push({ url: `${url}/products/${p.id}`, changeFrequency: "weekly", priority: 0.5 });
+    }
+
+    const posts = await listPublishedPosts(store.id);
+    if (posts.length) {
+      entries.push({ url: `${url}/blog`, lastModified: store.updated_at, changeFrequency: "weekly", priority: 0.5 });
+      for (const p of posts) {
+        entries.push({ url: `${url}/blog/${p.slug}`, lastModified: p.publishedAt, changeFrequency: "monthly", priority: 0.4 });
+      }
     }
   }
 

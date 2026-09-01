@@ -505,3 +505,86 @@ export async function generateStorePlan(
     return { plan: presetPlan(idea), tokensUsed: 400 };
   }
 }
+
+// ---------------------------------------------------------------------------
+// Blog drafts
+// ---------------------------------------------------------------------------
+
+export type BlogDraft = {
+  title: string;
+  /** One sentence — shown in the blog list, not the full post. */
+  excerpt: string;
+  /** Plain text, paragraphs separated by a blank line — same minimal-markup
+   *  convention as `about`/section `body` elsewhere in a plan. */
+  body: string;
+  seoTitle: string;
+  seoDescription: string;
+};
+
+function presetBlogDraft(topic: string, storeName: string): BlogDraft {
+  const clean = topic.trim().replace(/\.$/, "");
+  const title = clean
+    .split(/\s+/)
+    .map((w) => w[0]?.toUpperCase() + w.slice(1))
+    .join(" ");
+  return {
+    title,
+    excerpt: `A closer look at ${clean.toLowerCase()} from ${storeName}.`,
+    body: `At ${storeName}, we get asked about ${clean.toLowerCase()} often enough that it felt worth writing down properly.\n\nCheck back soon for the full guide — in the meantime, browse our current collection and reach out with any questions.`,
+    seoTitle: `${title} — ${storeName}`,
+    seoDescription: `${title}: what to know, from the team at ${storeName}.`,
+  };
+}
+
+const BLOG_SYSTEM = [
+  "You are EcomAI, writing a blog post for an online store.",
+  "Write genuinely useful, specific content for the topic given — not generic filler.",
+  "3-5 short paragraphs, plain text, a blank line between paragraphs. No markdown headings, no bullet lists, no emojis.",
+  "Warm, confident, concrete — mention real specifics implied by the topic and the store rather than vague generalities.",
+  "Respond with ONLY JSON using these exact keys:",
+  "{",
+  '  "title": string,',
+  '  "excerpt": string,        // one sentence, shown in the blog list',
+  '  "body": string,           // the full post',
+  '  "seoTitle": string,',
+  '  "seoDescription": string',
+  "}",
+].join("\n");
+
+/**
+ * Draft a blog post from a topic — the AI-authored half of the blog system
+ * (a merchant can also just write one from scratch; see blog-actions.ts).
+ */
+export async function generateBlogDraft(
+  topic: string,
+  storeName: string,
+): Promise<{ draft: BlogDraft; tokensUsed: number }> {
+  if (!isGatewayConfigured() || topic.trim().length < 2) {
+    return { draft: presetBlogDraft(topic, storeName), tokensUsed: 0 };
+  }
+
+  try {
+    const { content, tokensUsed } = await chat(
+      "workhorse",
+      [
+        { role: "system", content: BLOG_SYSTEM },
+        { role: "user", content: `Store: ${storeName}\nBlog post topic: ${topic}` },
+      ],
+      { temperature: 0.7, maxTokens: 1200, responseFormatJson: true, timeoutMs: 20000 },
+    );
+    const p = JSON.parse(content) as Partial<BlogDraft>;
+    const base = presetBlogDraft(topic, storeName);
+    return {
+      draft: {
+        title: p.title || base.title,
+        excerpt: p.excerpt || base.excerpt,
+        body: p.body || base.body,
+        seoTitle: p.seoTitle || base.seoTitle,
+        seoDescription: p.seoDescription || base.seoDescription,
+      },
+      tokensUsed,
+    };
+  } catch {
+    return { draft: presetBlogDraft(topic, storeName), tokensUsed: 0 };
+  }
+}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ShieldCheck, PackageCheck, BadgeCheck } from "lucide-react";
 import type { PlanMedia, StorePlan } from "@/lib/ecomai";
 
 /**
@@ -238,6 +239,36 @@ export function StoreSections({ plan }: { plan: StorePlan }) {
           </section>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * Universal, honestly-true value props — not per-store data (there's no
+ * reviews/ratings system to draw real numbers from), so this is deliberately
+ * the same three claims on every store rather than invented star ratings or
+ * review counts: real Stripe-secured checkout, cart pricing that only ever
+ * reflects actual stock, and every product coming from a supplier who went
+ * through this platform's own verification.
+ */
+const TRUST_ITEMS = [
+  { icon: ShieldCheck, label: "Secure checkout", detail: "Payments encrypted end to end" },
+  { icon: PackageCheck, label: "Real-time stock", detail: "What you see is what ships" },
+  { icon: BadgeCheck, label: "Vetted suppliers", detail: "Every product is supplier-verified" },
+] as const;
+
+export function TrustBadges({ compact = false }: { compact?: boolean }) {
+  return (
+    <div className={compact ? "flex flex-wrap gap-x-6 gap-y-2" : "grid gap-6 sm:grid-cols-3"}>
+      {TRUST_ITEMS.map(({ icon: Icon, label, detail }) => (
+        <div key={label} className={compact ? "flex items-center gap-2" : "flex items-start gap-3"}>
+          <Icon className={compact ? "h-4 w-4 shrink-0 opacity-60" : "h-5 w-5 shrink-0 opacity-70"} />
+          <div>
+            <p className={compact ? "text-xs font-semibold" : "text-sm font-semibold"}>{label}</p>
+            {!compact && <p className="mt-0.5 text-xs opacity-60">{detail}</p>}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

@@ -11,6 +11,7 @@ import {
   AboutBlock,
   HeroCarousel,
   StoreSections,
+  TrustBadges,
 } from "@/components/storefront/store-content";
 
 /**
@@ -96,6 +97,10 @@ export function StorefrontView({
             </a>
           </div>
         </section>
+
+        <div className="mx-auto max-w-4xl px-6 py-12" style={{ borderBottom: `1px solid ${line}` }}>
+          <TrustBadges />
+        </div>
 
         <section id="categories" className="mx-auto max-w-6xl px-6 py-20 sm:py-28">
           {/* ---- Spotlight — one product, shown big, with its full

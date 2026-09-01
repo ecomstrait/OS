@@ -14,6 +14,7 @@ export type RateLimit = { limit: number; windowSeconds: number };
 /** Cart mutations are chatty by nature; checkout should never be. */
 export const CART_LIMIT: RateLimit = { limit: 60, windowSeconds: 60 };
 export const CHECKOUT_LIMIT: RateLimit = { limit: 10, windowSeconds: 60 };
+export const NEWSLETTER_LIMIT: RateLimit = { limit: 5, windowSeconds: 60 };
 
 export type RateLimitResult = { allowed: boolean; hits: number; resetAt: Date | null };
 

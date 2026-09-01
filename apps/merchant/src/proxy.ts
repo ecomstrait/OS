@@ -25,6 +25,8 @@ function isStorefrontPath(pathname: string): boolean {
     pathname === "/" ||
     pathname === "/products" ||
     pathname.startsWith("/products/") ||
+    pathname === "/blog" ||
+    pathname.startsWith("/blog/") ||
     pathname === "/sitemap.xml" ||
     pathname === "/robots.txt"
   );

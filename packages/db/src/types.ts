@@ -41,6 +41,9 @@ export type SubscriptionStatus =
   | "incomplete";
 export type StoreType = "shopify_shopify_theme" | "shopify_liquid_theme" | "own_platform";
 export type StoreStatus = "draft" | "building" | "ready_for_review" | "live" | "archived";
+export type PostStatus = "draft" | "published";
+/** Who wrote the current draft — doesn't gate what a merchant can do with it. */
+export type PostSource = "ai" | "merchant";
 export type ShopifyStoreStatus =
   | "available"
   | "assigned"
@@ -349,6 +352,8 @@ export type Database = {
           domain: string | null;
           /** Set only once DNS was proven to point at us — see storefront-by-domain routing. Null means "not routed," regardless of what `domain` holds. */
           domain_verified_at: string | null;
+          /** The Resend Audience id for this store's newsletter signups — lazily created, see newsletter.ts. */
+          newsletter_audience_id: string | null;
           subdomain: string | null;
           theme: string | null;
           shopify_store_id: string | null;
@@ -486,6 +491,39 @@ export type Database = {
           description: string;
         };
         Update: Partial<Database["public"]["Tables"]["store_category_content"]["Row"]>;
+        Relationships: [];
+      };
+      store_posts: {
+        Row: {
+          id: string;
+          store_id: string;
+          title: string;
+          slug: string;
+          excerpt: string | null;
+          body: string;
+          cover_image: string | null;
+          status: PostStatus;
+          source: PostSource;
+          seo_title: string | null;
+          seo_description: string | null;
+          published_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          store_id: string;
+          title: string;
+          slug: string;
+          excerpt?: string | null;
+          body?: string;
+          cover_image?: string | null;
+          status?: PostStatus;
+          source?: PostSource;
+          seo_title?: string | null;
+          seo_description?: string | null;
+          published_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["store_posts"]["Row"]>;
         Relationships: [];
       };
       store_assets: {

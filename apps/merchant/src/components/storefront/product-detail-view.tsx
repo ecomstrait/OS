@@ -6,6 +6,7 @@ import type { Storefront } from "@/lib/storefront";
 import type { ApiProduct, StorefrontNavLink } from "@/lib/storefront-api";
 import { storeTokens, tokenStyle } from "@/lib/theme-tokens";
 import { StorefrontChrome, useStorefrontCartContext } from "@/components/storefront/storefront-chrome";
+import { TrustBadges } from "@/components/storefront/store-content";
 
 export function ProductDetailView({
   store,
@@ -75,6 +76,9 @@ export function ProductDetailView({
 
               <div className="mt-8 border-t pt-8" style={{ borderColor: line }}>
                 <AddToCart product={product} />
+                <div className="mt-6">
+                  <TrustBadges compact />
+                </div>
               </div>
             </div>
           </div>

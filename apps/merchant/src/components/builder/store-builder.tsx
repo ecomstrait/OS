@@ -27,6 +27,7 @@ import {
   AboutBlock,
   HeroCarousel,
   StoreSections,
+  TrustBadges,
 } from "@/components/storefront/store-content";
 import { storeTokens, tokenStyle } from "@/lib/theme-tokens";
 import type { DraftStore } from "@/lib/drafts";
@@ -619,7 +620,11 @@ export function StoreBuilder({
                   ))}
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 px-6 pb-6 sm:grid-cols-3">
+                <div className="border-y border-ink-100 px-6 py-5">
+                  <TrustBadges compact />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 px-6 pb-6 pt-6 sm:grid-cols-3">
                   {(products.length ? products : Array.from({ length: 3 }).map((_, i) => ({ id: `x${i}`, title: "Product", price: null, image: null }))).slice(0, 6).map((p) => (
                     <div key={p.id} className="overflow-hidden rounded-lg border border-ink-100">
                       <div className="aspect-square bg-ink-50">

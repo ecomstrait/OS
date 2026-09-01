@@ -30,6 +30,8 @@ export type {
   SubscriptionStatus,
   StoreType,
   StoreStatus,
+  PostStatus,
+  PostSource,
   ShopifyStoreStatus,
   AiEmbedding,
   AiAgentRun,

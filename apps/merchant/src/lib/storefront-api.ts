@@ -265,7 +265,7 @@ const MAX_NAV_CATEGORIES = 6;
  */
 export async function getStorefrontNav(
   storeId: string,
-  opts: { about: boolean; basePath?: string },
+  opts: { about: boolean; blog?: boolean; basePath?: string },
 ): Promise<StorefrontNavLink[]> {
   const base = opts.basePath ?? `/store/${storeId}`;
   // Sale/About are anchors on the home page only. On the id-path route
@@ -281,6 +281,9 @@ export async function getStorefrontNav(
     href: `${base}/products?category=${encodeURIComponent(c.category)}`,
   }));
   links.push({ label: "Shop all", href: `${base}/products` });
+  // A store with nothing published yet gets no "Blog" link — it would only
+  // ever lead to an empty page.
+  if (opts.blog) links.push({ label: "Blog", href: `${base}/blog` });
   links.push({ label: "Sale", href: `${home}#sale` });
   if (opts.about) links.push({ label: "About", href: `${home}#about` });
   return links;
