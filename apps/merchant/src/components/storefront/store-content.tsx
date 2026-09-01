@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { PlanMedia, StorePlan } from "@/lib/ecomai";
 
 /**
@@ -24,47 +25,89 @@ import type { PlanMedia, StorePlan } from "@/lib/ecomai";
  */
 
 /**
- * Backdrop for the hero: the chosen image, else the brand gradient.
+ * The hero backdrop: the merchant's images/videos as a crossfading carousel,
+ * or the brand gradient when there's nothing to show.
  *
- * A video can't be a CSS background, so it returns the gradient and
- * `HeroVideo` paints over the top — that way the hero still has a sensible
- * colour behind it while the video is loading or if it fails outright.
+ * One item behaves exactly like the old single-image/video hero (no dots, no
+ * autoplay — there's nothing to advance to). More than one adds dot
+ * navigation and a slow auto-advance that stops for `prefers-reduced-motion`.
+ * Must be the first child of a `position: relative` container — it paints
+ * itself as absolutely-positioned layers rather than a CSS background so a
+ * video can be one of the slides.
  */
-export function heroBackdropStyle(
-  media: PlanMedia | null | undefined,
-  gradient: string,
-): React.CSSProperties {
-  if (media?.kind === "image") {
-    return {
-      backgroundImage: `linear-gradient(180deg, rgba(10,10,12,.35), rgba(10,10,12,.62)), url('${media.url}')`,
-      backgroundSize: "cover",
-      backgroundPosition: "center",
-    };
-  }
-  return { background: gradient };
-}
+export function HeroCarousel({
+  media,
+  gradient,
+}: {
+  media: PlanMedia[] | null | undefined;
+  gradient: string;
+}) {
+  const items = media ?? [];
+  const [active, setActive] = useState(0);
 
-/**
- * The hero's video layer, when the merchant picked a video.
- *
- * Decorative: muted, looping and inert, so it never competes with the copy or
- * traps keyboard focus. Renders nothing for an image or empty slot, so callers
- * can drop it in unconditionally.
- */
-export function HeroVideo({ media }: { media: PlanMedia | null | undefined }) {
-  if (media?.kind !== "video") return null;
+  useEffect(() => {
+    if (items.length < 2) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const id = setInterval(() => setActive((i) => (i + 1) % items.length), 5500);
+    return () => clearInterval(id);
+  }, [items.length]);
+
+  // A picked media item could disappear from under an already-open store
+  // (deleted from the library) — clamp rather than render a blank slide.
+  const current = Math.min(active, Math.max(0, items.length - 1));
+
+  if (!items.length) {
+    return <div className="absolute inset-0" style={{ background: gradient }} />;
+  }
+
   return (
     <>
-      <video
-        src={media.url}
-        autoPlay
-        muted
-        loop
-        playsInline
-        aria-hidden
-        className="absolute inset-0 h-full w-full object-cover"
-      />
-      <div className="absolute inset-0" style={{ background: "rgba(10,10,12,.5)" }} />
+      {items.map((m, i) => (
+        <div
+          key={`${m.url}-${i}`}
+          aria-hidden={i !== current}
+          className="absolute inset-0 transition-opacity duration-700 ease-out"
+          style={{ opacity: i === current ? 1 : 0 }}
+        >
+          {m.kind === "video" ? (
+            <video
+              src={m.url}
+              autoPlay
+              muted
+              loop
+              playsInline
+              aria-hidden
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={m.url} alt={m.alt ?? ""} className="absolute inset-0 h-full w-full object-cover" />
+          )}
+          <div
+            className="absolute inset-0"
+            style={{ background: "linear-gradient(180deg, rgba(10,10,12,.35), rgba(10,10,12,.62))" }}
+          />
+        </div>
+      ))}
+
+      {items.length > 1 && (
+        <div className="absolute inset-x-0 bottom-6 z-10 flex justify-center gap-2">
+          {items.map((_, i) => (
+            <button
+              key={i}
+              type="button"
+              onClick={() => setActive(i)}
+              aria-label={`Show slide ${i + 1} of ${items.length}`}
+              aria-current={i === current}
+              className="h-1.5 rounded-full transition-all"
+              style={{
+                width: i === current ? "1.5rem" : "0.4rem",
+                background: i === current ? "#fff" : "rgba(255,255,255,.5)",
+              }}
+            />
+          ))}
+        </div>
+      )}
     </>
   );
 }

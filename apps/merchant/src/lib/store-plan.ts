@@ -85,7 +85,10 @@ export function normalizePlan(content: unknown, storeName = "Your store"): Store
   const raw = obj(content) ?? {};
 
   const name = str(raw.storeName, storeName);
-  const heroMedia = media(raw.heroMedia);
+  // heroMedia used to be a single object; stores saved before the carousel
+  // still have it that way, so accept either shape rather than silently
+  // dropping every existing hero image on the next read.
+  const heroMedia = mediaList(Array.isArray(raw.heroMedia) ? raw.heroMedia : [raw.heroMedia]);
   const aboutMedia = media(raw.aboutMedia);
   const blocks = sections(raw.sections);
 
@@ -103,7 +106,7 @@ export function normalizePlan(content: unknown, storeName = "Your store"): Store
     // Optional throughout, and omitted rather than defaulted — so a theme can
     // tell "the merchant left this blank" from "this store predates the field".
     ...(str(raw.announcement, "") ? { announcement: str(raw.announcement, "") } : {}),
-    ...(heroMedia ? { heroMedia } : {}),
+    ...(heroMedia.length ? { heroMedia } : {}),
     ...(aboutMedia ? { aboutMedia } : {}),
     ...(blocks.length ? { sections: blocks } : {}),
     ...(str(raw.footerText, "") ? { footerText: str(raw.footerText, "") } : {}),

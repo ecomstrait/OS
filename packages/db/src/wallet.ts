@@ -41,6 +41,17 @@ type AdjustParams = {
   kind: WalletTransactionKind;
   orderId?: string | null;
   note?: string | null;
+  /**
+   * Idempotency key for this real-world event (e.g. a Stripe checkout
+   * session id). `wallet_adjust` enforces uniqueness on this at the DB
+   * layer — a second call with the same `externalRef` is a guaranteed
+   * no-op, not just an unlikely race. Required for any caller that a
+   * duplicate delivery or a racing fallback path could invoke twice for
+   * the same event (e.g. wallet top-ups); omit only when the caller
+   * already has its own exactly-once guarantee (e.g. per-order debits,
+   * gated by `orders.credit_status`).
+   */
+  externalRef?: string | null;
 };
 
 /**
@@ -65,6 +76,7 @@ export async function debitWallet(
     p_kind: params.kind,
     p_order_id: params.orderId ?? null,
     p_note: params.note ?? null,
+    p_external_ref: params.externalRef ?? null,
   });
 
   if (error) {
@@ -98,6 +110,7 @@ export async function creditWallet(
     p_kind: params.kind,
     p_order_id: params.orderId ?? null,
     p_note: params.note ?? null,
+    p_external_ref: params.externalRef ?? null,
   });
 
   if (error) throw error;
@@ -198,14 +211,38 @@ export async function releaseHeldOrders(
         ? (order.cost_amount ?? 0) + (order.platform_fee_amount ?? 0)
         : (order.margin_amount ?? 0) + (order.platform_fee_amount ?? 0);
 
+    // The Stripe webhook and the wallet page's own reconciliation fallback
+    // can both call releaseHeldOrders for the same account around the same
+    // top-up — concurrently, or one retrying after a crash mid-loop. The
+    // debit itself must not move real money twice for the same order:
+    // `externalRef` makes a second call a guaranteed no-op (not just
+    // unlikely), via wallet_adjust's unique index — same mechanism as the
+    // top-up credit above.
     const debit = await debitWallet(admin, amount, {
       accountType,
       accountId,
       kind: "order_deduction",
       orderId: order.id,
       note: "Released on top-up",
+      externalRef: `release:${order.id}`,
     });
     if (!debit.ok) break;
+
+    // Claim this order before recording what's owed for it or counting it
+    // released: the debit above is safe to repeat, but `recordPayable` is a
+    // plain insert with no such guarantee, so it must run at most once. The
+    // WHERE clause makes this an atomic compare-and-swap — of two callers
+    // racing here for the same order, only one's UPDATE actually matches
+    // (Postgres row locking serializes them against each other), so only
+    // one proceeds past it.
+    const { data: claimed } = await admin
+      .from("orders")
+      .update({ credit_status: "deducted" })
+      .eq("id", order.id)
+      .eq("credit_status", holdStatus)
+      .select("id")
+      .maybeSingle();
+    if (!claimed) continue; // another caller already released this order
 
     if (accountType === "merchant") {
       await recordPayable(admin, {
@@ -226,7 +263,6 @@ export async function releaseHeldOrders(
       }
     }
 
-    await admin.from("orders").update({ credit_status: "deducted" }).eq("id", order.id);
     released++;
   }
 

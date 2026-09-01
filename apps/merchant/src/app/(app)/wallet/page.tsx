@@ -4,6 +4,7 @@ import { createClient } from "@ecomstrait/auth/server";
 import { createAdminClient } from "@ecomstrait/db";
 import { getWalletBalance } from "@ecomstrait/db/wallet";
 import { WalletTopupForm } from "@/components/wallet/topup-form";
+import { reconcileWalletTopup } from "@/lib/wallet-actions";
 
 export const metadata: Metadata = { title: "Wallet" };
 
@@ -15,7 +16,19 @@ function when(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-export default async function WalletPage() {
+export default async function WalletPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ topup?: string; session_id?: string }>;
+}) {
+  const { topup, session_id } = await searchParams;
+  if (topup === "success" && session_id) {
+    // Best-effort: if the Stripe webhook already credited this session this
+    // is a no-op, and the page must still render even if Stripe can't be
+    // reached right now.
+    await reconcileWalletTopup(session_id).catch(() => {});
+  }
+
   const supabase = await createClient();
   const {
     data: { user },

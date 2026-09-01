@@ -9,9 +9,8 @@ import { categoryLabel } from "@/lib/storefront-shared";
 import { StorefrontChrome, useStorefrontCartContext } from "@/components/storefront/storefront-chrome";
 import {
   AboutBlock,
-  HeroVideo,
+  HeroCarousel,
   StoreSections,
-  heroBackdropStyle,
 } from "@/components/storefront/store-content";
 
 /**
@@ -41,7 +40,7 @@ export function StorefrontView({
   categoryBands: CategoryBand[];
 }) {
   const t = storeTokens(store.theme, store.plan.brandColors);
-  const hero = store.plan.heroMedia ?? null;
+  const heroMedia = store.plan.heroMedia ?? [];
   const grad = `linear-gradient(135deg, ${t.brand}, ${t.accent})`;
   const line = "color-mix(in srgb, var(--ink) 12%, transparent)";
   const surface = "color-mix(in srgb, var(--ink) 4%, var(--bg))";
@@ -65,11 +64,8 @@ export function StorefrontView({
     >
       <StorefrontChrome store={store} navLinks={navLinks}>
         {/* ---- Hero — a real editorial moment, not a banner strip ---- */}
-        <section
-          className="relative flex min-h-[68vh] items-center overflow-hidden px-6 py-20 text-center text-white sm:min-h-[80vh]"
-          style={heroBackdropStyle(hero, grad)}
-        >
-          <HeroVideo media={hero} />
+        <section className="relative flex min-h-[68vh] items-center overflow-hidden px-6 py-20 text-center text-white sm:min-h-[80vh]">
+          <HeroCarousel media={heroMedia} gradient={grad} />
           <div className="relative mx-auto max-w-2xl">
             {store.plan.tagline && (
               <p className="mb-5 text-xs font-semibold uppercase text-white/80" style={{ letterSpacing: "0.28em" }}>

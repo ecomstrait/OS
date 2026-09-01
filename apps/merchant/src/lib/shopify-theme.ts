@@ -196,7 +196,7 @@ export function settingsFromPlan(
     tagline?: string;
     storeName?: string;
     announcement?: string;
-    heroMedia?: { url: string; kind: "image" | "video" } | null;
+    heroMedia?: { url: string; kind: "image" | "video" }[] | null;
     aboutMedia?: { url: string; kind: "image" | "video" } | null;
     about?: string;
     footerText?: string;
@@ -211,8 +211,11 @@ export function settingsFromPlan(
   const t = themeTokens(themeId);
   // Media lives on our CDN, so it can't go through Shopify's image_picker —
   // the themes read these URL settings instead and fall back to the picker.
-  const heroImage = plan?.heroMedia?.kind === "image" ? plan.heroMedia.url : "";
-  const heroVideo = plan?.heroMedia?.kind === "video" ? plan.heroMedia.url : "";
+  // Liquid themes don't render a carousel (yet), so only the first hero
+  // image and first hero video export — same single-hero behavior as before
+  // the custom storefront grew a carousel.
+  const heroImage = plan?.heroMedia?.find((m) => m.kind === "image")?.url ?? "";
+  const heroVideo = plan?.heroMedia?.find((m) => m.kind === "video")?.url ?? "";
   return {
     // Without these the header fell back to `shop.name` (the dev-store handle)
     // and rendered the logo with an invalid `width:px`.

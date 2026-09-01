@@ -45,7 +45,8 @@ export type StorePlan = {
   /** Everything below is optional: stores built before the content editor
    *  existed have none of it, and must keep rendering unchanged. */
   announcement?: string;
-  heroMedia?: PlanMedia | null;
+  /** One or more hero images/videos — more than one renders as a carousel. */
+  heroMedia?: PlanMedia[] | null;
   aboutMedia?: PlanMedia | null;
   sections?: PlanSection[];
   footerText?: string;

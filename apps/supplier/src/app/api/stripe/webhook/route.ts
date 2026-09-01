@@ -33,6 +33,11 @@ export async function POST(req: Request) {
         accountId: s.metadata.supplier_id,
         kind: "topup",
         note: `Stripe checkout ${s.id}`,
+        // A redelivered webhook, or a race against the wallet page's own
+        // reconciliation fallback for this same session, must credit the
+        // wallet at most once — enforced by wallet_adjust's unique index,
+        // not left to chance.
+        externalRef: s.id,
       });
       await releaseHeldOrders(admin, "supplier", s.metadata.supplier_id);
     }

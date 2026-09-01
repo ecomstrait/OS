@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { ShoppingBag } from "lucide-react";
 import { createClient } from "@ecomstrait/auth/server";
+import { createAdminClient } from "@ecomstrait/db";
 
 export const metadata: Metadata = { title: "Orders" };
 
@@ -11,6 +12,8 @@ const STATUS_STYLE: Record<string, string> = {
   refunded: "bg-ink-100 text-ink-500",
   cancelled: "bg-ink-100 text-ink-400",
 };
+
+const HELD_STYLE = "bg-amber-50 text-amber-700";
 
 function money(n: number | null): string {
   return `$${(n ?? 0).toFixed(2)}`;
@@ -42,6 +45,24 @@ export default async function OrdersPage() {
     : { data: [] };
 
   const list = orders ?? [];
+
+  // Which of these are stuck on low wallet credits (Docs/Credits-Settlement-Plan.md):
+  // same "unpaid / low credits" state the Wallet page's held-orders banner
+  // surfaces, but a merchant may never visit /wallet to see it — mark it
+  // right on the order itself too. `orders` has no merchant-facing RLS policy
+  // (it's scoped to suppliers), so this reads via the admin client, same as
+  // the Wallet page's held-orders query.
+  const admin = createAdminClient();
+  const storeOrderIds = list.map((o) => o.id);
+  let heldStoreOrderIds = new Set<string>();
+  if (admin && storeOrderIds.length) {
+    const { data: linked } = await admin
+      .from("orders")
+      .select("store_order_id, credit_status")
+      .in("store_order_id", storeOrderIds)
+      .eq("credit_status", "awaiting_merchant_credits");
+    heldStoreOrderIds = new Set((linked ?? []).map((o) => o.store_order_id).filter((id): id is string => Boolean(id)));
+  }
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -81,11 +102,17 @@ export default async function OrdersPage() {
                   const items = o.items ?? [];
                   const units = items.reduce((s, i) => s + i.quantity, 0);
                   const summary = items.map((i) => `${i.name} ×${i.quantity}`).join(", ");
+                  const held = heldStoreOrderIds.has(o.id);
                   return (
                     <tr key={o.id} className="border-b border-ink-50 align-top last:border-0">
                       <td className="px-4 py-3">
                         <p className="font-medium text-ink-900">#{o.id.slice(0, 8)}</p>
                         <p className="text-xs text-ink-400">{when(o.created_at)}</p>
+                        {held && (
+                          <p className="mt-1 text-xs font-medium text-amber-700">
+                            Not sent to supplier — add credits
+                          </p>
+                        )}
                       </td>
                       <td className="hidden px-4 py-3 text-ink-600 sm:table-cell">
                         {storeName.get(o.store_id) ?? "—"}
@@ -106,10 +133,10 @@ export default async function OrdersPage() {
                       <td className="px-4 py-3 text-right">
                         <span
                           className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                            STATUS_STYLE[o.status] ?? "bg-ink-100 text-ink-500"
+                            held ? HELD_STYLE : (STATUS_STYLE[o.status] ?? "bg-ink-100 text-ink-500")
                           }`}
                         >
-                          {o.status}
+                          {held ? "unpaid / low credits" : o.status}
                         </span>
                       </td>
                     </tr>

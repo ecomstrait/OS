@@ -22,9 +22,8 @@ import {
 } from "@/lib/builder-actions";
 import {
   AboutBlock,
-  HeroVideo,
+  HeroCarousel,
   StoreSections,
-  heroBackdropStyle,
 } from "@/components/storefront/store-content";
 import { storeTokens, tokenStyle } from "@/lib/theme-tokens";
 import type { DraftStore } from "@/lib/drafts";
@@ -584,11 +583,8 @@ export function StoreBuilder({
                   </div>
                 )}
 
-                <div
-                  className="relative overflow-hidden px-6 py-10 text-center text-white"
-                  style={heroBackdropStyle(plan.heroMedia, grad)}
-                >
-                  <HeroVideo media={plan.heroMedia} />
+                <div className="relative overflow-hidden px-6 py-10 text-center text-white">
+                  <HeroCarousel media={plan.heroMedia} gradient={grad} />
                   <div className="relative">
                     {logoUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element

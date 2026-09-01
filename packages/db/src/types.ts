@@ -358,6 +358,10 @@ export type Database = {
           /** The merchant's store — added for Docs/Credits-Settlement-Plan.md;
            *  nullable because it doesn't backfill pre-existing rows. */
           store_id: string | null;
+          /** Back-link to the customer-facing checkout this order was split
+           *  out of — see supabase/migrations/20260901140000_orders_store_order_link.sql.
+           *  Nullable because it doesn't backfill pre-existing rows. */
+          store_order_id: string | null;
           payment_type: OrderPaymentType | null;
           cost_amount: number | null;
           margin_amount: number | null;
@@ -601,6 +605,10 @@ export type Database = {
           balance_after: number;
           order_id: string | null;
           note: string | null;
+          /** Idempotency key for the real-world event this row represents
+           *  (e.g. a Stripe checkout session id) — unique when set, enforced
+           *  by a partial unique index, not by app-level convention. */
+          external_ref: string | null;
           created_at: string;
         };
         Insert: {
@@ -611,6 +619,7 @@ export type Database = {
           balance_after: number;
           order_id?: string | null;
           note?: string | null;
+          external_ref?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["wallet_transactions"]["Row"]>;
         Relationships: [];
@@ -673,6 +682,10 @@ export type Database = {
           p_kind: WalletTransactionKind;
           p_order_id?: string | null;
           p_note?: string | null;
+          /** Idempotency key (e.g. a Stripe checkout session id) — a second
+           *  call with the same value is a guaranteed no-op, enforced by a
+           *  unique index, not just convention. */
+          p_external_ref?: string | null;
         };
         Returns: number | null;
       };

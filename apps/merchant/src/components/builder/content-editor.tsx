@@ -29,6 +29,9 @@ const MEDIA_LIMIT: Partial<Record<PlanSection["type"], number>> = {
   gallery: 8,
 };
 
+/** More than one hero image/video becomes a carousel — this caps how many. */
+const HERO_MEDIA_LIMIT = 6;
+
 function Field({
   label,
   value,
@@ -162,8 +165,9 @@ export function ContentEditor({
 
   function pickedMedia(media: PlanMedia) {
     if (!picking) return;
-    if (picking.slot === "hero") set("heroMedia", media);
-    else if (picking.slot === "about") set("aboutMedia", media);
+    if (picking.slot === "hero") {
+      set("heroMedia", [...(plan.heroMedia ?? []), media].slice(-HERO_MEDIA_LIMIT));
+    } else if (picking.slot === "about") set("aboutMedia", media);
     else {
       const section = sections[picking.index];
       if (!section) return;
@@ -192,12 +196,44 @@ export function ContentEditor({
         <h3 className="text-xs font-bold uppercase tracking-wide text-ink-400">Hero</h3>
         <Field label="Headline" value={plan.heroHeadline} onChange={(v) => set("heroHeadline", v)} />
         <Field label="Subheading" value={plan.heroSub} rows={2} onChange={(v) => set("heroSub", v)} />
-        <MediaSlot
-          label="Background image or video"
-          media={plan.heroMedia ?? null}
-          onPick={() => setPicking({ slot: "hero" })}
-          onClear={() => set("heroMedia", null)}
-        />
+        <div>
+          <span className="mb-1 block text-xs font-semibold text-ink-600">
+            Background images or videos{" "}
+            <span className="font-normal text-ink-400">
+              (up to {HERO_MEDIA_LIMIT} — more than one becomes a carousel)
+            </span>
+          </span>
+          <div className="flex flex-wrap gap-2">
+            {(plan.heroMedia ?? []).map((m, mi) => (
+              <div key={`${m.url}-${mi}`} className="relative overflow-hidden rounded-xl border border-ink-200">
+                {m.kind === "video" ? (
+                  <video src={m.url} className="h-24 w-40 object-cover" muted />
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={m.url} alt={m.alt ?? ""} className="h-24 w-40 object-cover" />
+                )}
+                <button
+                  type="button"
+                  aria-label="Remove hero media"
+                  onClick={() => set("heroMedia", (plan.heroMedia ?? []).filter((_, x) => x !== mi))}
+                  className="absolute right-1 top-1 rounded-lg bg-white/90 p-1 text-ink-600 shadow-sm hover:text-red-600"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
+            {(plan.heroMedia?.length ?? 0) < HERO_MEDIA_LIMIT && (
+              <button
+                type="button"
+                onClick={() => setPicking({ slot: "hero" })}
+                className="inline-flex h-24 w-40 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-ink-300 text-xs text-ink-500 hover:border-brand-400 hover:text-brand-600"
+              >
+                <ImagePlus className="h-4 w-4" />
+                {(plan.heroMedia?.length ?? 0) === 0 ? "Choose" : "Add another"}
+              </button>
+            )}
+          </div>
+        </div>
       </section>
 
       <section className="space-y-3">

@@ -82,16 +82,20 @@ export async function recordCustomerOrder(
 
   const subtotal = opts.items.reduce((s, i) => s + (i.unit_price ?? 0) * i.quantity, 0);
 
-  await admin.from("store_orders").insert({
-    store_id: opts.storeId,
-    customer_name: opts.customerName ?? null,
-    customer_email: opts.customerEmail ?? null,
-    shipping: opts.shipping ?? null,
-    subtotal,
-    items: opts.items,
-    status: "paid",
-    stripe_session_id: opts.externalId,
-  });
+  const { data: storeOrder } = await admin
+    .from("store_orders")
+    .insert({
+      store_id: opts.storeId,
+      customer_name: opts.customerName ?? null,
+      customer_email: opts.customerEmail ?? null,
+      shipping: opts.shipping ?? null,
+      subtotal,
+      items: opts.items,
+      status: "paid",
+      stripe_session_id: opts.externalId,
+    })
+    .select("id")
+    .single();
 
   const { data: store } = await admin
     .from("stores")
@@ -131,6 +135,7 @@ export async function recordCustomerOrder(
       .insert({
         supplier_id: supplierId,
         store_id: opts.storeId,
+        store_order_id: storeOrder?.id ?? null,
         store_name: store?.name ?? null,
         customer_name: opts.customerName ?? null,
         customer_email: opts.customerEmail ?? null,
