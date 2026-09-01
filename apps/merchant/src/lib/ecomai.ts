@@ -69,6 +69,154 @@ function presetPlan(idea: string): StorePlan {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Builder conversation
+// ---------------------------------------------------------------------------
+
+export type BuilderTurn = { role: "user" | "assistant"; content: string };
+
+/** What the merchant already decided before the conversation starts — see BuilderContext in store-builder.tsx. */
+export type BuilderKnownContext = {
+  productCount?: number;
+  inferredNiche?: string;
+  presetTheme?: string;
+};
+
+export type ConverseResult = {
+  /** The assistant's next question, or its short wrap-up line once done. */
+  reply: string;
+  done: boolean;
+  /** Null until known — same four slots the old fixed questions collected. */
+  niche: string | null;
+  audience: string | null;
+  styleKeyword: string | null;
+  storeName: string | null;
+  tokensUsed: number;
+};
+
+const BUILDER_SYSTEM = [
+  "You are EcomAI, helping an entrepreneur set up an online store through a short, natural conversation.",
+  "You need to learn: what they sell (niche), who their customers are (audience), what visual style/vibe fits their brand, and what to name the store.",
+  "Ask ONE short, conversational question at a time — never a list, never more than one question in a message.",
+  "If a reply already answers more than one thing, don't ask about those again. Skip anything already given under \"Known so far\" below.",
+  "Don't drag this out: once you have enough to build a good store — often after 2-4 of their replies — stop asking.",
+  "If they say “skip”, “you pick”, “surprise me” or similar, make a sensible choice yourself rather than asking again.",
+  "Warm, confident, concise. No hype, no emojis.",
+  "",
+  "Respond with ONLY JSON, shaped exactly:",
+  '{ "done": boolean, "reply": string, "niche": string | null, "audience": string | null, "styleKeyword": string | null, "storeName": string | null }',
+  "",
+  '"niche" is a short phrase for what they sell (e.g. "handmade leather bags") — fill in your best guess as you learn more, null until you know anything.',
+  '"audience" is a short phrase for who buys it / where, or null.',
+  '"styleKeyword" is a short word/phrase for the visual vibe (e.g. "luxury", "playful"), or null.',
+  '"storeName" is what they want it called, once said — null if still open or they said "you pick".',
+  'When done=false: "reply" is your next question.',
+  'When done=true: "reply" is a short one-line wrap-up (e.g. "Got it — building your store.") and "niche" must be filled in.',
+].join("\n");
+
+/** The old fixed 4-question script, kept only as this conversation's no-gateway fallback. */
+const PRESET_QUESTIONS = [
+  { key: "niche", q: "What do you want to sell?" },
+  { key: "audience", q: "Who are your customers, and which country are you targeting? (or say “skip”)" },
+  { key: "style", q: "What style fits your brand — modern, luxury, playful, something else? (or “skip”)" },
+  { key: "storeName", q: "What should we name the store? Say “you pick” and I'll choose." },
+] as const;
+
+function isSkippedAnswer(text: string): boolean {
+  return /^(skip|none|no|na|-|you pick|surprise( me)?|any)$/i.test(text.trim());
+}
+
+function presetConverse(history: BuilderTurn[], context: BuilderKnownContext): ConverseResult {
+  const applicable = PRESET_QUESTIONS.filter(
+    (q) => !(q.key === "niche" && context.inferredNiche) && !(q.key === "style" && context.presetTheme),
+  );
+  const answers = history.filter((h) => h.role === "user").map((h) => h.content.trim());
+
+  if (answers.length < applicable.length) {
+    return {
+      done: false,
+      reply: applicable[answers.length].q,
+      niche: context.inferredNiche ?? null,
+      audience: null,
+      styleKeyword: context.presetTheme ?? null,
+      storeName: null,
+      tokensUsed: 0,
+    };
+  }
+
+  const byKey = new Map(applicable.map((q, i) => [q.key, answers[i]]));
+  const pick = (key: (typeof PRESET_QUESTIONS)[number]["key"]) => {
+    const v = byKey.get(key);
+    return v && !isSkippedAnswer(v) ? v.trim() : null;
+  };
+
+  return {
+    done: true,
+    reply: "Got it — building your store.",
+    niche: context.inferredNiche ?? pick("niche"),
+    audience: pick("audience"),
+    styleKeyword: context.presetTheme ?? pick("style"),
+    storeName: pick("storeName"),
+    tokensUsed: 0,
+  };
+}
+
+/**
+ * A real conversation that decides its own questions — replaces the old
+ * fixed 4-question script ("I don't want these 4 questions every time...
+ * AI need to ask questions itself"). Stateless per call like every gateway
+ * function here: the caller carries the running transcript and resends it
+ * each turn (`chat()` has no server-side memory of its own).
+ *
+ * Deliberately doesn't generate the plan itself — that stays
+ * `generateStorePlan`'s job (see `finalizeBuilderConversation` in
+ * builder-actions.ts), so this function's only responsibility is figuring
+ * out what to ask next and when enough is known.
+ */
+export async function converseBuilder(
+  history: BuilderTurn[],
+  context: BuilderKnownContext,
+): Promise<ConverseResult> {
+  if (!isGatewayConfigured()) return presetConverse(history, context);
+
+  const known: string[] = [];
+  if (context.productCount) known.push(`${context.productCount} product(s) already selected`);
+  if (context.inferredNiche) known.push(`niche looks like "${context.inferredNiche}"`);
+  if (context.presetTheme) known.push(`style/theme already chosen: ${context.presetTheme}`);
+  const system = BUILDER_SYSTEM + (known.length ? `\n\nKnown so far: ${known.join("; ")}.` : "");
+
+  try {
+    const { content, tokensUsed } = await chat(
+      "workhorse",
+      [{ role: "system", content: system }, ...history],
+      { temperature: 0.7, maxTokens: 500, responseFormatJson: true, timeoutMs: 12000 },
+    );
+    const parsed = JSON.parse(content) as {
+      done?: boolean;
+      reply?: string;
+      niche?: string | null;
+      audience?: string | null;
+      styleKeyword?: string | null;
+      storeName?: string | null;
+    };
+
+    const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+    const niche = str(parsed.niche) ?? context.inferredNiche ?? null;
+    const styleKeyword = str(parsed.styleKeyword) ?? context.presetTheme ?? null;
+    const reply = str(parsed.reply) ?? (parsed.done ? "Got it — building your store." : "Tell me a bit more.");
+
+    // "done" with no niche isn't usable — generateStorePlan needs something to
+    // build around, so treat it as one more turn rather than handing it "".
+    if (!(parsed.done && niche)) {
+      return { done: false, reply, niche, audience: str(parsed.audience), styleKeyword, storeName: str(parsed.storeName), tokensUsed };
+    }
+
+    return { done: true, reply, niche, audience: str(parsed.audience), styleKeyword, storeName: str(parsed.storeName), tokensUsed };
+  } catch {
+    return presetConverse(history, context);
+  }
+}
+
 /** Map a free-text style answer to one of our themes. */
 export function themeForStyle(style?: string): string {
   const s = (style ?? "").toLowerCase();

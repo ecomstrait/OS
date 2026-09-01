@@ -1,9 +1,18 @@
 import { notFound } from "next/navigation";
 import { getStorefront } from "@/lib/storefront";
 import { getStorefrontNav, getStoreProduct, listStoreCategories, listStoreProducts } from "@/lib/storefront-api";
+import { categoryLabel } from "@/lib/storefront-shared";
 import { StorefrontView, type CategoryBand } from "@/components/storefront/storefront-view";
 import { ProductsListingView } from "@/components/storefront/products-listing-view";
 import { ProductDetailView } from "@/components/storefront/product-detail-view";
+import {
+  JsonLdScript,
+  breadcrumbJsonLd,
+  organizationJsonLd,
+  productJsonLd,
+  requestOrigin,
+  websiteJsonLd,
+} from "@/lib/storefront-seo";
 
 /**
  * The three storefront pages' actual bodies, each taking an already-resolved
@@ -47,7 +56,15 @@ export async function StorefrontHome({
     }),
   );
 
-  return <StorefrontView store={store} navLinks={navLinks} categoryBands={categoryBands} basePath={basePath} />;
+  const origin = await requestOrigin();
+
+  return (
+    <>
+      <JsonLdScript data={organizationJsonLd({ name: store.name, origin, logoUrl: store.logoUrl })} />
+      <JsonLdScript data={websiteJsonLd({ name: store.name, origin })} />
+      <StorefrontView store={store} navLinks={navLinks} categoryBands={categoryBands} basePath={basePath} />
+    </>
+  );
 }
 
 export async function StorefrontProducts({
@@ -71,17 +88,29 @@ export async function StorefrontProducts({
     listStoreProducts(storeId, { category: category || undefined, q, page: 1 }),
   ]);
 
+  const origin = await requestOrigin();
+  const home = basePath || "/";
+  const crumbs = [
+    { name: store.name, url: `${origin}${home}` },
+    ...(category
+      ? [{ name: categoryLabel(category), url: `${origin}${basePath}/products?category=${encodeURIComponent(category)}` }]
+      : [{ name: "Shop all", url: `${origin}${basePath}/products` }]),
+  ];
+
   return (
-    <ProductsListingView
-      store={store}
-      navLinks={navLinks}
-      categories={categories}
-      initialProducts={initial.products}
-      initialTotal={initial.total}
-      initialCategory={category}
-      initialQuery={q}
-      basePath={basePath}
-    />
+    <>
+      <JsonLdScript data={breadcrumbJsonLd(crumbs)} />
+      <ProductsListingView
+        store={store}
+        navLinks={navLinks}
+        categories={categories}
+        initialProducts={initial.products}
+        initialTotal={initial.total}
+        initialCategory={category}
+        initialQuery={q}
+        basePath={basePath}
+      />
+    </>
   );
 }
 
@@ -102,5 +131,22 @@ export async function StorefrontProductDetail({
     basePath,
   });
 
-  return <ProductDetailView store={store} product={product} navLinks={navLinks} basePath={basePath} />;
+  const origin = await requestOrigin();
+  const home = basePath || "/";
+  const productUrl = `${origin}${basePath}/products/${productId}`;
+  const crumbs = [
+    { name: store.name, url: `${origin}${home}` },
+    ...(product.category
+      ? [{ name: categoryLabel(product.category), url: `${origin}${basePath}/products?category=${encodeURIComponent(product.category)}` }]
+      : []),
+    { name: product.title, url: productUrl },
+  ];
+
+  return (
+    <>
+      <JsonLdScript data={productJsonLd({ product, url: productUrl })} />
+      <JsonLdScript data={breadcrumbJsonLd(crumbs)} />
+      <ProductDetailView store={store} product={product} navLinks={navLinks} basePath={basePath} />
+    </>
+  );
 }

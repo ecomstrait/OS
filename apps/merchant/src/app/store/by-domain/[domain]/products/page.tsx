@@ -2,17 +2,34 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { getStorefront, resolveStoreIdByDomain } from "@/lib/storefront";
 import { StorefrontProducts } from "@/lib/storefront-pages";
+import { categoryLabel } from "@/lib/storefront-shared";
+import { requestOrigin, storefrontMetadata } from "@/lib/storefront-seo";
 
 export async function generateMetadata({
   params,
+  searchParams,
 }: {
   params: Promise<{ domain: string }>;
+  searchParams: Promise<{ category?: string; q?: string }>;
 }): Promise<Metadata> {
   const { domain } = await params;
+  const { category = "", q = "" } = await searchParams;
   const storeId = await resolveStoreIdByDomain(decodeURIComponent(domain));
   const s = storeId ? await getStorefront(storeId) : null;
   if (!s) return { title: "Shop" };
-  return { title: `Shop · ${s.name}` };
+
+  const origin = await requestOrigin();
+  const label = category ? categoryLabel(category) : "Shop all";
+  const canonicalPath = category ? `/products?category=${encodeURIComponent(category)}` : "/products";
+  const meta = storefrontMetadata({
+    title: `${label} · ${s.name}`,
+    description: category ? `Shop ${label} at ${s.name}.` : `Browse everything at ${s.name}.`,
+    canonical: `${origin}${canonicalPath}`,
+    storeName: s.name,
+    image: s.logoUrl,
+  });
+  if (q) meta.robots = { index: false, follow: true };
+  return meta;
 }
 
 export default async function ProductsByDomainPage({

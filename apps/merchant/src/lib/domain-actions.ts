@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@ecomstrait/auth/server";
 import type { StoreType } from "@ecomstrait/db";
 import { domainTarget, isValidDomain, normalizeDomain } from "@/lib/domain";
+import { addProjectDomain, removeProjectDomain } from "@/lib/vercel-domains";
 
 type OwnStore = { id: string; type: StoreType; domain: string | null };
 
@@ -38,10 +39,17 @@ export async function setStoreDomain(
   if (!s.ok) return { error: s.error };
 
   const raw = input.trim();
+  // A domain only ever gets attached to our Vercel project for own_platform
+  // stores — a Shopify store's DNS instructions point at Shopify's own
+  // infrastructure, not ours, so there's nothing of ours to detach/attach.
+  const isOwn = s.store.type === "own_platform";
+  const previous = s.store.domain;
+
   if (!raw) {
     // domain_verified_at clears with it — nothing routes to a domain the
     // store no longer claims.
     await s.supabase.from("stores").update({ domain: null, domain_verified_at: null }).eq("id", storeId);
+    if (isOwn && previous) void removeProjectDomain(previous);
     revalidatePath("/settings");
     return { domain: null };
   }
@@ -64,6 +72,10 @@ export async function setStoreDomain(
     if (error.code === "23505") return { error: "That domain is already connected to another store." };
     return { error: error.message };
   }
+  // Best-effort cleanup — a stray domain still attached to the Vercel
+  // project isn't something the merchant can see or fix, so it must not
+  // block saving the new one.
+  if (isOwn && previous && previous !== domain) void removeProjectDomain(previous);
   revalidatePath("/settings");
   return { domain };
 }
@@ -74,6 +86,8 @@ export type DomainCheck = {
   resolvedCname: string[];
   expectedA: string;
   verifiedAt: string | null;
+  /** Set only if attaching the domain to Vercel failed after DNS otherwise checked out. */
+  vercelError?: string;
 };
 
 /**
@@ -87,6 +101,13 @@ export type DomainCheck = {
  * routing (see `resolveStoreByDomain`): traffic for the domain only serves
  * this store once that column is set, and stops the moment a re-check finds
  * it's no longer pointed at us.
+ *
+ * For an `own_platform` store, a successful check also attaches the domain
+ * to the actual Vercel project (when `VERCEL_TOKEN`/`VERCEL_PROJECT_ID` are
+ * set) — DNS pointing at Vercel's IP alone was never enough for Vercel to
+ * route traffic or issue SSL for it; the domain has to be registered on the
+ * project too. This is what makes the "we provision SSL automatically" line
+ * merchants already see here true rather than aspirational.
  */
 export async function checkStoreDomain(storeId: string): Promise<DomainCheck | { error: string }> {
   const s = await ownStore(storeId);
@@ -113,5 +134,16 @@ export async function checkStoreDomain(storeId: string): Promise<DomainCheck | {
   const verifiedAt = connected ? new Date().toISOString() : null;
   await s.supabase.from("stores").update({ domain_verified_at: verifiedAt }).eq("id", storeId);
   revalidatePath("/settings");
-  return { connected, resolvedA, resolvedCname, expectedA: target.expectedA, verifiedAt };
+
+  let vercelError: string | undefined;
+  if (connected && s.store.type === "own_platform") {
+    const vercel = await addProjectDomain(domain);
+    // DNS is real and routing already works via our own middleware either
+    // way — a Vercel-side hiccup shouldn't be reported as "DNS isn't
+    // connected", but it does mean SSL/the actual Vercel routing isn't
+    // finished, so say so rather than silently claiming full success.
+    if (!vercel.ok && vercel.error !== "Vercel isn't configured.") vercelError = vercel.error;
+  }
+
+  return { connected, resolvedA, resolvedCname, expectedA: target.expectedA, verifiedAt, ...(vercelError ? { vercelError } : {}) };
 }

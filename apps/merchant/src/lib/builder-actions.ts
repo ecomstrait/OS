@@ -8,17 +8,19 @@ import { assertTokenBudget, recordTokenUsage, assertCanCreateStore } from "@/lib
 import { autoSelectProducts, getSelectedProducts, productImage } from "@/lib/catalog";
 import { merchantUrl } from "@/lib/stripe";
 import { resyncShopifyTheme } from "@/lib/shopify-actions";
-import { generateStorePlan, applyMerchantRequest, themeForStyle, type StorePlan } from "@/lib/ecomai";
+import {
+  generateStorePlan,
+  applyMerchantRequest,
+  converseBuilder,
+  themeForStyle,
+  type StorePlan,
+  type BuilderTurn,
+  type BuilderKnownContext,
+  type ConverseResult,
+} from "@/lib/ecomai";
 import { normalizePlan } from "@/lib/store-plan";
 import { purgeStoreMedia } from "@/lib/draft-sweep";
 import { askBusinessAdvisor } from "@/lib/agents/business-advisor";
-
-export type BuilderAnswers = {
-  niche: string;
-  audience?: string;
-  style?: string;
-  storeName?: string;
-};
 
 export type PreviewProduct = { id: string; title: string; price: number | null; image: string | null };
 
@@ -29,14 +31,34 @@ export type BuildResult = {
   error?: string;
 };
 
+export type { BuilderTurn, ConverseResult };
+
 /**
- * Co-founder build: generate the full plan + SEO + theme.
+ * One turn of the builder conversation — the AI decides what to ask next
+ * (or that it's ready to build), rather than a fixed question script.
+ */
+export async function converseBuilderTurn(
+  history: BuilderTurn[],
+  context: BuilderKnownContext,
+): Promise<ConverseResult | { error: string }> {
+  const budget = await assertTokenBudget(500);
+  if (!budget.ok) return { error: budget.error };
+  const result = await converseBuilder(history, context);
+  await recordTokenUsage(result.tokensUsed);
+  return result;
+}
+
+/**
+ * Co-founder build: generate the full plan + SEO + theme, once the
+ * conversation has gathered what it needs (`converseBuilderTurn` returned
+ * `done: true`). Same job `buildStore` used to do from 4 scripted answers,
+ * now fed by whatever the conversation actually collected.
  *
  * `useSelected` means the merchant arrived from Find Suppliers with products
  * already chosen — build around those instead of auto-picking for the niche.
  */
-export async function buildStore(
-  answers: BuilderAnswers,
+export async function finalizeBuilderConversation(
+  answers: { niche: string; audience?: string | null; styleKeyword?: string | null; storeName?: string | null },
   opts: { useSelected?: boolean } = {},
 ): Promise<BuildResult> {
   const budget = await assertTokenBudget(1500);
@@ -53,8 +75,8 @@ export async function buildStore(
   const idea = [
     `Business: ${answers.niche}`,
     answers.audience ? `Customers: ${answers.audience}` : "",
-    answers.style ? `Style: ${answers.style}` : "",
-    answers.storeName && !/you pick|surprise|any/i.test(answers.storeName) ? `Preferred name: ${answers.storeName}` : "",
+    answers.styleKeyword ? `Style: ${answers.styleKeyword}` : "",
+    answers.storeName ? `Preferred name: ${answers.storeName}` : "",
   ]
     .filter(Boolean)
     .join(". ");
@@ -62,9 +84,7 @@ export async function buildStore(
   const { plan, tokensUsed } = await generateStorePlan(idea, picked.map((p) => p.title));
   await recordTokenUsage(tokensUsed);
 
-  if (answers.storeName && !/you pick|surprise|any/i.test(answers.storeName)) {
-    plan.storeName = answers.storeName.trim();
-  }
+  if (answers.storeName) plan.storeName = answers.storeName.trim();
 
   const products: PreviewProduct[] = picked.map((p) => ({
     id: p.id,
@@ -73,7 +93,7 @@ export async function buildStore(
     image: productImage(p.images?.[0]),
   }));
 
-  return { plan, products, theme: themeForStyle(answers.style) };
+  return { plan, products, theme: themeForStyle(answers.styleKeyword ?? undefined) };
 }
 
 /**

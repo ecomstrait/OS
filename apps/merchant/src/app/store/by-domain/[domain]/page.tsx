@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { getStorefront, resolveStoreIdByDomain } from "@/lib/storefront";
 import { StorefrontHome } from "@/lib/storefront-pages";
+import { requestOrigin, storefrontMetadata } from "@/lib/storefront-seo";
 
 /**
  * Reached only via proxy.ts's rewrite — a request whose Host header is a
@@ -20,7 +21,14 @@ export async function generateMetadata({
   const storeId = await resolveStoreIdByDomain(decodeURIComponent(domain));
   const s = storeId ? await getStorefront(storeId) : null;
   if (!s) return { title: "Store" };
-  return { title: s.plan.seoTitle || s.name, description: s.plan.seoDescription };
+  const origin = await requestOrigin();
+  return storefrontMetadata({
+    title: s.plan.seoTitle || s.name,
+    description: s.plan.seoDescription || `Shop ${s.name}.`,
+    canonical: `${origin}/`,
+    storeName: s.name,
+    image: s.logoUrl,
+  });
 }
 
 export default async function StoreByDomainPage({ params }: { params: Promise<{ domain: string }> }) {

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getStorefront } from "@/lib/storefront";
 import { getStoreProduct } from "@/lib/storefront-api";
 import { StorefrontProductDetail } from "@/lib/storefront-pages";
+import { requestOrigin, storefrontMetadata } from "@/lib/storefront-seo";
 
 /**
  * The product detail page — the single biggest structural gap this
@@ -19,10 +20,14 @@ export async function generateMetadata({
   const { id, productId } = await params;
   const [store, product] = await Promise.all([getStorefront(id), getStoreProduct(id, productId)]);
   if (!store || !product) return { title: "Product" };
-  return {
+  const origin = await requestOrigin();
+  return storefrontMetadata({
     title: `${product.title} · ${store.name}`,
-    description: product.description ?? store.plan.seoDescription,
-  };
+    description: product.description || store.plan.seoDescription || `${product.title} at ${store.name}.`,
+    canonical: `${origin}/store/${id}/products/${productId}`,
+    storeName: store.name,
+    image: product.image ?? store.logoUrl,
+  });
 }
 
 export default async function ProductPage({

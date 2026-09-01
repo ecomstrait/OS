@@ -174,6 +174,12 @@ export function DomainCard({
               </span>
             )}
           </div>
+          {check?.vercelError && (
+            <p className="mt-2 text-xs text-amber-600">
+              DNS is connected, but finishing setup failed: {check.vercelError}. Try Check DNS again in a
+              moment.
+            </p>
+          )}
           {storeType === "own_platform" && (
             <p className="mt-2 text-[11px] text-ink-400">
               {verifiedAt

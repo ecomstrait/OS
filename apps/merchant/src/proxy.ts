@@ -21,7 +21,13 @@ function isOwnHost(host: string): boolean {
 
 /** The only paths a customer-facing custom domain ever needs to serve. */
 function isStorefrontPath(pathname: string): boolean {
-  return pathname === "/" || pathname === "/products" || pathname.startsWith("/products/");
+  return (
+    pathname === "/" ||
+    pathname === "/products" ||
+    pathname.startsWith("/products/") ||
+    pathname === "/sitemap.xml" ||
+    pathname === "/robots.txt"
+  );
 }
 
 export async function proxy(request: NextRequest) {

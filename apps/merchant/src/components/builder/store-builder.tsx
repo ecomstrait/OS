@@ -10,7 +10,8 @@ import type { StoreType } from "@ecomstrait/db";
 import { storeThemes } from "@/content/themes";
 import { ContentEditor } from "@/components/builder/content-editor";
 import {
-  buildStore,
+  converseBuilderTurn,
+  finalizeBuilderConversation,
   refineStore,
   createStore,
   editStore,
@@ -19,6 +20,8 @@ import {
   saveDraft,
   discardDraft,
   type PreviewProduct,
+  type BuilderTurn,
+  type ConverseResult,
 } from "@/lib/builder-actions";
 import {
   AboutBlock,
@@ -47,15 +50,6 @@ export type ExistingStore = {
 };
 
 type Msg = { id: number; role: "ai" | "user"; content: string };
-
-const ALL_QUESTIONS: { key: keyof Answers; q: string }[] = [
-  { key: "niche", q: "What do you want to sell?" },
-  { key: "audience", q: "Who are your customers, and which country are you targeting? (or say “skip”)" },
-  { key: "style", q: "What style fits your brand — modern, luxury, playful, something else? (or “skip”)" },
-  { key: "storeName", q: "What should we name the store? Say “you pick” and I'll choose — and upload a logo below if you have one." },
-];
-
-type Answers = { niche: string; audience: string; style: string; storeName: string };
 
 /**
  * What the merchant already decided before arriving here — products picked in
@@ -92,8 +86,6 @@ const PATH_LABELS: Record<StoreType, string> = {
   shopify_shopify_theme: "Shopify store",
 };
 
-const isSkip = (s: string) => /^(skip|none|no|na|-)$/i.test(s.trim());
-
 export function StoreBuilder({
   userId,
   initialTheme,
@@ -119,26 +111,14 @@ export function StoreBuilder({
   // that already exist, and mixing the two would offer Launch on a live store.
   const resumed = editing ? null : (draft ?? null);
 
-  // Questions the merchant has effectively already answered elsewhere.
-  const skipped = useMemo(() => {
-    const keys = new Set<keyof Answers>();
-    if (context?.productCount) keys.add("niche");
-    if (context?.presetTheme) keys.add("style");
-    return keys;
-  }, [context]);
-
-  const QUESTIONS = useMemo(
-    () => ALL_QUESTIONS.filter((q) => !skipped.has(q.key)),
-    [skipped],
-  );
-
-  /** Answers pre-filled from the arriving context. */
-  const seeded = useMemo<Answers>(
+  // What converseBuilderTurn needs to know is already settled — it decides
+  // itself what's left to ask, rather than the client scripting which of a
+  // fixed list of questions to skip.
+  const knownContext = useMemo(
     () => ({
-      niche: context?.inferredNiche ?? "",
-      audience: "",
-      style: context?.presetTheme ?? "",
-      storeName: "",
+      productCount: context?.productCount,
+      inferredNiche: context?.inferredNiche,
+      presetTheme: context?.presetTheme,
     }),
     [context],
   );
@@ -187,14 +167,15 @@ export function StoreBuilder({
                 },
               ]
             : []),
-          { id: 2, role: "ai", content: QUESTIONS[0]?.q ?? "Ready when you are — say “go” and I'll build it." },
         ],
   );
   const [stage, setStage] = useState<"asking" | "ready">(
     existing || resumed ? "ready" : "asking",
   );
-  const [qIndex, setQIndex] = useState(0);
-  const [answers, setAnswers] = useState<Answers>(seeded);
+  // The running transcript sent to converseBuilderTurn — separate from
+  // `messages` (which also carries the greeting bubbles above, not part of
+  // the actual conversation the AI is reasoning over).
+  const [history, setHistory] = useState<BuilderTurn[]>([]);
 
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -261,14 +242,52 @@ export function StoreBuilder({
     setMessages((m) => [...m, { id: nextId(), role: "ai", content }]);
   }
 
-  async function runBuild(finalAnswers: Answers) {
+  // The conversation's opening question is the AI's own, not a hardcoded
+  // string — asking with an empty transcript is exactly how it decides what
+  // (if anything, given `knownContext`) it still needs to know first.
+  useEffect(() => {
+    if (existing || resumed || stage !== "asking" || history.length > 0) return;
+    let cancelled = false;
+    (async () => {
+      // Deferred a tick so `setBusy` never fires synchronously inside the
+      // effect body itself — it still shows well before the network call
+      // resolves.
+      await Promise.resolve();
+      if (cancelled) return;
+      setBusy(true);
+      const res = await converseBuilderTurn([], knownContext);
+      if (cancelled) return;
+      setBusy(false);
+      if ("error" in res) {
+        pushAi(res.error);
+        return;
+      }
+      setHistory([{ role: "assistant", content: res.reply }]);
+      pushAi(res.reply);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Only ever runs once, on mount — `history.length > 0` guards any re-run.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function runBuild(answers: {
+    niche: string | null;
+    audience: string | null;
+    styleKeyword: string | null;
+    storeName: string | null;
+  }) {
     setBusy(true);
     pushAi(
       context?.productCount
-        ? "Perfect — building your store now around the products you picked: writing copy, generating SEO, and applying a theme…"
-        : "Perfect — building your store now: picking products, writing copy, generating SEO, and applying a theme…",
+        ? "Building your store now around the products you picked: writing copy, generating SEO, and applying a theme…"
+        : "Building your store now: picking products, writing copy, generating SEO, and applying a theme…",
     );
-    const res = await buildStore(finalAnswers, { useSelected: Boolean(context?.productCount) });
+    const res = await finalizeBuilderConversation(
+      { niche: answers.niche || context?.inferredNiche || "a new store", audience: answers.audience, styleKeyword: answers.styleKeyword, storeName: answers.storeName },
+      { useSelected: Boolean(context?.productCount) },
+    );
     setBusy(false);
     if (res.error) {
       pushAi(res.error);
@@ -316,22 +335,18 @@ export function StoreBuilder({
     setMessages((m) => [...m, { id: nextId(), role: "user", content: text }]);
 
     if (stage === "asking") {
-      const question = QUESTIONS[qIndex];
-      if (!question) {
-        await runBuild(answers);
+      setBusy(true);
+      const nextHistory: BuilderTurn[] = [...history, { role: "user", content: text }];
+      const res: ConverseResult | { error: string } = await converseBuilderTurn(nextHistory, knownContext);
+      setBusy(false);
+      if ("error" in res) {
+        pushAi(res.error);
         return;
       }
-      const key = question.key;
-      const value = isSkip(text) ? "" : text;
-      const updated = { ...answers, [key]: value };
-      setAnswers(updated);
-
-      if (qIndex < QUESTIONS.length - 1) {
-        const nextQ = qIndex + 1;
-        setQIndex(nextQ);
-        pushAi(QUESTIONS[nextQ].q);
-      } else {
-        await runBuild(updated);
+      setHistory([...nextHistory, { role: "assistant", content: res.reply }]);
+      pushAi(res.reply);
+      if (res.done) {
+        await runBuild(res);
       }
       return;
     }
