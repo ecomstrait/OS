@@ -22,6 +22,8 @@ export type {
   OrderStatus,
   Subscription,
   UsageDaily,
+  SupplierSubscription,
+  SupplierUsageDaily,
   ShopifyStore,
   Store,
   PlanTier,
@@ -50,5 +52,7 @@ export {
   PLAN_ENTITLEMENTS,
   PLAN_ORDER,
   PROMO_USER_LIMIT,
+  SUPPLIER_PLAN_ENTITLEMENTS,
   type PlanEntitlement,
+  type SupplierPlanEntitlement,
 } from "./plans";

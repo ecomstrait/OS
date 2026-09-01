@@ -289,7 +289,7 @@ export type Database = {
       };
       /** Supplier-side counterpart of `subscriptions` — keyed by `supplier_id`
        *  (the business), not `user_id`, matching `supplier_wallets`' pooled
-       *  balance model. See supabase/migrations/20260901160000_supplier_subscriptions.sql. */
+       *  balance model. See supabase/migrations/20260901170000_supplier_subscriptions.sql. */
       supplier_subscriptions: {
         Row: {
           supplier_id: string;

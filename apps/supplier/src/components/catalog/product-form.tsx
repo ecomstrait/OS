@@ -74,6 +74,10 @@ export function ProductForm({
         category: form.category || undefined,
         wholesalePrice: form.wholesale_price ? Number(form.wholesale_price) : undefined,
       });
+      if ("error" in r) {
+        setError(r.error);
+        return;
+      }
       // Explicit action → regenerate and replace the AI-authored fields.
       // Only the suggested price defers to a value the user already typed.
       setForm((f) => ({

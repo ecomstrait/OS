@@ -45,10 +45,15 @@ export async function getSupplierAnalytics(
   const reqs = requests ?? [];
 
   // ---- Inventory ----
+  // Published products only — matches the category chart right below, which
+  // already filters the same way. Counting drafts here (as this used to)
+  // meant a product not even listed anywhere could inflate "Out of stock"
+  // and drag down the "Inventory health" quality factor below.
   let inStock = 0,
     low = 0,
     out = 0;
   for (const p of prods) {
+    if (p.status !== "published") continue;
     const available = p.stock - p.reserved;
     if (available <= 0) out += 1;
     else if (available <= p.low_stock_threshold) low += 1;
@@ -129,7 +134,11 @@ export async function getSupplierAnalytics(
     verificationDone: verLevels,
     verificationTotal: 5,
     publishedProducts,
-    productsTotal: prods.length,
+    // `inStock` above is now published-products-only (see the loop that
+    // sets it) — `productsTotal` here must be scoped the same way, or the
+    // ratio would be pulled down by draft products that were never at risk
+    // of a stock-out in the first place, since nothing was ever listed.
+    productsTotal: publishedProducts,
     inStockProducts: inStock,
     totalRequests: reqs.length,
     respondedRequests: responded.length,

@@ -24,6 +24,9 @@ export type Enrichment = {
   seoDescription: string;
   suggestedRetailPrice: number | null;
   source: "groq" | "preset";
+  /** Actual tokens spent on this call (0 for the deterministic fallback) —
+   *  the caller records this against the supplier's daily AI-token usage. */
+  tokensUsed: number;
 };
 
 function presetEnrichment(input: EnrichInput): Enrichment {
@@ -38,6 +41,7 @@ function presetEnrichment(input: EnrichInput): Enrichment {
     seoDescription: `Buy ${input.title} at wholesale. Reliable ${cat} with fast fulfilment and strong margins for online stores.`,
     suggestedRetailPrice: retail,
     source: "preset",
+    tokensUsed: 0,
   };
 }
 
@@ -61,7 +65,7 @@ export async function enrichProduct(input: EnrichInput): Promise<Enrichment> {
   }`;
 
   try {
-    const { content } = await chat(
+    const { content, tokensUsed } = await chat(
       "workhorse",
       [
         { role: "system", content: system },
@@ -82,6 +86,7 @@ export async function enrichProduct(input: EnrichInput): Promise<Enrichment> {
         typeof p.seoDescription === "string" ? p.seoDescription : base.seoDescription,
       suggestedRetailPrice: price,
       source: "groq",
+      tokensUsed,
     };
   } catch {
     return presetEnrichment(input);

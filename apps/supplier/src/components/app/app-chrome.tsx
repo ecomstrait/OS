@@ -12,6 +12,8 @@ import {
   Package,
   BarChart3,
   Wallet,
+  Sparkles,
+  CreditCard,
   Settings,
   Menu,
   X,
@@ -32,6 +34,8 @@ const NAV = [
   { href: "/orders", label: "Orders", icon: Package },
   { href: "/wallet", label: "Wallet", icon: Wallet },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
+  { href: "/cofounder", label: "Co-Founder", icon: Sparkles },
+  { href: "/billing", label: "Billing", icon: CreditCard },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

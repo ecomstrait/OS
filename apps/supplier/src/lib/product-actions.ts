@@ -8,6 +8,7 @@ import { requireApprovedSupplier } from "@/lib/supplier-context";
 import { enrichProduct, type EnrichInput, type Enrichment } from "@/lib/ai";
 import { chunk, cleanIds, type BulkResult } from "@/lib/bulk";
 import { syncProductToStores } from "@/lib/sync-stores";
+import { assertCanAddProduct, assertTokenBudget, recordTokenUsage } from "@/lib/entitlements";
 
 /** Raw form values (strings from inputs); parsed here into typed columns. */
 export type ProductInput = {
@@ -49,6 +50,8 @@ function toRow(input: ProductInput) {
 export async function createProduct(input: ProductInput): Promise<{ error: string } | never> {
   const ctx = await requireApprovedSupplier();
   if ("error" in ctx) return ctx;
+  const limit = await assertCanAddProduct();
+  if (!limit.ok) return limit;
   const { error } = await ctx.supabase
     .from("products")
     .insert({ supplier_id: ctx.supplierId, ...toRow(input) });
@@ -195,6 +198,8 @@ export async function bulkImportProducts(
   if ("error" in ctx) return { imported: 0, error: ctx.error };
   const clean = rows.filter((r) => r.title?.trim());
   if (!clean.length) return { imported: 0, error: "No valid rows found." };
+  const limit = await assertCanAddProduct(clean.length);
+  if (!limit.ok) return { imported: 0, error: limit.error };
   const { error, count } = await ctx.supabase
     .from("products")
     .insert(clean.map((r) => ({ supplier_id: ctx.supplierId, ...toRow(r) })), { count: "exact" });
@@ -203,6 +208,10 @@ export async function bulkImportProducts(
   return { imported: count ?? clean.length };
 }
 
-export async function enrichProductAction(input: EnrichInput): Promise<Enrichment> {
-  return enrichProduct(input);
+export async function enrichProductAction(input: EnrichInput): Promise<Enrichment | { error: string }> {
+  const budget = await assertTokenBudget(500);
+  if (!budget.ok) return { error: budget.error };
+  const result = await enrichProduct(input);
+  await recordTokenUsage(result.tokensUsed);
+  return result;
 }
