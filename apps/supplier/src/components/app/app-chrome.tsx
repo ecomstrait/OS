@@ -11,6 +11,7 @@ import {
   ClipboardList,
   Package,
   BarChart3,
+  Wallet,
   Settings,
   Menu,
   X,
@@ -29,6 +30,7 @@ const NAV = [
   { href: "/requests", label: "Requests", icon: ClipboardList },
   { href: "/listings", label: "Listing requests", icon: Store },
   { href: "/orders", label: "Orders", icon: Package },
+  { href: "/wallet", label: "Wallet", icon: Wallet },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

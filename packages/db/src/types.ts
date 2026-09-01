@@ -14,6 +14,24 @@ export type ProductVariant = { name: string; options: string[] };
 export type RequestStatus = "new" | "accepted" | "declined" | "proposed" | "fulfilled";
 export type MessageSender = "supplier" | "store_owner" | "system";
 export type OrderStatus = "processing" | "shipped" | "delivered" | "cancelled";
+/** Docs/Credits-Settlement-Plan.md — merchant wallet (pooled per user) vs supplier wallet. */
+export type WalletAccountType = "merchant" | "supplier";
+export type WalletTransactionKind =
+  | "topup"
+  | "order_deduction"
+  | "order_credit"
+  | "reversal"
+  | "settlement_payout";
+/** Who collected the customer's money: the merchant (Shopify checkout) or the
+ *  supplier (COD, collected at delivery). Decides which wallet gets debited. */
+export type OrderPaymentType = "prepaid" | "cod";
+export type OrderCreditStatus =
+  | "deducted"
+  | "awaiting_merchant_credits"
+  | "awaiting_supplier_credits"
+  | "reversed";
+export type PayableStatus = "pending" | "settled";
+export type SettlementBatchStatus = "draft" | "paid";
 export type PlanTier = "free" | "basic" | "premium" | "full";
 export type SubscriptionStatus =
   | "trialing"
@@ -333,6 +351,14 @@ export type Database = {
           store_owner_email: string | null;
           shipping: string | null;
           status: OrderStatus;
+          /** The merchant's store — added for Docs/Credits-Settlement-Plan.md;
+           *  nullable because it doesn't backfill pre-existing rows. */
+          store_id: string | null;
+          payment_type: OrderPaymentType | null;
+          cost_amount: number | null;
+          margin_amount: number | null;
+          platform_fee_amount: number | null;
+          credit_status: OrderCreditStatus;
           created_at: string;
           updated_at: string;
         };
@@ -549,9 +575,106 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["ai_cost_ledger"]["Row"]>;
         Relationships: [];
       };
+      merchant_wallets: {
+        Row: { user_id: string; balance: number; updated_at: string };
+        Insert: { user_id: string; balance?: number };
+        Update: Partial<Database["public"]["Tables"]["merchant_wallets"]["Row"]>;
+        Relationships: [];
+      };
+      supplier_wallets: {
+        Row: { supplier_id: string; balance: number; updated_at: string };
+        Insert: { supplier_id: string; balance?: number };
+        Update: Partial<Database["public"]["Tables"]["supplier_wallets"]["Row"]>;
+        Relationships: [];
+      };
+      wallet_transactions: {
+        Row: {
+          id: string;
+          account_type: WalletAccountType;
+          account_id: string;
+          kind: WalletTransactionKind;
+          amount: number;
+          balance_after: number;
+          order_id: string | null;
+          note: string | null;
+          created_at: string;
+        };
+        Insert: {
+          account_type: WalletAccountType;
+          account_id: string;
+          kind: WalletTransactionKind;
+          amount: number;
+          balance_after: number;
+          order_id?: string | null;
+          note?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["wallet_transactions"]["Row"]>;
+        Relationships: [];
+      };
+      payable_ledger: {
+        Row: {
+          id: string;
+          account_type: WalletAccountType;
+          account_id: string;
+          order_id: string;
+          amount: number;
+          status: PayableStatus;
+          settlement_batch_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          account_type: WalletAccountType;
+          account_id: string;
+          order_id: string;
+          amount: number;
+          status?: PayableStatus;
+          settlement_batch_id?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["payable_ledger"]["Row"]>;
+        Relationships: [];
+      };
+      settlement_batches: {
+        Row: {
+          id: string;
+          period_start: string;
+          period_end: string;
+          run_at: string;
+          status: SettlementBatchStatus;
+          total_to_merchants: number;
+          total_to_suppliers: number;
+          paid_at: string | null;
+          paid_by: string | null;
+        };
+        Insert: {
+          period_start: string;
+          period_end: string;
+          run_at?: string;
+          status?: SettlementBatchStatus;
+          total_to_merchants?: number;
+          total_to_suppliers?: number;
+          paid_at?: string | null;
+          paid_by?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["settlement_batches"]["Row"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      wallet_adjust: {
+        Args: {
+          p_account_type: WalletAccountType;
+          p_account_id: string;
+          p_amount: number;
+          p_kind: WalletTransactionKind;
+          p_order_id?: string | null;
+          p_note?: string | null;
+        };
+        Returns: number | null;
+      };
+      is_admin: { Args: Record<string, never>; Returns: boolean };
+      reverse_cod_deduction: { Args: { p_order_id: string }; Returns: boolean };
+    };
     Enums: { user_role: UserRole };
     CompositeTypes: Record<string, never>;
   };
@@ -580,3 +703,8 @@ export type AiEmbedding = Database["public"]["Tables"]["ai_embeddings"]["Row"];
 export type AiAgentRun = Database["public"]["Tables"]["ai_agent_runs"]["Row"];
 export type AiApproval = Database["public"]["Tables"]["ai_approvals"]["Row"];
 export type AiCostLedgerEntry = Database["public"]["Tables"]["ai_cost_ledger"]["Row"];
+export type MerchantWallet = Database["public"]["Tables"]["merchant_wallets"]["Row"];
+export type SupplierWallet = Database["public"]["Tables"]["supplier_wallets"]["Row"];
+export type WalletTransaction = Database["public"]["Tables"]["wallet_transactions"]["Row"];
+export type PayableLedgerEntry = Database["public"]["Tables"]["payable_ledger"]["Row"];
+export type SettlementBatch = Database["public"]["Tables"]["settlement_batches"]["Row"];

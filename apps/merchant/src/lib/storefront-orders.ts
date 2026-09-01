@@ -152,6 +152,8 @@ export async function confirmOrder(
   await recordCustomerOrder(admin, {
     storeId,
     externalId: sessionId,
+    // Stripe Checkout has no COD mode — the customer always pays up front.
+    paymentType: "prepaid",
     customerName: cust?.name,
     customerEmail: cust?.email,
     shipping: shipText,

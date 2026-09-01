@@ -13,6 +13,7 @@ import {
   ShoppingBag,
   TrendingUp,
   CreditCard,
+  Wallet,
   Settings,
   Menu,
   X,
@@ -31,6 +32,7 @@ const NAV = [
   { href: "/stores", label: "Stores", icon: Store },
   { href: "/orders", label: "Orders", icon: ShoppingBag },
   { href: "/sales", label: "Sales", icon: TrendingUp },
+  { href: "/wallet", label: "Wallet", icon: Wallet },
   { href: "/billing", label: "Billing", icon: CreditCard },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

@@ -33,6 +33,17 @@ export type {
   AiAgentRun,
   AiApproval,
   AiCostLedgerEntry,
+  WalletAccountType,
+  WalletTransactionKind,
+  OrderPaymentType,
+  OrderCreditStatus,
+  PayableStatus,
+  SettlementBatchStatus,
+  MerchantWallet,
+  SupplierWallet,
+  WalletTransaction,
+  PayableLedgerEntry,
+  SettlementBatch,
 } from "./types";
 export { createAdminClient } from "./admin";
 export {
