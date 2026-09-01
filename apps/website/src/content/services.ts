@@ -8,13 +8,14 @@ export type Service = {
 };
 
 export const services: Service[] = [
-  {
-    icon: "Wand2",
-    title: "AI Website Builder",
-    description:
-      "Generate a complete, on-brand ecommerce website from a single prompt — homepage, collections, product pages, and copy.",
-    features: ["Brand generation", "Responsive by default", "Live preview", "One-click deploy"],
-  },
+  // AI Website Builder — hidden from the site for now, not removed.
+  // {
+  //   icon: "Wand2",
+  //   title: "AI Website Builder",
+  //   description:
+  //     "Generate a complete, on-brand ecommerce website from a single prompt — homepage, collections, product pages, and copy.",
+  //   features: ["Brand generation", "Responsive by default", "Live preview", "One-click deploy"],
+  // },
   {
     icon: "Boxes",
     title: "Supplier Consultant",

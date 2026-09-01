@@ -5,7 +5,7 @@ import { Section, SectionHeading } from "@/components/ui/section";
 import { Reveal } from "@/components/ui/reveal";
 import { Button } from "@/components/ui/button";
 import { LeadForm } from "@/components/shared/lead-form";
-import { siteConfig, supplierSignupUrl } from "@/lib/site";
+import { siteConfig, supplierSignupUrl, merchantSignupUrl } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Contact",
@@ -56,7 +56,7 @@ export default function ContactPage() {
                   Watch EcomAI build a business, or start selling as a supplier — no call needed.
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <Button href="/#builder" variant="primary" size="sm">
+                  <Button href={merchantSignupUrl} variant="primary" size="sm">
                     <Sparkles className="h-4 w-4" /> Build a business
                   </Button>
                   <Button href={supplierSignupUrl} variant="outline" size="sm">

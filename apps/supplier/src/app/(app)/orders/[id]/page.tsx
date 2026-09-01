@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { ArrowLeft, Mail, MessageSquare } from "lucide-react";
+import { ArrowLeft, Mail, Phone, MapPin, MessageSquare } from "lucide-react";
 import { createClient } from "@ecomstrait/auth/server";
 import type { OrderItem } from "@ecomstrait/db/types";
 import { ORDER_STATUS_STYLE } from "@/lib/order-status";
@@ -38,19 +38,50 @@ export default async function OrderDetailPage({
         <h1 className="text-2xl font-bold text-ink-950">
           Order #{order.number}
         </h1>
-        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${ORDER_STATUS_STYLE[order.status]}`}>
-          {order.status}
-        </span>
+        <div className="flex items-center gap-2">
+          {order.payment_type === "cod" && (
+            <span className="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
+              Cash on Delivery
+            </span>
+          )}
+          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${ORDER_STATUS_STYLE[order.status]}`}>
+            {order.status}
+          </span>
+        </div>
       </div>
 
-      <div className="mt-2 flex flex-wrap gap-4 text-sm text-ink-500">
-        <span>{order.store_name || order.store_owner_name || "Store owner"}</span>
-        {order.store_owner_email && (
-          <span className="inline-flex items-center gap-1.5">
-            <Mail className="h-4 w-4" /> {order.store_owner_email}
-          </span>
-        )}
-      </div>
+      <p className="mt-2 text-sm text-ink-500">{order.store_name || "Store"}</p>
+
+      {/* Ship to */}
+      <section className="mt-6 rounded-2xl border border-ink-100 bg-white p-5">
+        <h2 className="text-sm font-semibold text-ink-950">Ship to</h2>
+        <div className="mt-3 space-y-2 text-sm">
+          <p className="font-medium text-ink-800">{order.customer_name || "Customer"}</p>
+          {order.shipping ? (
+            <p className="inline-flex items-start gap-1.5 text-ink-600">
+              <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-ink-400" /> {order.shipping}
+            </p>
+          ) : (
+            <p className="text-ink-400">No shipping address on file.</p>
+          )}
+          {order.customer_phone && (
+            <a
+              href={`tel:${order.customer_phone}`}
+              className="inline-flex items-center gap-1.5 text-ink-600 hover:text-ink-900"
+            >
+              <Phone className="h-4 w-4 text-ink-400" /> {order.customer_phone}
+            </a>
+          )}
+          {order.customer_email && (
+            <a
+              href={`mailto:${order.customer_email}`}
+              className="flex items-center gap-1.5 text-ink-600 hover:text-ink-900"
+            >
+              <Mail className="h-4 w-4 text-ink-400" /> {order.customer_email}
+            </a>
+          )}
+        </div>
+      </section>
 
       {/* Items */}
       <section className="mt-6 rounded-2xl border border-ink-100 bg-white p-5">

@@ -1,81 +1,44 @@
 "use client";
 
-import { useState } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { Check, Sparkles } from "lucide-react";
+import { PLAN_ENTITLEMENTS, PLAN_ORDER } from "@ecomstrait/db/plans";
 import { Section, SectionHeading } from "@/components/ui/section";
 import { Button } from "@/components/ui/button";
+import { merchantSignupUrl } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
-type Plan = {
-  name: string;
-  price: string;
-  tagline: string;
-  features: string[];
-  featured?: boolean;
-};
+/** Marketing-only pick, not a product signal — the merchant app's own billing
+ *  page (apps/merchant/src/components/billing/billing-plans.tsx) doesn't
+ *  badge any tier; this is purely which card gets the visual anchor here. */
+const FEATURED_TIER = "premium";
 
-const plans: Plan[] = [
-  { name: "Starter", price: "Coming soon", tagline: "Launch your first store", features: ["AI-built website", "Up to 100 products", "Custom domain", "Standard support"] },
-  { name: "Growth", price: "Coming soon", tagline: "Scale with automation", features: ["Everything in Starter", "Unlimited products", "AI marketing & SEO", "Priority support"], featured: true },
-  { name: "Agency", price: "Coming soon", tagline: "Launch stores for clients", features: ["Everything in Growth", "White-label", "Multi-store management", "Dedicated manager"] },
-];
-
-type Billing = "build" | "monthly";
-
-const BILLING: { id: Billing; label: string; note: string }[] = [
-  { id: "build", label: "One-time build", note: "one-time launch fee" },
-  { id: "monthly", label: "Monthly platform", note: "billed monthly after launch" },
-];
+function fmt(n: number): string {
+  if (n >= 1_000_000) return `${n / 1_000_000}M`;
+  if (n >= 1_000) return `${n / 1_000}K`;
+  return String(n);
+}
 
 export function PricingPlans() {
   const reduce = useReducedMotion();
-  const [billing, setBilling] = useState<Billing>("build");
-  const activeNote = BILLING.find((b) => b.id === billing)!.note;
 
   return (
     <Section tone="muted" id="pricing">
       <SectionHeading
         eyebrow="Pricing"
-        title="Simple plans, coming soon"
-        description="A one-time build plus a monthly platform subscription. Detailed pricing is on the way — book a demo for a tailored quote."
+        title="Simple plans that grow with you"
+        description="Start free, upgrade as your store grows. Every plan includes the full AI toolkit — more stores and AI usage as you go up."
       />
 
-      {/* billing toggle — user interaction */}
-      <div className="mt-10 flex justify-center">
-        <div className="relative inline-flex rounded-full border border-ink-200 bg-white p-1 shadow-sm">
-          {BILLING.map((b) => {
-            const active = billing === b.id;
-            return (
-              <button
-                key={b.id}
-                onClick={() => setBilling(b.id)}
-                aria-pressed={active}
-                className={cn(
-                  "relative z-10 rounded-full px-5 py-2 text-sm font-semibold transition-colors duration-200",
-                  active ? "text-white" : "text-ink-600 hover:text-ink-900",
-                )}
-              >
-                {active && (
-                  <motion.span
-                    layoutId="billing-pill"
-                    className="absolute inset-0 -z-10 rounded-full bg-brand-500 shadow-lg shadow-brand-500/25"
-                    transition={reduce ? { duration: 0 } : { type: "spring", stiffness: 380, damping: 30 }}
-                  />
-                )}
-                {b.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      <div className="mt-12 grid gap-6 lg:grid-cols-3">
-        {plans.map((plan, i) => (
-          <PlanCard key={plan.name} plan={plan} index={i} note={activeNote} reduce={!!reduce} />
-        ))}
+      <div className="mt-12 grid gap-6 lg:grid-cols-4">
+        {PLAN_ORDER.map((tier, i) => {
+          const plan = PLAN_ENTITLEMENTS[tier];
+          return (
+            <PlanCard key={tier} plan={plan} featured={tier === FEATURED_TIER} index={i} reduce={!!reduce} />
+          );
+        })}
       </div>
     </Section>
   );
@@ -83,13 +46,13 @@ export function PricingPlans() {
 
 function PlanCard({
   plan,
+  featured,
   index,
-  note,
   reduce,
 }: {
-  plan: Plan;
+  plan: (typeof PLAN_ENTITLEMENTS)[keyof typeof PLAN_ENTITLEMENTS];
+  featured: boolean;
   index: number;
-  note: string;
   reduce: boolean;
 }) {
   return (
@@ -101,13 +64,13 @@ function PlanCard({
       whileHover={reduce ? undefined : { y: -8 }}
       className={cn(
         "group relative flex h-full flex-col rounded-3xl border p-8 transition-shadow duration-300",
-        plan.featured
+        featured
           ? "border-brand-300 bg-white shadow-2xl shadow-brand-500/10 ring-1 ring-brand-200 hover:shadow-brand-500/25"
           : "border-ink-100 bg-white hover:border-brand-200 hover:shadow-xl hover:shadow-ink-950/5",
       )}
     >
       {/* pulsing "Most popular" highlight */}
-      {plan.featured && (
+      {featured && (
         <span className="absolute -top-3 left-8 inline-flex items-center gap-1 rounded-full bg-brand-500 px-3 py-1 text-xs font-semibold text-white">
           {!reduce && (
             <motion.span
@@ -123,7 +86,7 @@ function PlanCard({
       )}
 
       {/* soft glow on hover for the featured card */}
-      {plan.featured && (
+      {featured && (
         <div
           aria-hidden
           className="pointer-events-none absolute -inset-px -z-10 rounded-3xl opacity-0 blur-md transition-opacity duration-300 group-hover:opacity-100"
@@ -131,43 +94,31 @@ function PlanCard({
         />
       )}
 
-      <h3 className="text-lg font-bold text-ink-950">{plan.name}</h3>
-      <p className="text-sm text-ink-500">{plan.tagline}</p>
+      <h3 className="text-lg font-bold text-ink-950">{plan.label}</h3>
 
-      <p className="mt-5 text-2xl font-extrabold text-ink-950 font-display">{plan.price}</p>
-      <div className="mt-1 h-5 overflow-hidden">
-        <AnimatePresence mode="wait">
-          <motion.span
-            key={note}
-            initial={reduce ? false : { opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={reduce ? undefined : { opacity: 0, y: -8 }}
-            transition={{ duration: 0.3, ease: EASE }}
-            className="block text-xs font-medium text-brand-600"
-          >
-            {note}
-          </motion.span>
-        </AnimatePresence>
-      </div>
+      <p className="mt-5 text-2xl font-extrabold text-ink-950 font-display">
+        {plan.priceMonthly === 0 ? "Free" : `$${plan.priceMonthly}`}
+        {plan.priceMonthly > 0 && <span className="text-sm font-medium text-ink-400">/mo</span>}
+      </p>
 
       <ul className="mt-6 flex-1 space-y-3">
-        {plan.features.map((f, fi) => (
-          <motion.li
-            key={f}
-            initial={reduce ? false : { opacity: 0, x: -10 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: false, margin: "-40px" }}
-            transition={{ duration: 0.35, delay: 0.15 + index * 0.1 + fi * 0.08, ease: EASE }}
-            className="flex items-center gap-2.5 text-sm text-ink-600"
-          >
-            <Check className="h-4 w-4 shrink-0 text-brand-500" strokeWidth={3} /> {f}
-          </motion.li>
-        ))}
+        <li className="flex items-center gap-2.5 text-sm text-ink-600">
+          <Check className="h-4 w-4 shrink-0 text-brand-500" strokeWidth={3} />
+          {fmt(plan.tokensPerDay)} AI tokens/day
+        </li>
+        <li className="flex items-center gap-2.5 text-sm text-ink-600">
+          <Check className="h-4 w-4 shrink-0 text-brand-500" strokeWidth={3} />
+          {plan.storeLimit} store{plan.storeLimit === 1 ? "" : "s"}
+        </li>
+        <li className="flex items-center gap-2.5 text-sm text-ink-600">
+          <Check className="h-4 w-4 shrink-0 text-brand-500" strokeWidth={3} />
+          Full AI toolkit — builder, SEO, marketing, analytics
+        </li>
       </ul>
 
       <div className="mt-8">
-        <Button href="#consultation" variant={plan.featured ? "primary" : "outline"} size="md" className="w-full">
-          Get notified
+        <Button href={merchantSignupUrl} variant={featured ? "primary" : "outline"} size="md" className="w-full">
+          {plan.priceMonthly === 0 ? "Start free" : "Build My Business"}
         </Button>
       </div>
     </motion.div>

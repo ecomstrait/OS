@@ -10,7 +10,7 @@ import {
 import { Section, SectionHeading } from "@/components/ui/section";
 import { Button } from "@/components/ui/button";
 import { WaitlistForm } from "@/components/shared/waitlist-form";
-import { supplierSignupUrl } from "@/lib/site";
+import { supplierSignupUrl, merchantSignupUrl } from "@/lib/site";
 import { track } from "@/lib/analytics";
 import { AiAvatar } from "@/components/ecomai/ai-avatar";
 import type { BusinessPlan } from "@/lib/ecomai";
@@ -426,7 +426,7 @@ function Result({
             <Button href={supplierSignupUrl} variant="primary" size="md">Become a Supplier <ArrowRight className="h-4 w-4" /></Button>
           ) : (
             <Button
-              href="/#builder"
+              href={merchantSignupUrl}
               variant="ai"
               size="md"
               onClick={() => track("build_clicked", { niche: plan.niche, source: "ai-simulator" })}

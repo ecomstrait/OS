@@ -1,5 +1,7 @@
 import { Hero } from "@/components/home/hero";
-import { AiBuilder } from "@/components/home/ai-builder";
+// AI Website Builder — hidden from the site for now, not removed. Re-enable
+// by uncommenting this import and the <AiBuilder /> usage below.
+// import { AiBuilder } from "@/components/home/ai-builder";
 import { AiSimulator } from "@/components/home/ai-simulator";
 import { HowItWorks } from "@/components/home/how-it-works";
 import { ServicesSection } from "@/components/home/services-section";
@@ -17,7 +19,7 @@ export default function HomePage() {
   return (
     <>
       <Hero />
-      <AiBuilder />
+      {/* <AiBuilder /> */}
       <AiSimulator />
       <HowItWorks />
       <ServicesSection />

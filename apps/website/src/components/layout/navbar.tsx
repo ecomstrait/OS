@@ -7,7 +7,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Menu, X } from "lucide-react";
 import { Logo } from "@/components/ui/logo";
 import { Button } from "@/components/ui/button";
-import { primaryNav, secondaryNav, supplierSignupUrl } from "@/lib/site";
+import { primaryNav, secondaryNav, supplierSignupUrl, merchantSignupUrl } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 const allNav = [...primaryNav, ...secondaryNav];
@@ -55,7 +55,7 @@ export function Navbar() {
         </div>
 
         <div className="hidden items-center gap-2 lg:flex">
-          <Button href="/#builder" variant="ghost" size="sm">
+          <Button href={merchantSignupUrl} variant="ghost" size="sm">
             Build My Business
           </Button>
           <Button href={supplierSignupUrl} variant="primary" size="sm">
@@ -94,7 +94,7 @@ export function Navbar() {
                 </Link>
               ))}
               <div className="mt-3 flex flex-col gap-2">
-                <Button href="/#builder" variant="outline" size="md" onClick={() => setOpen(false)}>
+                <Button href={merchantSignupUrl} variant="outline" size="md" onClick={() => setOpen(false)}>
                   Build My Business
                 </Button>
                 <Button href={supplierSignupUrl} variant="primary" size="md" onClick={() => setOpen(false)}>

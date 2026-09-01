@@ -7,7 +7,8 @@
     ".": "./src/index.ts",
     "./admin": "./src/admin.ts",
     "./types": "./src/types.ts",
-    "./wallet": "./src/wallet.ts"
+    "./wallet": "./src/wallet.ts",
+    "./plans": "./src/plans.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.7"

@@ -5,7 +5,7 @@ import { Section, SectionHeading } from "@/components/ui/section";
 import { Reveal } from "@/components/ui/reveal";
 import { Button } from "@/components/ui/button";
 import { CtaBanner } from "@/components/shared/cta-banner";
-import { supplierSignupUrl } from "@/lib/site";
+import { supplierSignupUrl, merchantSignupUrl } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "About",
@@ -160,8 +160,13 @@ export default function AboutPage() {
               to help shape it and get early access.
             </p>
             <div className="mt-1 flex flex-col gap-3 sm:flex-row">
-              <Button href="/#builder" variant="primary" size="md">
+              {/* "Watch AI build a business" linked to the AI Website Builder
+                  demo, which is hidden for now (see app/(site)/page.tsx). */}
+              {/* <Button href="/#builder" variant="primary" size="md">
                 Watch AI build a business
+              </Button> */}
+              <Button href={merchantSignupUrl} variant="primary" size="md">
+                Build My Business
               </Button>
               <Button href={supplierSignupUrl} variant="outline" size="md">
                 Become a supplier

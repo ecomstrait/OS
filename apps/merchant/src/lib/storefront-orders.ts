@@ -156,6 +156,7 @@ export async function confirmOrder(
     paymentType: "prepaid",
     customerName: cust?.name,
     customerEmail: cust?.email,
+    customerPhone: cust?.phone,
     shipping: shipText,
     items,
   });

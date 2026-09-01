@@ -9,7 +9,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { OceanBackdrop } from "@/components/ui/ocean-backdrop";
 import { Button } from "@/components/ui/button";
-import { supplierSignupUrl } from "@/lib/site";
+import { supplierSignupUrl, merchantSignupUrl } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 type IconType = React.ComponentType<{ className?: string }>;
@@ -102,7 +102,7 @@ export function WhyHero() {
               intelligent platform that helps you launch, manage, and grow.
             </p>
             <div className="mt-2 flex flex-col gap-3 sm:flex-row">
-              <Button href="/#builder" variant="primary" size="lg">
+              <Button href={merchantSignupUrl} variant="primary" size="lg">
                 Build My Business <ArrowRight className="h-4 w-4" />
               </Button>
               <Button href={supplierSignupUrl} variant="outline-light" size="lg">

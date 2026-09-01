@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OceanBackdrop } from "@/components/ui/ocean-backdrop";
+import { merchantSignupUrl } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 type IconType = React.ComponentType<{ className?: string }>;
@@ -105,7 +106,7 @@ export function ServicesHero() {
               transition={{ duration: 0.6, ease: EASE }}
               className="mt-8 flex flex-col justify-center gap-3 sm:flex-row lg:justify-start"
             >
-              <Button href="/#builder" variant="primary" size="lg">
+              <Button href={merchantSignupUrl} variant="primary" size="lg">
                 Build My Business <ArrowRight className="h-4 w-4" />
               </Button>
               <Button href="/contact" variant="outline-light" size="lg">Book a Demo</Button>

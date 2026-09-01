@@ -347,8 +347,12 @@ export type Database = {
           supplier_id: string;
           request_id: string | null;
           store_name: string | null;
-          store_owner_name: string | null;
-          store_owner_email: string | null;
+          /** The end customer's name/email/phone — despite the table's
+           *  `store_*` prefix elsewhere, these are who the supplier ships
+           *  to, not the merchant. See supabase/migrations/20260901130000_orders_customer_fields.sql. */
+          customer_name: string | null;
+          customer_email: string | null;
+          customer_phone: string | null;
           shipping: string | null;
           status: OrderStatus;
           /** The merchant's store — added for Docs/Credits-Settlement-Plan.md;

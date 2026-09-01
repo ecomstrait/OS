@@ -5,7 +5,7 @@ import type { OrderStatus } from "@ecomstrait/db/types";
 import { getSupplierContext } from "@/lib/supplier-context";
 import { sendStoreOwnerEmail, escapeHtml } from "@/lib/notify";
 
-/** Advance an order through its fulfilment lifecycle (and email the store owner). */
+/** Advance an order through its fulfilment lifecycle (and email the customer). */
 export async function setOrderStatus(
   orderId: string,
   status: OrderStatus,
@@ -15,7 +15,7 @@ export async function setOrderStatus(
 
   const { data: order } = await ctx.supabase
     .from("orders")
-    .select("id, number, store_owner_email")
+    .select("id, number, customer_email")
     .eq("id", orderId)
     .eq("supplier_id", ctx.supplierId)
     .maybeSingle();
@@ -36,9 +36,9 @@ export async function setOrderStatus(
     await ctx.supabase.rpc("reverse_cod_deduction", { p_order_id: orderId });
   }
 
-  if (order.store_owner_email) {
+  if (order.customer_email) {
     await sendStoreOwnerEmail({
-      to: order.store_owner_email,
+      to: order.customer_email,
       subject: `Order #${order.number} is ${status}`,
       html: `<p>Your order <strong>#${order.number}</strong> is now <strong>${escapeHtml(status)}</strong>.</p>`,
     });

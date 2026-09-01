@@ -3,13 +3,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
-  ArrowRight, Play, Search, Sparkles, Boxes, Tag, Warehouse, Layers,
+  ArrowRight, Search, Sparkles, Boxes, Tag, Warehouse, Layers,
   DollarSign, Store, ListChecks, ClipboardList, CreditCard, Users, Brain,
   RefreshCw, BarChart3, CheckCircle2, Rocket, Handshake,
   TrendingUp, MapPin, ChevronDown,
+  // Play — only used by the "Watch AI build a business" button, commented
+  // out below alongside the hidden AI Website Builder demo.
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OceanBackdrop } from "@/components/ui/ocean-backdrop";
+import { merchantSignupUrl, supplierSignupUrl } from "@/lib/site";
 
 type IconType = React.ComponentType<{ className?: string }>;
 
@@ -52,7 +55,8 @@ const SLIDES: Slide[] = [
       { icon: Users, label: "Customer Reach" },
     ],
     chips: [
-      { icon: Sparkles, label: "AI Website Builder" },
+      // AI Website Builder — hidden from the site for now, not removed.
+      // { icon: Sparkles, label: "AI Website Builder" },
       { icon: Brain, label: "AI Business Consultant" },
       { icon: RefreshCw, label: "Smart Automation" },
       { icon: BarChart3, label: "Real-time Insights" },
@@ -209,15 +213,17 @@ export function Hero() {
         {/* ---- CTAs ---- */}
         <div className="mt-10 flex flex-col items-center gap-4">
           <div className="flex flex-col flex-wrap justify-center gap-3 sm:flex-row">
-            <Button href="#builder" variant="primary" size="lg">
+            <Button href={merchantSignupUrl} variant="primary" size="lg">
               Build My Business <ArrowRight className="h-4 w-4" />
             </Button>
-            <Button href="/suppliers" variant="ai" size="lg">
+            <Button href={supplierSignupUrl} variant="ai" size="lg">
               <Search className="h-4 w-4" /> Find a Supplier
             </Button>
-            <Button href="#builder" variant="outline-light" size="lg">
+            {/* "Watch AI build a business" linked to the AI Website Builder
+                demo, which is hidden for now (see app/(site)/page.tsx). */}
+            {/* <Button href="#builder" variant="outline-light" size="lg">
               <Play className="h-4 w-4" /> Watch AI build a business
-            </Button>
+            </Button> */}
           </div>
 
           {/* Slide controls */}

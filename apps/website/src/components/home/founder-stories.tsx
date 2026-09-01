@@ -7,6 +7,7 @@ import { Section, SectionHeading } from "@/components/ui/section";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { founderStories } from "@/content/founder-stories";
+import { merchantSignupUrl } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 const AUTO_MS = 7000;
@@ -151,7 +152,7 @@ export function FounderStories() {
       </div>
 
       <div className="mt-10 flex justify-center">
-        <Button href="/#builder" variant="ai" size="md">
+        <Button href={merchantSignupUrl} variant="ai" size="md">
           Start your story <ArrowRight className="h-4 w-4" />
         </Button>
       </div>

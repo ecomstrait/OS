@@ -8,8 +8,9 @@ type ShopifyLine = { title: string; quantity: number; price: string; sku?: strin
 type ShopifyOrder = {
   id: number;
   line_items: ShopifyLine[];
-  customer?: { first_name?: string; last_name?: string; email?: string };
+  customer?: { first_name?: string; last_name?: string; email?: string; phone?: string | null };
   email?: string;
+  phone?: string | null;
   shipping_address?: Record<string, string | null>;
   financial_status?: string;
   payment_gateway_names?: string[];
@@ -35,6 +36,7 @@ function fmtShippingAddr(a?: Record<string, string | null>): string | null {
   if (!a) return null;
   const parts = [
     a.name,
+    a.company,
     [a.address1, a.address2].filter(Boolean).join(" "),
     [a.city, a.province, a.zip].filter(Boolean).join(" "),
     a.country,
@@ -95,6 +97,9 @@ export async function POST(req: Request) {
     paymentType: derivePaymentType(order),
     customerName: name,
     customerEmail: order.customer?.email ?? order.email ?? null,
+    // Prefer the shipping address's own phone (most relevant to delivery),
+    // falling back to the order- and customer-level phone Shopify also sends.
+    customerPhone: order.shipping_address?.phone ?? order.phone ?? order.customer?.phone ?? null,
     shipping: fmtShippingAddr(order.shipping_address),
     items,
   });

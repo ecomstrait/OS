@@ -27,6 +27,17 @@ export const supplierAppUrl =
   process.env.NEXT_PUBLIC_SUPPLIER_APP_URL || "http://localhost:3001";
 export const supplierSignupUrl = `${supplierAppUrl}/signup`;
 
+/**
+ * The Merchant Portal is a separate app/deployment — every "Build My
+ * Business" CTA sends entrepreneurs there to actually sign up and build,
+ * rather than to the (currently hidden) on-site AI builder demo. Configurable
+ * per environment via NEXT_PUBLIC_MERCHANT_APP_URL, so attaching a custom
+ * domain later is an env change, never a code change.
+ */
+export const merchantAppUrl =
+  process.env.NEXT_PUBLIC_MERCHANT_APP_URL || "http://localhost:3002";
+export const merchantSignupUrl = `${merchantAppUrl}/signup`;
+
 export type NavItem = { label: string; href: string };
 
 export const primaryNav: NavItem[] = [
@@ -59,7 +70,7 @@ export const footerNav: { title: string; links: NavItem[] }[] = [
     title: "For You",
     links: [
       { label: "Become a Supplier", href: supplierSignupUrl },
-      { label: "Build a Business", href: "/#builder" },
+      { label: "Build a Business", href: merchantSignupUrl },
       { label: "Book a Demo", href: "/contact" },
       { label: "Pricing", href: "/store-owners#pricing" },
     ],

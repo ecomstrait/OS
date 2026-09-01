@@ -68,6 +68,7 @@ export async function recordCustomerOrder(
     paymentType: OrderPaymentType;
     customerName?: string | null;
     customerEmail?: string | null;
+    customerPhone?: string | null;
     shipping?: string | null;
     items: SoldItem[];
   },
@@ -131,8 +132,9 @@ export async function recordCustomerOrder(
         supplier_id: supplierId,
         store_id: opts.storeId,
         store_name: store?.name ?? null,
-        store_owner_name: opts.customerName ?? null,
-        store_owner_email: opts.customerEmail ?? null,
+        customer_name: opts.customerName ?? null,
+        customer_email: opts.customerEmail ?? null,
+        customer_phone: opts.customerPhone ?? null,
         shipping: opts.shipping ?? null,
         status: "processing",
         payment_type: opts.paymentType,

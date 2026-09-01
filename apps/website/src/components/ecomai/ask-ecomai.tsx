@@ -7,6 +7,7 @@ import { AiAvatar } from "@/components/ecomai/ai-avatar";
 import { Button } from "@/components/ui/button";
 import type { ChatMessage } from "@/lib/ask";
 import { ASK_SUGGESTIONS } from "@/content/ask-suggestions";
+import { merchantSignupUrl } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -236,8 +237,8 @@ export function AskEcomAI() {
         {/* Waitlist nudge */}
         <div className="mx-auto mt-6 flex max-w-3xl flex-col items-center gap-3 text-center sm:flex-row sm:justify-center">
           <p className="text-sm text-ink-300">Ready to let EcomAI build your business?</p>
-          <Button href="/#builder" size="sm">
-            Watch AI build a business
+          <Button href={merchantSignupUrl} size="sm">
+            Build My Business
           </Button>
         </div>
       </div>

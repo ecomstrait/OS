@@ -83,7 +83,8 @@ export function EcomAi() {
                 <Bot className="h-5 w-5" />
               </span>
               <div>
-                <p className="text-sm font-semibold text-white">EcomAI Website Builder</p>
+                {/* AI Website Builder — hidden from the site for now, not removed. */}
+                {/* <p className="text-sm font-semibold text-white">EcomAI Website Builder</p> */}
                 <p className="text-[11px] text-ink-400">Describe your store — watch it come to life</p>
               </div>
             </div>

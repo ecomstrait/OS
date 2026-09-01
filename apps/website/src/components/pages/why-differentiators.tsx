@@ -7,7 +7,8 @@ import { Icon, type IconName } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 
 const differentiators: { icon: IconName; title: string }[] = [
-  { icon: "Wand2", title: "AI Website Builder" },
+  // AI Website Builder — hidden from the site for now, not removed.
+  // { icon: "Wand2", title: "AI Website Builder" },
   { icon: "Bot", title: "AI Business Consultant" },
   { icon: "Boxes", title: "Supplier Marketplace" },
   { icon: "Rocket", title: "Store Launch Service" },

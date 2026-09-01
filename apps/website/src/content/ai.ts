@@ -8,7 +8,8 @@ export type AiFeature = {
 };
 
 export const aiFeatures: AiFeature[] = [
-  { icon: "Wand2", title: "AI Website Builder", description: "Generate a complete storefront from a prompt — branding, pages, and content.", status: "live" },
+  // AI Website Builder — hidden from the site for now, not removed.
+  // { icon: "Wand2", title: "AI Website Builder", description: "Generate a complete storefront from a prompt — branding, pages, and content.", status: "live" },
   { icon: "Bot", title: "Business Consultant", description: "Ask anything about pricing, products, and strategy. Get answers grounded in your data.", status: "live" },
   { icon: "PenTool", title: "AI Product Writer", description: "SEO-ready titles, descriptions, and attributes for your entire catalog.", status: "live" },
   { icon: "Search", title: "SEO Assistant", description: "Automated metadata, keywords, and structured data to help you rank.", status: "live" },

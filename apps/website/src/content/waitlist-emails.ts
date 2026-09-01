@@ -9,6 +9,8 @@
  * Typed data (Sanity-ready) so copy can move to a CMS without touching code.
  */
 
+import { merchantSignupUrl } from "@/lib/site";
+
 export type WaitlistEmail = {
   /** Ordinal in the sequence. */
   step: number;
@@ -26,6 +28,11 @@ export type WaitlistEmail = {
 };
 
 const SITE = "https://ecomstrait.com";
+
+// AI Website Builder demo is hidden for now — the CTAs below go straight to
+// merchantSignupUrl instead of the (no-longer-rendered) `${SITE}/#builder`.
+// Copy in a couple of these emails still narrates "watch it build" — worth a
+// pass if the drip goes out again before that section is re-enabled.
 
 export const waitlistDrip: WaitlistEmail[] = [
   {
@@ -45,7 +52,7 @@ export const waitlistDrip: WaitlistEmail[] = [
       "Day 15 — marketing that runs itself",
       "Day 30 — your first 30 days, mapped end to end",
     ],
-    cta: { label: "Watch AI build a business", href: `${SITE}/#builder` },
+    cta: { label: "Watch AI build a business", href: merchantSignupUrl },
   },
   {
     step: 1,
@@ -63,7 +70,7 @@ export const waitlistDrip: WaitlistEmail[] = [
       "Brand & logo → homepage → SEO → mobile version",
       "Payments & shipping configured → optimized for conversion",
     ],
-    cta: { label: "Try the AI store builder", href: `${SITE}/#builder` },
+    cta: { label: "Try the AI store builder", href: merchantSignupUrl },
   },
   {
     step: 2,
@@ -112,6 +119,6 @@ export const waitlistDrip: WaitlistEmail[] = [
       "We're opening the beta to Founders Waitlist members first. As one of them, you'll get early access, founder pricing, and a direct line to the team as we roll it out.",
       "When you're ready, tell EcomAI what business you want to build. Your co-founder is waiting.",
     ],
-    cta: { label: "Build your business", href: `${SITE}/#builder` },
+    cta: { label: "Build your business", href: merchantSignupUrl },
   },
 ];

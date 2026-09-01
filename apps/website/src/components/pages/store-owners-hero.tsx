@@ -4,9 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import {
   AnimatePresence, motion, useInView, useReducedMotion,
 } from "framer-motion";
-import { ArrowRight, Images, Sparkles, ShoppingBag } from "lucide-react";
+import { ArrowRight, Sparkles, ShoppingBag } from "lucide-react";
+// Images — only used by the "Watch AI build a business" button, commented
+// out below alongside the hidden AI Website Builder demo.
 import { Button } from "@/components/ui/button";
 import { OceanBackdrop } from "@/components/ui/ocean-backdrop";
+import { merchantSignupUrl } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -144,12 +147,14 @@ export function StoreOwnersHero() {
               transition={{ duration: 0.6, delay: 0.24, ease: EASE }}
               className="mt-9 flex flex-col justify-center gap-3 sm:flex-row lg:justify-start"
             >
-              <Button href="/#builder" variant="primary" size="lg">
+              <Button href={merchantSignupUrl} variant="primary" size="lg">
                 Build My Business <ArrowRight className="h-4 w-4" />
               </Button>
-              <Button href="/#builder" variant="outline-light" size="lg">
+              {/* "Watch AI build a business" linked to the AI Website Builder
+                  demo, which is hidden for now (see app/(site)/page.tsx). */}
+              {/* <Button href="/#builder" variant="outline-light" size="lg">
                 <Images className="h-4 w-4" /> Watch AI build a business
-              </Button>
+              </Button> */}
             </motion.div>
 
             {/* theme picker — user interaction */}

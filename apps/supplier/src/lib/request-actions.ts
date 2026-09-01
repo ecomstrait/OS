@@ -28,8 +28,12 @@ async function createOrderFromRequest(
       supplier_id: supplierId,
       request_id: requestId,
       store_name: req.store_name,
-      store_owner_name: req.store_owner_name,
-      store_owner_email: req.store_owner_email,
+      // `orders.customer_name/email` is who the shipment goes to — for a
+      // request-originated order that's the requesting merchant themselves
+      // (no separate end-customer exists in this flow), unlike a
+      // sale-originated order (order-sink.ts) where it's the actual buyer.
+      customer_name: req.store_owner_name,
+      customer_email: req.store_owner_email,
       status: "processing",
     })
     .select("id")

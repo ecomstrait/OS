@@ -56,6 +56,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ storeId
       },
     })),
     shipping_address_collection: { allowed_countries: COUNTRIES as never },
+    // The supplier fulfilling the order needs a phone number for delivery
+    // coordination (especially COD) — Stripe won't collect it otherwise.
+    phone_number_collection: { enabled: true },
     success_url: `${base}/store/${storeId}/success?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${base}/store/${storeId}`,
     metadata: {

@@ -17,7 +17,7 @@ type Row = {
   id: string;
   number: number;
   store_name: string | null;
-  store_owner_name: string | null;
+  customer_name: string | null;
   status: OrderStatus;
   created_at: string;
   order_items: { product_name: string; quantity: number }[];
@@ -54,7 +54,7 @@ export default async function OrdersPage({
       .eq("credit_status", "deducted");
     if (q) {
       keyQuery = keyQuery.or(
-        `store_name.ilike.${likeTerm(q)},store_owner_name.ilike.${likeTerm(q)}`,
+        `store_name.ilike.${likeTerm(q)},customer_name.ilike.${likeTerm(q)}`,
       );
     }
     const { data: keys } = await keyQuery.order("created_at", { ascending: false });
@@ -71,7 +71,7 @@ export default async function OrdersPage({
       const { data } = await supabase
         .from("orders")
         .select(
-          "id, number, store_name, store_owner_name, status, created_at, order_items(product_name, quantity)",
+          "id, number, store_name, customer_name, status, created_at, order_items(product_name, quantity)",
         )
         .eq("supplier_id", supplier.supplierId)
         .in("id", pageIds);
@@ -128,7 +128,7 @@ export default async function OrdersPage({
                       >
                         <div className="min-w-0">
                           <p className="font-medium text-ink-900">
-                            #{o.number} · {o.store_name || o.store_owner_name || "Store owner"}
+                            #{o.number} · {o.store_name || o.customer_name || "Customer"}
                           </p>
                           <p className="truncate text-sm text-ink-500">{summaryText}</p>
                         </div>
