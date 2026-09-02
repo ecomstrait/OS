@@ -96,7 +96,7 @@ export function ProductCard({
             title in one tile doesn't push its button out of line with the rest. */}
         <div className="mt-auto pt-3">
           {stores?.length ? (
-            <ListingMenu productId={product.id} stores={stores} listings={listings ?? {}} />
+            <ListingMenu productId={product.id} stores={stores} listings={listings ?? {}} selected={selected} />
           ) : (
             <AddButton productId={product.id} selected={selected} />
           )}

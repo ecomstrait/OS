@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Search, PackageOpen, X } from "lucide-react";
+import { Search, PackageOpen, Sparkles, X } from "lucide-react";
 import { clampPage, parseTableParams, type RawParams } from "@ecomstrait/ui";
 import { Pagination } from "@ecomstrait/ui/pagination";
 import { getPublishedCatalog, getSelectedIds, getCatalogFacets } from "@/lib/catalog";
@@ -54,12 +54,29 @@ export default async function FindSuppliersPage({
             Browse verified suppliers&apos; products and add them to your inventory.
           </p>
         </div>
-        <Link
-          href="/inventory"
-          className="inline-flex items-center gap-2 rounded-xl border border-ink-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink-800 hover:bg-ink-50"
-        >
-          <PackageOpen className="h-4 w-4" /> Selected ({selected.size})
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/inventory"
+            className="inline-flex items-center gap-2 rounded-xl border border-ink-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink-800 hover:bg-ink-50"
+          >
+            <PackageOpen className="h-4 w-4" /> Selected ({selected.size})
+          </Link>
+          {selected.size > 0 ? (
+            <Link
+              href="/builder"
+              className="inline-flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-600"
+            >
+              <Sparkles className="h-4 w-4" /> Create a store with selected inventory
+            </Link>
+          ) : (
+            <span
+              title="Select at least one product first"
+              className="inline-flex cursor-not-allowed items-center gap-2 rounded-xl bg-ink-100 px-4 py-2.5 text-sm font-semibold text-ink-400"
+            >
+              <Sparkles className="h-4 w-4" /> Create a store with selected inventory
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Changing a filter must land on page 1 — the old page number would

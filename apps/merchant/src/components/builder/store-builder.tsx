@@ -164,16 +164,27 @@ export function StoreBuilder({
                 {
                   id: 1,
                   role: "ai" as const,
+                  // Explicit and directive when arriving with a basket from Find
+                  // Suppliers — that merchant clicked "Create a store with
+                  // selected inventory" specifically so those exact products get
+                  // used, not auto-picked by AI, so this says so plainly and asks
+                  // right away for what's still needed (name + brand) instead of
+                  // leaving that to whatever the model's own next question is.
                   content: [
                     context.productCount
-                      ? `I've got the ${context.productCount} product${context.productCount === 1 ? "" : "s"} you selected`
+                      ? `Your ${context.productCount} selected product${context.productCount === 1 ? "" : "s"} ${
+                          context.productCount === 1 ? "is" : "are"
+                        } already added — I'll build the store around ${
+                          context.productCount === 1 ? "it" : "them"
+                        }, not pick my own.`
                       : "",
-                    context.presetThemeName ? `the ${context.presetThemeName} theme` : "",
+                    context.presetThemeName ? `I've also got the ${context.presetThemeName} theme you picked.` : "",
+                    context.productCount
+                      ? "Just tell me the store name and a bit about your brand — style, colours, who it's for — and I'll set up the rest."
+                      : "So I'll skip that question.",
                   ]
                     .filter(Boolean)
-                    .join(" and ")
-                    .replace(/^./, (c) => c.toUpperCase())
-                    .concat(" — so I'll skip those questions."),
+                    .join(" "),
                 },
               ]
             : []),
