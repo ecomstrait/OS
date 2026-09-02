@@ -100,6 +100,24 @@ export const STEPS = [
   { n: 5, title: "Review" },
 ] as const;
 
+/**
+ * What an admin can flag when returning an application for edits — one
+ * shared list so the admin's checklist form and what the supplier sees
+ * (dashboard banner, onboarding wizard banner) never drift into three
+ * independently-typed copies of the same items. Labels mirror the wizard's
+ * own step/field-group names above so both sides recognize them.
+ */
+export const RETURN_CHECKLIST = [
+  { key: "business_info", label: "Business information (name, type, contact, phone, location, website)" },
+  { key: "business_details", label: "Business details (experience, categories, description)" },
+  { key: "doc_business_registration", label: "Business registration document" },
+  { key: "doc_tax_registration", label: "Tax registration document" },
+  { key: "doc_national_id", label: "National ID / passport document" },
+  { key: "doc_company_logo", label: "Company logo" },
+  { key: "doc_address_proof", label: "Business address proof document" },
+  { key: "product_info", label: "Product information (inventory size, lead time, shipping regions)" },
+] as const;
+
 /** Fields that must be non-empty for a given step to advance. */
 export function stepFields(step: number): FieldDef[] {
   if (step === 1) return STEP1_FIELDS;

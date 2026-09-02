@@ -104,6 +104,13 @@ export type Database = {
           status: SupplierStatus;
           onboarding_step: number;
           quality_score: number | null;
+          /** Set when an admin returns the application for edits — checked
+           *  items from RETURN_CHECKLIST (apps/supplier/src/lib/onboarding.ts)
+           *  plus an optional free-text note, both cleared on the next
+           *  approval or resubmission. See
+           *  supabase/migrations/20260902110000_supplier_return_feedback.sql. */
+          return_reasons: string[];
+          return_note: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -157,7 +164,14 @@ export type Database = {
           images: string[];
           sku: string | null;
           wholesale_price: number | null;
+          /** Functions as MSRP — a supplier-set reference price, never
+           *  enforced on its own (only used to compute the storefront's
+           *  "was $X" markdown display). */
           retail_price: number | null;
+          /** Minimum advertised price — a hard floor, unlike retail_price.
+           *  Enforced by a DB trigger on store_products, not just app code.
+           *  See supabase/migrations/20260902120000_products_map_price.sql. */
+          map_price: number | null;
           stock: number;
           reserved: number;
           low_stock_threshold: number;

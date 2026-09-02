@@ -59,6 +59,13 @@ export type MerchantListing = {
   title: string;
   image: string | null;
   price: number | null;
+  /** The supplier's suggested price (products.retail_price) — reference
+   *  only, shown alongside the editable price, never enforced on its own. */
+  msrp: number | null;
+  /** The supplier's price floor (products.map_price), when set — enforced
+   *  both here (fast feedback) and by a DB trigger on store_products
+   *  (the actual guarantee, see updateListingPrice). */
+  mapPrice: number | null;
   supplierName: string;
   storeId: string;
   storeName: string;
@@ -103,7 +110,7 @@ export async function getMerchantListings(storeId?: string): Promise<MerchantLis
   const productIds = [...new Set(rows.map((r) => r.product_id))];
   const { data: products } = await admin
     .from("products")
-    .select("id, title, images, retail_price, supplier_id")
+    .select("id, title, images, retail_price, map_price, supplier_id")
     .in("id", productIds);
   const byId = new Map((products ?? []).map((p) => [p.id, p]));
 
@@ -126,6 +133,8 @@ export async function getMerchantListings(storeId?: string): Promise<MerchantLis
         title: p.title,
         image: productImage(p.images?.[0]),
         price: r.price ?? p.retail_price,
+        msrp: p.retail_price,
+        mapPrice: p.map_price,
         supplierName: supplierNames.get(p.supplier_id) ?? "Supplier",
         storeId: r.store_id,
         storeName: storeNames.get(r.store_id) ?? "Untitled store",

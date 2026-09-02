@@ -14,6 +14,7 @@ import {
 import { createClient } from "@ecomstrait/auth/server";
 import { getMySupplier } from "@/lib/supplier-context";
 import type { SupplierVerification } from "@ecomstrait/db/types";
+import { RETURN_CHECKLIST } from "@/lib/onboarding";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
@@ -36,7 +37,7 @@ export default async function DashboardPage() {
   const { data: supplier } = my
     ? await supabase
         .from("suppliers")
-        .select("id, status, business_name, quality_score")
+        .select("id, status, business_name, quality_score, return_reasons, return_note")
         .eq("id", my.supplierId)
         .maybeSingle()
     : { data: null };
@@ -74,6 +75,9 @@ export default async function DashboardPage() {
   const completed = verification
     ? LEVELS.filter((l) => verification[l.key]).length
     : 0;
+  const returnKeys = new Set(supplier?.return_reasons ?? []);
+  const returnReasons = RETURN_CHECKLIST.filter((item) => returnKeys.has(item.key)).map((item) => item.label);
+  const returnNote = supplier?.return_note ?? null;
 
   const widgets = [
     { label: "Open requests", value: String(openRequests ?? 0), icon: ClipboardList },
@@ -91,13 +95,37 @@ export default async function DashboardPage() {
           : "Let's get your supplier account set up."}
       </p>
 
-      {status === "pending" && (
+      {status === "pending" && (returnReasons.length > 0 || returnNote) ? (
         <Banner
-          tone="brand"
-          title="Finish setting up your business"
-          body="Complete the 5-step onboarding to get verified and start publishing products."
-          cta={{ href: "/onboarding", label: "Start onboarding" }}
-        />
+          tone="amber"
+          icon={<AlertTriangle className="h-5 w-5" />}
+          title="Your application was returned for edits"
+          body="An admin flagged a few things to fix before your application can move forward."
+          cta={{ href: "/onboarding", label: "Continue editing" }}
+        >
+          {returnReasons.length > 0 && (
+            <ul className="mt-3 flex flex-col gap-1.5">
+              {returnReasons.map((label) => (
+                <li key={label} className="flex items-start gap-2 text-sm text-ink-700">
+                  <Circle className="mt-1 h-1.5 w-1.5 shrink-0 fill-current text-amber-500" />
+                  {label}
+                </li>
+              ))}
+            </ul>
+          )}
+          {returnNote && (
+            <p className="mt-3 rounded-lg bg-white/60 p-3 text-sm text-ink-700">{returnNote}</p>
+          )}
+        </Banner>
+      ) : (
+        status === "pending" && (
+          <Banner
+            tone="brand"
+            title="Finish setting up your business"
+            body="Complete the 5-step onboarding to get verified and start publishing products."
+            cta={{ href: "/onboarding", label: "Start onboarding" }}
+          />
+        )
       )}
       {status === "in_review" && (
         <Banner
@@ -177,12 +205,14 @@ function Banner({
   body,
   cta,
   icon,
+  children,
 }: {
   tone: "brand" | "amber" | "red";
   title: string;
   body: string;
   cta?: { href: string; label: string };
   icon?: React.ReactNode;
+  children?: React.ReactNode;
 }) {
   const tones = {
     brand: "border-brand-100 bg-brand-50/60",
@@ -195,9 +225,10 @@ function Banner({
     >
       <div className="flex items-start gap-3">
         {icon && <span className="mt-0.5 text-ink-600">{icon}</span>}
-        <div>
+        <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-ink-950">{title}</p>
           <p className="text-sm text-ink-500">{body}</p>
+          {children}
         </div>
       </div>
       {cta && (

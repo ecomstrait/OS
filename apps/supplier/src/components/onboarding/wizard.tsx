@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ArrowRight, Loader2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Loader2, AlertTriangle, Circle } from "lucide-react";
 import type { DocumentType } from "@ecomstrait/db/types";
 import { Button } from "@/components/ui";
 import { Stepper, FieldInput } from "@/components/onboarding/fields";
@@ -14,6 +14,7 @@ import {
   STEP2_FIELDS,
   STEP4_FIELDS,
   stepFields,
+  RETURN_CHECKLIST,
   type SupplierForm,
 } from "@/lib/onboarding";
 import { saveSupplier, submitOnboarding } from "@/lib/supplier-actions";
@@ -25,12 +26,19 @@ export function OnboardingWizard({
   initialStep,
   initialSupplierId,
   initialUploaded,
+  returnReasons = [],
+  returnNote = null,
 }: {
   userId: string;
   initialForm: SupplierForm;
   initialStep: number;
   initialSupplierId: string | null;
   initialUploaded: Record<string, string>;
+  /** Set when this application was sent back for edits — shown persistently
+   *  while the supplier works through the steps, not just on the dashboard
+   *  before they click in. */
+  returnReasons?: string[];
+  returnNote?: string | null;
 }) {
   const router = useRouter();
   const [step, setStep] = useState(Math.min(Math.max(initialStep, 1), 5));
@@ -101,8 +109,39 @@ export function OnboardingWizard({
     }
   }
 
+  const returnedLabels = RETURN_CHECKLIST.filter((item) => returnReasons.includes(item.key)).map(
+    (item) => item.label,
+  );
+
   return (
     <div className="mx-auto max-w-2xl">
+      {(returnedLabels.length > 0 || returnNote) && (
+        <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-ink-950">
+                This application was returned for edits
+              </p>
+              <p className="text-sm text-ink-500">Fix these before resubmitting:</p>
+              {returnedLabels.length > 0 && (
+                <ul className="mt-3 flex flex-col gap-1.5">
+                  {returnedLabels.map((label) => (
+                    <li key={label} className="flex items-start gap-2 text-sm text-ink-700">
+                      <Circle className="mt-1 h-1.5 w-1.5 shrink-0 fill-current text-amber-500" />
+                      {label}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {returnNote && (
+                <p className="mt-3 rounded-lg bg-white/60 p-3 text-sm text-ink-700">{returnNote}</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="mb-8">
         <Stepper current={step} />
       </div>

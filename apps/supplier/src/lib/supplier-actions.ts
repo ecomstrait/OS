@@ -69,6 +69,12 @@ export async function submitOnboarding(input: {
       onboarding_step: 5,
       marketing_opt_in: input.marketingOptIn,
       terms_accepted_at: nowIso,
+      // Whatever an earlier "return for edits" flagged has now been
+      // resubmitted — clear it so it doesn't reappear as if still
+      // outstanding if a later review cycle returns the application again
+      // for a different reason.
+      return_reasons: [],
+      return_note: null,
     })
     .eq("owner_user_id", user.id)
     .select("id")

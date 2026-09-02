@@ -44,6 +44,7 @@ export function CsvImport() {
         sku: get("sku"),
         wholesale_price: get("wholesale_price"),
         retail_price: get("retail_price"),
+        map_price: get("map_price"),
         stock: get("stock"),
         status: "draft",
       };

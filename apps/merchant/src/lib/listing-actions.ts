@@ -102,6 +102,64 @@ export async function requestListing(
   return { status: "pending" };
 }
 
+/**
+ * Adjust the merchant's own selling price for a listing already on one of
+ * their stores. `store_products.price` starts out seeded from the
+ * supplier's MSRP (requestListing/createStore) with no merchant input at
+ * all — this is the actual "adjust it" surface.
+ *
+ * The MAP check here is fast feedback, not the real guarantee: the DB has
+ * its own unconditional trigger (store_products_map_price_guard,
+ * supabase/migrations/20260902120000_products_map_price.sql) that rejects
+ * the write regardless of caller, so this can't be bypassed by skipping
+ * this action.
+ */
+export async function updateListingPrice(
+  storeId: string,
+  productId: string,
+  price: number,
+): Promise<{ error?: string }> {
+  if (!Number.isFinite(price) || price <= 0) {
+    return { error: "Enter a valid price." };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated." };
+
+  const { data: store } = await supabase
+    .from("stores")
+    .select("id")
+    .eq("id", storeId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!store) return { error: "Store not found." };
+
+  const admin = createAdminClient();
+  if (!admin) return { error: "Server not configured." };
+  const { data: product } = await admin
+    .from("products")
+    .select("map_price")
+    .eq("id", productId)
+    .maybeSingle();
+  if (!product) return { error: "Product not found." };
+  if (product.map_price != null && price < product.map_price) {
+    return { error: `Can't price below the MAP ($${product.map_price.toFixed(2)}) set by the supplier.` };
+  }
+
+  const { error } = await supabase
+    .from("store_products")
+    .update({ price })
+    .eq("store_id", storeId)
+    .eq("product_id", productId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/inventory");
+  return {};
+}
+
 /** Remove a listing (or withdraw a pending request) from one of the merchant's stores. */
 export async function removeListing(
   storeId: string,

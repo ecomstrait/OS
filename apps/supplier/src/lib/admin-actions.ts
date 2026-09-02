@@ -116,7 +116,13 @@ export async function approveSupplier(id: string): Promise<{ error?: string }> {
   if ("error" in a) return a;
   const now = new Date().toISOString();
 
-  const { error } = await a.client.from("suppliers").update({ status: "approved" }).eq("id", id);
+  const { error } = await a.client
+    .from("suppliers")
+    // Clears any earlier "return for edits" feedback — mirrors
+    // approveListing clearing decline_reason on approval
+    // (listing-actions.ts) — a stale checklist must not outlive approval.
+    .update({ status: "approved", return_reasons: [], return_note: null })
+    .eq("id", id);
   if (error) return { error: error.message };
 
   await a.client.from("supplier_verification").upsert(
@@ -183,12 +189,23 @@ export async function setStorefrontPassword(
 }
 
 /** Send an application back for edits (e.g. request more info). */
-export async function returnToPending(id: string): Promise<{ error?: string }> {
+export async function returnToPending(
+  id: string,
+  input: { reasons: string[]; note?: string },
+): Promise<{ error?: string }> {
+  const note = input.note?.trim().slice(0, 500) || null;
+  const reasons = input.reasons.filter(Boolean);
+  // A return with nothing checked and no note tells the supplier nothing —
+  // same problem as the old one-click version, now actually prevented.
+  if (reasons.length === 0 && !note) {
+    return { error: "Select at least one item or add a note before sending it back." };
+  }
+
   const a = await asAdmin();
   if ("error" in a) return a;
   const { error } = await a.client
     .from("suppliers")
-    .update({ status: "pending" })
+    .update({ status: "pending", return_reasons: reasons, return_note: note })
     .eq("id", id);
   if (error) return { error: error.message };
   revalidatePath("/admin/suppliers");

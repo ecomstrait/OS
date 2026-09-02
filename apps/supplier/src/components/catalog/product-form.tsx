@@ -14,6 +14,7 @@ export type ProductFormValues = {
   sku: string;
   wholesale_price: string;
   retail_price: string;
+  map_price: string;
   stock: string;
   status: ProductStatus;
   description: string;
@@ -28,6 +29,7 @@ const EMPTY: ProductFormValues = {
   sku: "",
   wholesale_price: "",
   retail_price: "",
+  map_price: "",
   stock: "0",
   status: "draft",
   description: "",
@@ -241,7 +243,13 @@ export function ProductForm({
         <Card title="Pricing & stock">
           <div className="grid gap-4">
             <TextField id="wholesale_price" label="Wholesale price" type="number" value={form.wholesale_price} onChange={(e) => set("wholesale_price", e.target.value)} />
-            <TextField id="retail_price" label="Retail price" type="number" value={form.retail_price} onChange={(e) => set("retail_price", e.target.value)} />
+            <TextField id="retail_price" label="MSRP (suggested retail price)" type="number" value={form.retail_price} onChange={(e) => set("retail_price", e.target.value)} />
+            <div>
+              <TextField id="map_price" label="MAP (minimum advertised price)" type="number" value={form.map_price} onChange={(e) => set("map_price", e.target.value)} />
+              <p className="mt-1 text-xs text-ink-400">
+                The lowest price merchants can list this at — leave blank for no floor.
+              </p>
+            </div>
             <TextField id="stock" label="Stock" type="number" value={form.stock} onChange={(e) => set("stock", e.target.value)} />
           </div>
         </Card>

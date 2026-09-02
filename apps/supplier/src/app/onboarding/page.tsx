@@ -62,6 +62,8 @@ export default async function OnboardingPage() {
       initialStep={supplier?.onboarding_step ?? 1}
       initialSupplierId={supplier?.id ?? null}
       initialUploaded={uploaded}
+      returnReasons={supplier?.return_reasons ?? []}
+      returnNote={supplier?.return_note ?? null}
     />
   );
 }

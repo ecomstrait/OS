@@ -18,6 +18,7 @@ export type ProductInput = {
   sku?: string;
   wholesale_price?: string;
   retail_price?: string;
+  map_price?: string;
   stock?: string;
   status?: ProductStatus;
   seo_title?: string;
@@ -39,6 +40,7 @@ function toRow(input: ProductInput) {
     sku: input.sku?.trim() || null,
     wholesale_price: num(input.wholesale_price),
     retail_price: num(input.retail_price),
+    map_price: num(input.map_price),
     stock: Math.max(0, Math.trunc(num(input.stock) ?? 0)),
     status: input.status ?? "draft",
     seo_title: input.seo_title?.trim() || null,

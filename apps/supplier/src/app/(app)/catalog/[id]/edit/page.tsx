@@ -37,6 +37,7 @@ export default async function EditProductPage({
     sku: product.sku ?? "",
     wholesale_price: product.wholesale_price != null ? String(product.wholesale_price) : "",
     retail_price: product.retail_price != null ? String(product.retail_price) : "",
+    map_price: product.map_price != null ? String(product.map_price) : "",
     stock: String(product.stock ?? 0),
     status: product.status,
     description: product.description ?? "",

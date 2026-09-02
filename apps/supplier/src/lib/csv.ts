@@ -46,7 +46,8 @@ export const IMPORT_FIELDS: { key: string; label: string; aliases: string[]; req
   { key: "category", label: "Category", aliases: ["category", "cat", "type"] },
   { key: "sku", label: "SKU", aliases: ["sku", "code"] },
   { key: "wholesale_price", label: "Wholesale price", aliases: ["wholesale", "wholesaleprice", "cost"] },
-  { key: "retail_price", label: "Retail price", aliases: ["retail", "retailprice", "price", "rrp", "msrp"] },
+  { key: "retail_price", label: "MSRP (retail price)", aliases: ["retail", "retailprice", "price", "rrp", "msrp"] },
+  { key: "map_price", label: "MAP (min. advertised price)", aliases: ["map", "mapprice", "minadvertisedprice", "minprice"] },
   { key: "stock", label: "Stock", aliases: ["stock", "quantity", "qty", "inventory"] },
 ];
 
