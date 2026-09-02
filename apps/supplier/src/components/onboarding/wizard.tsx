@@ -17,6 +17,7 @@ import {
   type SupplierForm,
 } from "@/lib/onboarding";
 import { saveSupplier, submitOnboarding } from "@/lib/supplier-actions";
+import { websiteUrl } from "@/lib/site-url";
 
 export function OnboardingWizard({
   userId,
@@ -170,8 +171,25 @@ export function OnboardingWizard({
                   className="mt-0.5 h-4 w-4 rounded border-ink-300 text-brand-500"
                 />
                 <span>
-                  I accept the Terms of Service and Privacy Policy, and confirm the information above
-                  is accurate.
+                  I accept the{" "}
+                  <a
+                    href={`${websiteUrl()}/terms`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-brand-600 underline hover:text-brand-700"
+                  >
+                    Terms of Service
+                  </a>{" "}
+                  and{" "}
+                  <a
+                    href={`${websiteUrl()}/privacy`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-medium text-brand-600 underline hover:text-brand-700"
+                  >
+                    Privacy Policy
+                  </a>
+                  , and confirm the information above is accurate.
                 </span>
               </label>
               <label className="flex items-start gap-3 text-sm text-ink-700">

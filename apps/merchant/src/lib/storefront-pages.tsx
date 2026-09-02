@@ -5,11 +5,13 @@ import { getStorefrontNav, getStoreProduct, listStoreCategories, listStoreProduc
 import { categoryLabel } from "@/lib/storefront-shared";
 import { ensureCategoryDescription, getCachedCategoryDescription } from "@/lib/category-content";
 import { listPublishedPosts, getPublishedPost } from "@/lib/blog-api";
+import { listStorePages, getStorePage } from "@/lib/pages-api";
 import { StorefrontView, type CategoryBand } from "@/components/storefront/storefront-view";
 import { ProductsListingView } from "@/components/storefront/products-listing-view";
 import { ProductDetailView } from "@/components/storefront/product-detail-view";
 import { BlogListView } from "@/components/storefront/blog-list-view";
 import { BlogPostView } from "@/components/storefront/blog-post-view";
+import { PageView } from "@/components/storefront/page-view";
 import {
   JsonLdScript,
   articleJsonLd,
@@ -54,8 +56,9 @@ export async function StorefrontHome({
 
   const hasAbout = Boolean(store.plan.about || store.plan.aboutMedia);
   const hasBlog = await hasPublishedPosts(storeId);
+  const pages = await listStorePages(storeId);
   const [navLinks, categories] = await Promise.all([
-    getStorefrontNav(storeId, { about: hasAbout, blog: hasBlog, basePath }),
+    getStorefrontNav(storeId, { about: hasAbout, blog: hasBlog, pages, basePath }),
     listStoreCategories(storeId),
   ]);
 
@@ -96,8 +99,9 @@ export async function StorefrontProducts({
 
   const hasAbout = Boolean(store.plan.about || store.plan.aboutMedia);
   const hasBlog = await hasPublishedPosts(storeId);
+  const pages = await listStorePages(storeId);
   const [navLinks, categories, initial] = await Promise.all([
-    getStorefrontNav(storeId, { about: hasAbout, blog: hasBlog, basePath }),
+    getStorefrontNav(storeId, { about: hasAbout, blog: hasBlog, pages, basePath }),
     listStoreCategories(storeId),
     listStoreProducts(storeId, { category: category || undefined, q, page: 1 }),
   ]);
@@ -165,6 +169,7 @@ export async function StorefrontProductDetail({
   const navLinks = await getStorefrontNav(storeId, {
     about: Boolean(store.plan.about || store.plan.aboutMedia),
     blog: await hasPublishedPosts(storeId),
+    pages: await listStorePages(storeId),
     basePath,
   });
 
@@ -202,6 +207,7 @@ export async function StorefrontBlogList({
   const navLinks = await getStorefrontNav(storeId, {
     about: Boolean(store.plan.about || store.plan.aboutMedia),
     blog: posts.length > 0,
+    pages: await listStorePages(storeId),
     basePath,
   });
 
@@ -223,6 +229,7 @@ export async function StorefrontBlogPost({
   const navLinks = await getStorefrontNav(storeId, {
     about: Boolean(store.plan.about || store.plan.aboutMedia),
     blog: true, // this page's own existence proves at least one post is published
+    pages: await listStorePages(storeId),
     basePath,
   });
 
@@ -249,6 +256,46 @@ export async function StorefrontBlogPost({
       />
       <JsonLdScript data={breadcrumbJsonLd(crumbs)} />
       <BlogPostView store={store} navLinks={navLinks} post={post} basePath={basePath} />
+    </>
+  );
+}
+
+/**
+ * A custom page — Contact Us, FAQ, Shipping, whatever a merchant asked the
+ * EcomAI chat to create (see `applyPageAction` in builder-actions.ts). Same
+ * `[slug]` segment on both routes; `[slug]` sits alongside the literal
+ * `products`/`blog`/`success` folders, which Next always matches first.
+ */
+export async function StorefrontCustomPage({
+  storeId,
+  slug,
+  basePath = `/store/${storeId}`,
+}: {
+  storeId: string;
+  slug: string;
+  basePath?: string;
+}) {
+  const [store, page] = await Promise.all([getStorefront(storeId), getStorePage(storeId, slug)]);
+  if (!store || !page) notFound();
+
+  const navLinks = await getStorefrontNav(storeId, {
+    about: Boolean(store.plan.about || store.plan.aboutMedia),
+    blog: await hasPublishedPosts(storeId),
+    pages: await listStorePages(storeId),
+    basePath,
+  });
+
+  const origin = await requestOrigin();
+  const home = basePath || "/";
+  const crumbs = [
+    { name: store.name, url: `${origin}${home}` },
+    { name: page.title, url: `${origin}${basePath}/${slug}` },
+  ];
+
+  return (
+    <>
+      <JsonLdScript data={breadcrumbJsonLd(crumbs)} />
+      <PageView store={store} navLinks={navLinks} page={page} basePath={basePath} />
     </>
   );
 }

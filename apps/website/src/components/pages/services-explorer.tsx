@@ -5,12 +5,12 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Check } from "lucide-react";
 import { SectionHeading } from "@/components/ui/section";
 import { Icon } from "@/components/ui/icon";
-import { services } from "@/content/services";
+import { services, type ServiceCategory } from "@/content/services";
 import { cn } from "@/lib/utils";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
-type CategoryKey = "all" | "build" | "sell" | "automate" | "grow";
+type CategoryKey = "all" | ServiceCategory;
 
 const CATEGORIES: { key: CategoryKey; label: string }[] = [
   { key: "all", label: "All" },
@@ -19,22 +19,6 @@ const CATEGORIES: { key: CategoryKey; label: string }[] = [
   { key: "automate", label: "Automate" },
   { key: "grow", label: "Grow" },
 ];
-
-/** Sort each service into a lane of the commerce journey. */
-const CATEGORY_BY_TITLE: Record<string, Exclude<CategoryKey, "all">> = {
-  "AI Website Development": "build",
-  "Store Setup Service": "build",
-  "Shopify Development": "build",
-  "Custom Ecommerce": "build",
-  "Supplier Management": "sell",
-  "Inventory Management": "sell",
-  "Product Management": "sell",
-  "Hosting & Maintenance": "automate",
-  "Business Automation": "automate",
-  "SEO Optimization": "grow",
-  "Analytics & Reporting": "grow",
-  "AI Business Consultant": "grow",
-};
 
 type Accent = {
   hex: string;
@@ -74,7 +58,7 @@ export function ServicesExplorer() {
   const items = useMemo(() => {
     const withIndex = services.map((service, index) => ({ service, index }));
     if (category === "all") return withIndex;
-    return withIndex.filter(({ service }) => CATEGORY_BY_TITLE[service.title] === category);
+    return withIndex.filter(({ service }) => service.category === category);
   }, [category]);
 
   return (

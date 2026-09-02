@@ -8,6 +8,7 @@ import {
   Search,
   // LayoutGrid, // only used by the hidden Gallery nav entry below
   Sparkles,
+  Bot,
   PackageOpen,
   Store,
   ShoppingBag,
@@ -35,6 +36,7 @@ const NAV = [
   { href: "/orders", label: "Orders", icon: ShoppingBag },
   { href: "/sales", label: "Sales", icon: TrendingUp },
   { href: "/wallet", label: "Wallet", icon: Wallet },
+  { href: "/cofounder", label: "Co-Founder", icon: Bot },
   { href: "/billing", label: "Billing", icon: CreditCard },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

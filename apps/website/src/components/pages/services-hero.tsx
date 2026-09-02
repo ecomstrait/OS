@@ -2,12 +2,11 @@
 
 import { useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import {
-  Wand2, Boxes, Store, ShoppingBag, Code2, Package, FileText, Search,
-  Server, Workflow, BarChart3, Bot, Sparkles, ArrowRight,
-} from "lucide-react";
+import { Sparkles, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OceanBackdrop } from "@/components/ui/ocean-backdrop";
+import { iconMap } from "@/components/ui/icon";
+import { services } from "@/content/services";
 import { merchantSignupUrl } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
@@ -15,27 +14,37 @@ type IconType = React.ComponentType<{ className?: string }>;
 type Accent = "brand" | "ai";
 type Node = { icon: IconType; label: string; accent: Accent };
 
-/* The full ecommerce stack — every service revolving around the platform. */
-const NODES: Node[] = [
-  { icon: Wand2, label: "AI Website Development", accent: "brand" }, // 0
-  { icon: Boxes, label: "Supplier Management", accent: "ai" }, // 1
-  { icon: Store, label: "Store Setup Service", accent: "brand" }, // 2
-  { icon: ShoppingBag, label: "Shopify Development", accent: "ai" }, // 3
-  { icon: Code2, label: "Custom Ecommerce", accent: "brand" }, // 4
-  { icon: Package, label: "Inventory Management", accent: "ai" }, // 5
-  { icon: FileText, label: "Product Management", accent: "brand" }, // 6
-  { icon: Search, label: "SEO Optimization", accent: "ai" }, // 7
-  { icon: Server, label: "Hosting & Maintenance", accent: "brand" }, // 8
-  { icon: Workflow, label: "Business Automation", accent: "ai" }, // 9
-  { icon: BarChart3, label: "Analytics & Reporting", accent: "brand" }, // 10
-  { icon: Bot, label: "AI Business Consultant", accent: "ai" }, // 11
-];
+/* The full ecommerce stack — every service revolving around the platform,
+ * sourced from content/services.ts (was a second, independently hardcoded
+ * list here that drifted out of sync with the real service titles —
+ * including a ghost node for a service that's actually hidden site-wide). */
+const NODES: Node[] = services.map((s, i) => ({
+  icon: iconMap[s.icon],
+  label: s.title,
+  accent: i % 2 === 0 ? "brand" : "ai",
+}));
 
-/* Three orbits, four services each, counter-rotating at different speeds. */
+/* Split node indices evenly into three counter-rotating orbits — computed
+ * from however many services there actually are, so this can't go stale the
+ * way the old fixed 4/4/4 grouping did when a service was added/removed. */
+function splitIntoRings(count: number, rings = 3): number[][] {
+  const base = Math.floor(count / rings);
+  const rem = count % rings;
+  const out: number[][] = [];
+  let start = 0;
+  for (let r = 0; r < rings; r++) {
+    const size = base + (r < rem ? 1 : 0);
+    out.push(Array.from({ length: size }, (_, k) => start + k));
+    start += size;
+  }
+  return out;
+}
+
+const RING_INDICES = splitIntoRings(NODES.length);
 const RINGS = [
-  { indices: [0, 1, 2, 3], radiusPct: 46, duration: 52, dir: 1 as const },
-  { indices: [4, 5, 6, 7], radiusPct: 33, duration: 40, dir: -1 as const },
-  { indices: [8, 9, 10, 11], radiusPct: 21, duration: 30, dir: 1 as const },
+  { indices: RING_INDICES[0], radiusPct: 46, duration: 52, dir: 1 as const },
+  { indices: RING_INDICES[1], radiusPct: 33, duration: 40, dir: -1 as const },
+  { indices: RING_INDICES[2], radiusPct: 21, duration: 30, dir: 1 as const },
 ];
 
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -277,7 +286,7 @@ function CenterOrb({
   accentHex: string;
   hovered: number | null;
 }) {
-  const label = hovered !== null ? NODES[hovered].label : "12 services · one platform";
+  const label = hovered !== null ? NODES[hovered].label : `${NODES.length} services · one platform`;
   return (
     <div className="pointer-events-none absolute inset-0 grid place-items-center">
       <div className="relative grid h-36 w-36 place-items-center sm:h-40 sm:w-40">

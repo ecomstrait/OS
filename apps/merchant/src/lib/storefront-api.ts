@@ -291,7 +291,7 @@ const MAX_NAV_CATEGORIES = 6;
  */
 export async function getStorefrontNav(
   storeId: string,
-  opts: { about: boolean; blog?: boolean; basePath?: string },
+  opts: { about: boolean; blog?: boolean; pages?: { slug: string; title: string }[]; basePath?: string },
 ): Promise<StorefrontNavLink[]> {
   const base = opts.basePath ?? `/store/${storeId}`;
   // Sale/About are anchors on the home page only. On the id-path route
@@ -312,6 +312,8 @@ export async function getStorefrontNav(
   if (opts.blog) links.push({ label: "Blog", href: `${base}/blog` });
   links.push({ label: "Sale", href: `${home}#sale` });
   if (opts.about) links.push({ label: "About", href: `${home}#about` });
+  // Custom pages (Contact Us, FAQ, ...) created through the EcomAI chat.
+  for (const p of opts.pages ?? []) links.push({ label: p.title, href: `${base}/${p.slug}` });
   return links;
 }
 

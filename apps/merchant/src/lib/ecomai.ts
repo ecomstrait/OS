@@ -244,6 +244,22 @@ const EDITABLE = [
 
 type EditableField = (typeof EDITABLE)[number];
 
+/**
+ * A whole standalone page (Contact Us, FAQ, Shipping, ...) to create, edit,
+ * or remove — distinct from `changes`, which only ever touches the fixed
+ * StorePlan fields above. Persisting this is the caller's job (it's a
+ * `store_pages` row, not part of the plan) — see `applyPageAction` in
+ * builder-actions.ts.
+ */
+export type PageAction = {
+  action: "create" | "update" | "delete";
+  /** Lowercase-hyphenated, e.g. "contact-us" — the URL segment. */
+  slug: string;
+  title?: string;
+  /** Plain text, paragraphs separated by a blank line. Omitted for a delete. */
+  body?: string;
+};
+
 export type MerchantReply = {
   plan: StorePlan;
   /** What EcomAI says back. Never empty. */
@@ -251,6 +267,8 @@ export type MerchantReply = {
   /** Fields actually changed, for the caller to summarise or log. */
   changed: EditableField[];
   tokensUsed: number;
+  /** Set only when the merchant asked for a whole page, not a field edit. */
+  pageAction?: PageAction;
 };
 
 /** Human labels, so a fallback summary reads like a sentence. */
@@ -328,14 +346,44 @@ const MERCHANT_SYSTEM = [
   "You are EcomAI, an ecommerce co-founder helping a merchant with their store.",
   "",
   "Reply with JSON only, shaped exactly:",
-  '{ "intent": "edit" | "question" | "unsupported", "reply": "...", "changes": { } }',
+  '{ "intent": "edit" | "page" | "question" | "unsupported", "reply": "...", "changes": { }, "page": null | { "action": "create" | "update" | "delete", "slug": "...", "title": "...", "body": "..." } }',
   "",
-  '"edit"        they asked you to change the store. Put ONLY the fields you are',
-  "              changing in changes — omit every field you are leaving alone.",
-  '"question"    they asked something. Answer it in reply. changes must be empty.',
-  '"unsupported" they want something you cannot do from here (adding products,',
-  "              uploading images, prices, shipping, payments, domains). Say so",
-  "              plainly and point them at the right part of the dashboard.",
+  '"edit"        they asked you to change an existing field. Put ONLY the fields',
+  "              you are changing in changes — omit every field you are leaving",
+  '              alone. "page" must be null.',
+  '"page"        they want to add, change, or remove a WHOLE PAGE — "add a',
+  '              Contact Us page", "make a FAQ page", "remove the Shipping',
+  '              page", "update the About page to mention our new hours".',
+  "              This is a real, supported capability — never call it",
+  '              unsupported. Fill "page"; changes must be empty.',
+  '                action  "create" (or reuse for an existing slug — same as',
+  "                        update), \"update\", or \"delete\".",
+  '                slug    lowercase-hyphenated url segment, e.g. "contact-us".',
+  '                        Reuse the existing slug when editing/removing a page',
+  "                        already mentioned above.",
+  "                title   the page's heading. Omit for a delete.",
+  "                body    the page's content: plain text, a blank line between",
+  "                        paragraphs, no markdown. Write real content using",
+  "                        facts already given in this conversation or already",
+  "                        visible in the store's own fields below (contact",
+  "                        details, address, policies, hours). Never invent a",
+  "                        phone number, address, policy, or claim you don't",
+  "                        actually have — if the merchant hasn't told you what",
+  "                        a page should say, ask them instead of making it up.",
+  "                        Omit for a delete.",
+  '"question"    they asked something. Answer it in reply. changes and page must',
+  "              be empty/null.",
+  '"unsupported" they want something genuinely outside this chat (adding',
+  "              products, uploading images, prices, shipping rates, payments,",
+  "              domains — anything that isn't a store-plan field or a page).",
+  "              Say so plainly and point them at the real dashboard section",
+  '              that handles it — never invent a section name. The only',
+  '              sections that exist are: "Find Suppliers" (browse products',
+  '              and add them to a store), "Selected Inventory" (products',
+  '              already chosen, before a store is built), "Stores",',
+  '              "Orders", "Sales", "Wallet", "Billing", and "Settings". There',
+  '              is no "Products" section and no "Navigation" section — a new',
+  "              product is added via Find Suppliers, not a product editor.",
   "",
   "Fields allowed in changes:",
   "  storeName, tagline, heroHeadline, heroSub, about, seoTitle, seoDescription,",
@@ -343,8 +391,9 @@ const MERCHANT_SYSTEM = [
   '  brandColors               - array of 1-3 hex colours like "#0f172a"',
   "  collections               - array of up to 5 short category names",
   "",
-  "You cannot change images, video or content sections; the merchant manages",
-  "those under Content. If asked, say that rather than inventing a URL.",
+  "You cannot change images, video or content sections through changes; the",
+  "merchant manages those under Content. If asked for those specifically",
+  "(not a whole page), say so rather than inventing a URL.",
   "",
   "reply is spoken to the merchant: one or two sentences, first person, and",
   'specific about what you actually changed. Never reply with just "updated".',
@@ -361,6 +410,9 @@ const MERCHANT_SYSTEM = [
 export async function applyMerchantRequest(
   plan: StorePlan,
   instruction: string,
+  /** Slug/title of every page the store already has, so the model can match
+   *  an update/delete to the right one instead of guessing a new slug. */
+  existingPages: { slug: string; title: string }[] = [],
 ): Promise<MerchantReply> {
   const text = instruction.trim();
   if (text.length < 2) {
@@ -386,7 +438,12 @@ export async function applyMerchantRequest(
       "workhorse",
       [
         { role: "system", content: MERCHANT_SYSTEM },
-        { role: "user", content: `Current store:\n${JSON.stringify(visible)}\n\nMerchant says: ${text}` },
+        {
+          role: "user",
+          content: `Current store:\n${JSON.stringify(visible)}\n\nExisting pages: ${
+            existingPages.length ? JSON.stringify(existingPages) : "(none yet)"
+          }\n\nMerchant says: ${text}`,
+        },
       ],
       { temperature: 0.4, maxTokens: 900, responseFormatJson: true, timeoutMs: 15000 },
     );
@@ -395,11 +452,42 @@ export async function applyMerchantRequest(
       intent?: string;
       reply?: string;
       changes?: Record<string, unknown>;
+      page?: { action?: string; slug?: string; title?: string; body?: string } | null;
     };
 
     const intent =
-      parsed.intent === "question" || parsed.intent === "unsupported" ? parsed.intent : "edit";
+      parsed.intent === "question" || parsed.intent === "unsupported" || parsed.intent === "page"
+        ? parsed.intent
+        : "edit";
     const modelReply = typeof parsed.reply === "string" ? parsed.reply.trim() : "";
+
+    if (intent === "page") {
+      const slug = typeof parsed.page?.slug === "string" ? parsed.page.slug.trim() : "";
+      const action =
+        parsed.page?.action === "delete" ? "delete" : parsed.page?.action === "update" ? "update" : "create";
+      // No slug means the model couldn't actually carry this out — treat it
+      // like it had nothing to change, rather than reporting success.
+      if (!slug) {
+        return {
+          plan,
+          reply: modelReply || "Which page, and what should it say?",
+          changed: [],
+          tokensUsed,
+        };
+      }
+      return {
+        plan,
+        reply: modelReply || "On it.",
+        changed: [],
+        tokensUsed,
+        pageAction: {
+          action,
+          slug,
+          title: typeof parsed.page?.title === "string" ? parsed.page.title.trim() : undefined,
+          body: typeof parsed.page?.body === "string" ? parsed.page.body.trim() : undefined,
+        },
+      };
+    }
 
     // A question must never mutate the store, whatever the model returned
     // alongside its answer.

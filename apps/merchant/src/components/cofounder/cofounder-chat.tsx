@@ -50,8 +50,8 @@ export function CoFounderChat({ businessName }: { businessName: string | null })
                 Hi{businessName ? `, ${businessName}` : ""} — I&apos;m your AI co-founder.
               </p>
               <p className="mt-1 max-w-sm text-sm text-ink-400">
-                Ask me about your revenue trend, which orders are stuck, what to restock, or how to grow —
-                I only work from your real numbers.
+                Ask me about your revenue trend, which store is winning, orders stuck on low
+                credits, or how to grow — I only work from your real numbers.
               </p>
             </div>
           </div>

@@ -15,6 +15,9 @@ export type SupplierAnalytics = {
     responseRate: number | null;
     avgResponseHours: number | null;
     publishedProducts: number;
+    /** All products regardless of status (draft included) — catalog size,
+     *  distinct from `publishedProducts` (what's actually listed/live). */
+    totalProducts: number;
   };
 };
 
@@ -158,6 +161,28 @@ export async function getSupplierAnalytics(
       responseRate: reqs.length ? Math.round((responded.length / reqs.length) * 100) : null,
       avgResponseHours,
       publishedProducts,
+      totalProducts: prods.length,
     },
   };
+}
+
+/** Compact plain-text digest for the EcomAI Co-Founder chat — catalog/quality
+ *  counterpart to revenue-analytics.ts's summarizeForAdvisor, so the advisor
+ *  can actually answer "how many products do I have" / "what's low on
+ *  stock" / "how's my catalog doing" instead of only ever seeing revenue. */
+export function summarizeCatalogForAdvisor(a: SupplierAnalytics): string {
+  const lines = [
+    `Catalog: ${a.metrics.totalProducts} total product(s), ${a.metrics.publishedProducts} published/live.`,
+    `Stock (published products only): ${a.inventory.inStock} in stock, ${a.inventory.low} low stock, ${a.inventory.out} out of stock.`,
+    a.categoryCounts.length
+      ? `Top categories: ${a.categoryCounts.map((c) => `${c.category} (${c.count})`).join(", ")}.`
+      : `No published categories yet.`,
+    `Requests: ${a.metrics.openRequests} open of ${a.metrics.totalRequests} total, acceptance rate ${
+      a.metrics.acceptanceRate != null ? `${a.metrics.acceptanceRate}%` : "n/a (no responses yet)"
+    }.`,
+    `Quality score: ${a.quality.score}/100 (${a.quality.tier}) — factors: ${a.quality.factors
+      .map((f) => `${f.label} ${f.earned}/${f.max}`)
+      .join(", ")}.`,
+  ];
+  return lines.join("\n");
 }

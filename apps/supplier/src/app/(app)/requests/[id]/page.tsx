@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { ArrowLeft, ArrowRight, Mail, Clock } from "lucide-react";
+import { ArrowLeft, ArrowRight, Mail, Phone, Clock, Truck } from "lucide-react";
 import { createClient } from "@ecomstrait/auth/server";
 import type { RequestItem, RequestMessage } from "@ecomstrait/db/types";
 import { REQUEST_STATUS_STYLE } from "@/lib/request-status";
@@ -68,6 +68,11 @@ export default async function RequestDetailPage({
             <Mail className="h-4 w-4" /> {request.store_owner_email}
           </span>
         )}
+        {request.store_owner_phone && (
+          <span className="inline-flex items-center gap-1.5">
+            <Phone className="h-4 w-4" /> {request.store_owner_phone}
+          </span>
+        )}
         {request.timeline && (
           <span className="inline-flex items-center gap-1.5">
             <Clock className="h-4 w-4" /> {request.timeline}
@@ -91,6 +96,15 @@ export default async function RequestDetailPage({
           <p className="mt-4 rounded-xl bg-ink-50 p-3 text-sm text-ink-600">
             <span className="font-medium text-ink-800">Note: </span>
             {request.note}
+          </p>
+        )}
+        {request.shipping && (
+          <p className="mt-3 flex items-start gap-2 rounded-xl bg-ink-50 p-3 text-sm text-ink-600">
+            <Truck className="mt-0.5 h-4 w-4 shrink-0 text-ink-400" />
+            <span>
+              <span className="font-medium text-ink-800">Ships to: </span>
+              {request.shipping}
+            </span>
           </p>
         )}
       </section>

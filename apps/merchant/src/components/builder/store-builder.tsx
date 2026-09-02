@@ -371,7 +371,7 @@ export function StoreBuilder({
       return;
     }
 
-    const res = await refineStore(plan, text);
+    const res = await refineStore(plan, text, draftId);
     setBusy(false);
     if (res.error) {
       pushAi(res.error);

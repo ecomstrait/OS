@@ -6,6 +6,7 @@ import { siteUrl } from "@/lib/site-url";
 import { isPublicStatus } from "@/lib/store-status";
 import { listStoreCategories, listStoreProducts } from "@/lib/storefront-api";
 import { listPublishedPosts } from "@/lib/blog-api";
+import { listStorePages } from "@/lib/pages-api";
 
 // Otherwise Next prerenders this once at build time — a store launched (or a
 // product added) afterward would stay invisible to crawlers until the next
@@ -68,6 +69,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       for (const p of posts) {
         entries.push({ url: `${url}/blog/${p.slug}`, lastModified: p.publishedAt, changeFrequency: "monthly", priority: 0.4 });
       }
+    }
+
+    const pages = await listStorePages(store.id);
+    for (const p of pages) {
+      entries.push({ url: `${url}/${p.slug}`, lastModified: store.updated_at, changeFrequency: "monthly", priority: 0.4 });
     }
   }
 

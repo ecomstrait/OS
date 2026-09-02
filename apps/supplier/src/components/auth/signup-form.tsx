@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { createClient } from "@ecomstrait/auth/client";
-import { Button, TextField } from "@/components/ui";
+import { Button, TextField, PasswordField } from "@/components/ui";
 import { authCallbackUrl } from "@/lib/site-url";
 
 export function SignupForm() {
@@ -60,18 +60,17 @@ export function SignupForm() {
       />
       <TextField
         id="email"
-        label="Work email"
+        label="Email"
         type="email"
         required
         autoComplete="email"
-        placeholder="you@business.com"
+        placeholder="you@email.com"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
       />
-      <TextField
+      <PasswordField
         id="password"
         label="Password"
-        type="password"
         required
         autoComplete="new-password"
         placeholder="At least 8 characters"

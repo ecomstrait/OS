@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { createClient } from "@ecomstrait/auth/client";
-import { Button, TextField } from "@/components/ui";
+import { Button, TextField, PasswordField } from "@/components/ui";
 import { authCallbackUrl } from "@/lib/site-url";
 
 export function SignupForm() {
@@ -50,7 +50,7 @@ export function SignupForm() {
     <form onSubmit={onSubmit} className="flex flex-col gap-4">
       <TextField id="fullName" label="Full name" required autoComplete="name" placeholder="Jane Doe" value={fullName} onChange={(e) => setFullName(e.target.value)} />
       <TextField id="email" label="Email" type="email" required autoComplete="email" placeholder="you@email.com" value={email} onChange={(e) => setEmail(e.target.value)} />
-      <TextField id="password" label="Password" type="password" required autoComplete="new-password" placeholder="At least 8 characters" value={password} onChange={(e) => setPassword(e.target.value)} />
+      <PasswordField id="password" label="Password" required autoComplete="new-password" placeholder="At least 8 characters" value={password} onChange={(e) => setPassword(e.target.value)} />
       {error && <p className="text-sm text-red-600">{error}</p>}
       <Button type="submit" disabled={status === "loading"}>
         {status === "loading" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create account"}

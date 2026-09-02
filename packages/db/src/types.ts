@@ -200,6 +200,10 @@ export type Database = {
           store_name: string | null;
           store_owner_name: string | null;
           store_owner_email: string | null;
+          /** Added for the admin sample-request form and real requests alike —
+           *  see supabase/migrations/20260902100000_product_requests_contact_shipping.sql. */
+          store_owner_phone: string | null;
+          shipping: string | null;
           timeline: string | null;
           note: string | null;
           status: RequestStatus;
@@ -524,6 +528,25 @@ export type Database = {
           published_at?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["store_posts"]["Row"]>;
+        Relationships: [];
+      };
+      store_pages: {
+        Row: {
+          id: string;
+          store_id: string;
+          title: string;
+          slug: string;
+          body: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          store_id: string;
+          title: string;
+          slug: string;
+          body?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["store_pages"]["Row"]>;
         Relationships: [];
       };
       store_assets: {

@@ -37,44 +37,75 @@ export async function setUserRole(
   return {};
 }
 
-/** Seed a sample store-owner request for a supplier (until the merchant app exists). */
-export async function createSampleRequest(supplierId: string): Promise<{ error?: string }> {
+export type SampleRequestInput = {
+  storeName: string;
+  contactName: string;
+  contactEmail: string;
+  contactPhone?: string;
+  shipping?: string;
+  timeline?: string;
+  note?: string;
+  productId?: string | null;
+  productName: string;
+  quantity: number;
+  message?: string;
+};
+
+/**
+ * Seed a store-owner request for a supplier, with admin-entered details
+ * (until the merchant app generates real requests for every supplier —
+ * see Docs/Supplier-Portal-Plan.md). Previously inserted the same hardcoded
+ * "Nova Boutique" placeholder every time with a single click; now takes the
+ * actual contact + shipping details an admin fills in, so what lands in a
+ * supplier's inbox is deliberate, not a fixed canned row.
+ */
+export async function createSampleRequest(
+  supplierId: string,
+  input: SampleRequestInput,
+): Promise<{ error?: string }> {
   const a = await asAdmin();
   if ("error" in a) return a;
 
-  const { data: product } = await a.client
-    .from("products")
-    .select("id, title")
-    .eq("supplier_id", supplierId)
-    .limit(1)
-    .maybeSingle();
+  const storeName = input.storeName.trim();
+  const contactName = input.contactName.trim();
+  const contactEmail = input.contactEmail.trim();
+  const productName = input.productName.trim();
+  if (!storeName || !contactName || !contactEmail || !productName) {
+    return { error: "Store name, contact name, contact email, and product are required." };
+  }
 
   const { data: req, error } = await a.client
     .from("product_requests")
     .insert({
       supplier_id: supplierId,
-      store_name: "Nova Boutique",
-      store_owner_name: "Alex Rivera",
-      store_owner_email: "alex@example.com",
-      timeline: "Within 2 weeks",
-      note: "Trialling demand for a new collection — keen to place a starter order.",
+      store_name: storeName,
+      store_owner_name: contactName,
+      store_owner_email: contactEmail,
+      store_owner_phone: input.contactPhone?.trim() || null,
+      shipping: input.shipping?.trim() || null,
+      timeline: input.timeline?.trim() || null,
+      note: input.note?.trim() || null,
       status: "new",
     })
     .select("id")
     .single();
   if (error) return { error: error.message };
 
+  const quantity = Math.max(1, Math.round(input.quantity) || 1);
   await a.client.from("request_items").insert({
     request_id: req.id,
-    product_id: product?.id ?? null,
-    product_name: product?.title ?? "Sample product",
-    quantity: 25,
+    product_id: input.productId || null,
+    product_name: productName,
+    quantity,
   });
-  await a.client.from("request_messages").insert({
-    request_id: req.id,
-    sender: "store_owner",
-    body: "Hi! We'd love to stock this. What's your lead time for 25 units?",
-  });
+
+  if (input.message?.trim()) {
+    await a.client.from("request_messages").insert({
+      request_id: req.id,
+      sender: "store_owner",
+      body: input.message.trim(),
+    });
+  }
 
   revalidatePath(`/admin/suppliers/${supplierId}`);
   return {};

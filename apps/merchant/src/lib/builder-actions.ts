@@ -17,10 +17,12 @@ import {
   type BuilderTurn,
   type BuilderKnownContext,
   type ConverseResult,
+  type PageAction,
 } from "@/lib/ecomai";
 import { normalizePlan } from "@/lib/store-plan";
 import { purgeStoreMedia } from "@/lib/draft-sweep";
 import { askBusinessAdvisor } from "@/lib/agents/business-advisor";
+import { listStorePages } from "@/lib/pages-api";
 
 export type PreviewProduct = { id: string; title: string; price: number | null; image: string | null };
 
@@ -31,7 +33,13 @@ export type BuildResult = {
   error?: string;
 };
 
-export type { BuilderTurn, ConverseResult };
+// A direct re-export-from, not `export type { BuilderTurn, ConverseResult };`
+// referencing the inline `type` import above — that shape compiles (via SWC's
+// per-file, syntax-only type erasure) into a runtime `export { BuilderTurn,
+// ConverseResult }`, referencing bindings that don't exist because they were
+// type-only. That throws the moment this module loads, taking every action
+// in this file down with it — not a caught error, a load-time ReferenceError.
+export type { BuilderTurn, ConverseResult } from "@/lib/ecomai";
 
 /**
  * One turn of the builder conversation — the AI decides what to ask next
@@ -41,11 +49,21 @@ export async function converseBuilderTurn(
   history: BuilderTurn[],
   context: BuilderKnownContext,
 ): Promise<ConverseResult | { error: string }> {
-  const budget = await assertTokenBudget(500);
-  if (!budget.ok) return { error: budget.error };
-  const result = await converseBuilder(history, context);
-  await recordTokenUsage(result.tokensUsed);
-  return result;
+  try {
+    const budget = await assertTokenBudget(500);
+    if (!budget.ok) return { error: budget.error };
+    const result = await converseBuilder(history, context);
+    await recordTokenUsage(result.tokensUsed);
+    return result;
+  } catch (err) {
+    // This is the one call the builder makes automatically, before a
+    // merchant has done anything — an unhandled throw here doesn't show up
+    // as "that action failed," it shows up as "the builder is broken."
+    // Every other AI entry point in this file degrades to an error string
+    // instead of throwing; this one didn't.
+    console.error("[builder] converseBuilderTurn failed:", err);
+    return { error: "That didn't go through — refresh and try again." };
+  }
 }
 
 /**
@@ -61,39 +79,115 @@ export async function finalizeBuilderConversation(
   answers: { niche: string; audience?: string | null; styleKeyword?: string | null; storeName?: string | null },
   opts: { useSelected?: boolean } = {},
 ): Promise<BuildResult> {
-  const budget = await assertTokenBudget(1500);
-  if (!budget.ok) return { error: budget.error };
+  try {
+    const budget = await assertTokenBudget(1500);
+    if (!budget.ok) return { error: budget.error };
 
-  const chosen = opts.useSelected ? await getSelectedProducts() : [];
-  if (!opts.useSelected && answers.niche.trim().length < 2) {
-    return { error: "Tell me what you want to sell first." };
+    const chosen = opts.useSelected ? await getSelectedProducts() : [];
+    if (!opts.useSelected && answers.niche.trim().length < 2) {
+      return { error: "Tell me what you want to sell first." };
+    }
+
+    // Fall back to auto-pick if the basket emptied between pages.
+    const picked = chosen.length ? chosen : await autoSelectProducts(answers.niche, 8);
+
+    const idea = [
+      `Business: ${answers.niche}`,
+      answers.audience ? `Customers: ${answers.audience}` : "",
+      answers.styleKeyword ? `Style: ${answers.styleKeyword}` : "",
+      answers.storeName ? `Preferred name: ${answers.storeName}` : "",
+    ]
+      .filter(Boolean)
+      .join(". ");
+
+    const { plan, tokensUsed } = await generateStorePlan(idea, picked.map((p) => p.title));
+    await recordTokenUsage(tokensUsed);
+
+    if (answers.storeName) plan.storeName = answers.storeName.trim();
+
+    const products: PreviewProduct[] = picked.map((p) => ({
+      id: p.id,
+      title: p.title,
+      price: p.retail_price,
+      image: productImage(p.images?.[0]),
+    }));
+
+    return { plan, products, theme: themeForStyle(answers.styleKeyword ?? undefined) };
+  } catch (err) {
+    console.error("[builder] finalizeBuilderConversation failed:", err);
+    return { error: "Building your store didn't go through — try again in a moment." };
+  }
+}
+
+/**
+ * Route segments a custom page can never take — each one is a real folder
+ * already, and Next.js would serve that folder either way, so a page saved
+ * under one of these names would silently never be reachable at its own URL.
+ */
+const RESERVED_SLUGS = new Set(["products", "blog", "success"]);
+
+function slugifyPage(input: string): string {
+  return (
+    input
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 80) || "page"
+  );
+}
+
+/**
+ * The database side of a `PageAction` — create, update, or delete one
+ * `store_pages` row for a whole page the merchant asked EcomAI for in chat
+ * ("add a Contact Us page"), as opposed to a `changes` edit to the fixed plan
+ * fields. Owner-scoped through the caller's RLS-bound client, same as every
+ * other builder action; a delete/update that matches nothing is reported
+ * back rather than silently claimed as done.
+ */
+async function applyPageAction(
+  supabase: SupabaseServerClient,
+  storeId: string,
+  action: PageAction,
+): Promise<{ note: string }> {
+  const slug = slugifyPage(action.slug);
+  if (RESERVED_SLUGS.has(slug)) {
+    return { note: `"${slug}" is already a built-in page on your store — try a different name for it.` };
   }
 
-  // Fall back to auto-pick if the basket emptied between pages.
-  const picked = chosen.length ? chosen : await autoSelectProducts(answers.niche, 8);
+  if (action.action === "delete") {
+    const { data, error } = await supabase
+      .from("store_pages")
+      .delete()
+      .eq("store_id", storeId)
+      .eq("slug", slug)
+      .select("id")
+      .maybeSingle();
+    if (error) return { note: `I couldn't remove that page: ${error.message}` };
+    if (!data) return { note: `I couldn't find a "${slug}" page to remove.` };
+    return { note: `Removed the "${slug}" page.` };
+  }
 
-  const idea = [
-    `Business: ${answers.niche}`,
-    answers.audience ? `Customers: ${answers.audience}` : "",
-    answers.styleKeyword ? `Style: ${answers.styleKeyword}` : "",
-    answers.storeName ? `Preferred name: ${answers.storeName}` : "",
-  ]
-    .filter(Boolean)
-    .join(". ");
+  const title = (action.title ?? "").trim() || slug.replace(/-/g, " ");
+  const body = (action.body ?? "").trim();
 
-  const { plan, tokensUsed } = await generateStorePlan(idea, picked.map((p) => p.title));
-  await recordTokenUsage(tokensUsed);
+  const { data: existingRow, error: findErr } = await supabase
+    .from("store_pages")
+    .select("id")
+    .eq("store_id", storeId)
+    .eq("slug", slug)
+    .maybeSingle();
+  if (findErr) return { note: `I couldn't save that page: ${findErr.message}` };
 
-  if (answers.storeName) plan.storeName = answers.storeName.trim();
+  if (existingRow) {
+    const { error } = await supabase.from("store_pages").update({ title, body }).eq("id", existingRow.id);
+    if (error) return { note: `I couldn't update that page: ${error.message}` };
+    return { note: `Updated the "${title}" page.` };
+  }
 
-  const products: PreviewProduct[] = picked.map((p) => ({
-    id: p.id,
-    title: p.title,
-    price: p.retail_price,
-    image: productImage(p.images?.[0]),
-  }));
-
-  return { plan, products, theme: themeForStyle(answers.styleKeyword ?? undefined) };
+  const { error } = await supabase.from("store_pages").insert({ store_id: storeId, title, slug, body });
+  if (error) return { note: `I couldn't create that page: ${error.message}` };
+  return { note: `Added a "${title}" page — it's live in your navigation now.` };
 }
 
 /**
@@ -101,15 +195,37 @@ export async function finalizeBuilderConversation(
  *
  * Returns the assistant's own words rather than a plan alone, so the builder
  * can say what actually happened instead of always printing "Updated".
+ *
+ * `draftId` is the row `ensureDraftStore` created — a whole-page request
+ * (create/update/delete a `store_pages` row) needs somewhere to write, so
+ * before that row exists it's answered without touching the database rather
+ * than silently doing nothing.
  */
 export async function refineStore(
   plan: StorePlan,
   instruction: string,
+  draftId?: string | null,
 ): Promise<{ plan?: StorePlan; reply?: string; changed?: string[]; error?: string }> {
   const budget = await assertTokenBudget(500);
   if (!budget.ok) return { error: budget.error };
-  const res = await applyMerchantRequest(plan, instruction);
+
+  const existingPages = draftId ? await listStorePages(draftId) : [];
+  const res = await applyMerchantRequest(plan, instruction, existingPages);
   await recordTokenUsage(res.tokensUsed);
+
+  if (res.pageAction) {
+    if (!draftId) {
+      return { plan: res.plan, reply: "Give your store a moment to save, then ask me again and I'll add that page." };
+    }
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { error: "Not authenticated." };
+    const { note } = await applyPageAction(supabase, draftId, res.pageAction);
+    return { plan: res.plan, reply: note };
+  }
+
   return { plan: res.plan, reply: res.reply, changed: res.changed };
 }
 
@@ -284,9 +400,25 @@ export async function editStore(storeId: string, instruction: string): Promise<E
   if (!budget.ok) return { error: budget.error };
 
   const current = normalizePlan(store.content);
-  const ai = await applyMerchantRequest(current, instruction);
+  const existingPages = await listStorePages(storeId);
+  const ai = await applyMerchantRequest(current, instruction, existingPages);
   const plan = ai.plan;
   await recordTokenUsage(ai.tokensUsed);
+
+  // A whole-page request never touches `content` (`ai.changed` stays empty),
+  // so it has to be checked before that "nothing changed" branch below, or
+  // "add a Contact Us page" would be misrouted into the advisor/question path.
+  if (ai.pageAction) {
+    const { note } = await applyPageAction(supabase, storeId, ai.pageAction);
+    revalidatePath(`/store/${storeId}`);
+
+    if (store.type === "shopify_liquid_theme") {
+      // Custom pages aren't pushed to a Shopify shop yet — only the
+      // own-platform storefront reads `store_pages` today.
+      return { plan: current, synced: "draft", note: `${note} Add it in your Shopify admin's Pages section too, to show it on your live Shopify store.` };
+    }
+    return { plan: current, synced: store.type === "own_platform" ? "live" : "draft", note };
+  }
 
   // A question or a request we can't act on must not write to the store, nor
   // burn a version-history slot describing an edit that never happened.

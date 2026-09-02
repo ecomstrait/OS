@@ -4,6 +4,9 @@ import { createClient } from "@ecomstrait/auth/client";
 import { Button } from "@/components/ui";
 import { authCallbackUrl } from "@/lib/site-url";
 
+/** Google OAuth sign-in. Works once the Google provider is enabled in
+ *  Supabase (Authentication → Providers → Google) with this app's
+ *  /auth/callback added to the project's Redirect URLs allowlist. */
 export function GoogleButton({ label = "Continue with Google" }: { label?: string }) {
   async function onClick() {
     const supabase = createClient();

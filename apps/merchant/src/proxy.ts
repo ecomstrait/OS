@@ -21,7 +21,7 @@ function isOwnHost(host: string): boolean {
 
 /** The only paths a customer-facing custom domain ever needs to serve. */
 function isStorefrontPath(pathname: string): boolean {
-  return (
+  if (
     pathname === "/" ||
     pathname === "/products" ||
     pathname.startsWith("/products/") ||
@@ -29,7 +29,17 @@ function isStorefrontPath(pathname: string): boolean {
     pathname.startsWith("/blog/") ||
     pathname === "/sitemap.xml" ||
     pathname === "/robots.txt"
-  );
+  ) {
+    return true;
+  }
+  // A custom page (Contact Us, FAQ, ...) is always exactly one top-level
+  // segment — anything deeper isn't a page slug and must stay host-agnostic.
+  // The API in particular: a storefront page's own fetch calls are
+  // same-origin on a connected domain, and rewriting them here would break
+  // every one of them (see the comment below).
+  if (pathname.startsWith("/api/")) return false;
+  const segments = pathname.split("/").filter(Boolean);
+  return segments.length === 1;
 }
 
 export async function proxy(request: NextRequest) {

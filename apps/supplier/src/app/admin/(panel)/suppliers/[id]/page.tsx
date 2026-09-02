@@ -7,7 +7,7 @@ import type { SupplierVerification } from "@ecomstrait/db/types";
 import { DOCUMENTS } from "@/lib/onboarding";
 import { AdminActions } from "@/components/admin/admin-actions";
 import { PhoneVerifyToggle } from "@/components/admin/phone-verify-toggle";
-import { SampleRequestButton } from "@/components/admin/sample-request-button";
+import { SampleRequestForm } from "@/components/admin/sample-request-form";
 
 export const metadata: Metadata = { title: "Review supplier — Admin" };
 
@@ -50,6 +50,12 @@ export default async function AdminSupplierDetail({
     .from("supplier_documents")
     .select("*")
     .eq("supplier_id", id);
+
+  const { data: products } = await client
+    .from("products")
+    .select("id, title")
+    .eq("supplier_id", id)
+    .order("title");
 
   const docs = await Promise.all(
     (documents ?? []).map(async (d) => {
@@ -132,10 +138,11 @@ export default async function AdminSupplierDetail({
           <section className="rounded-2xl border border-ink-100 bg-white p-5">
             <h2 className="text-sm font-semibold text-ink-950">Testing</h2>
             <p className="mb-3 mt-1 text-xs text-ink-400">
-              Seed a store-owner request to preview the supplier&apos;s inbox (until the
-              merchant app exists).
+              Seed a store-owner request — with real contact and shipping details you enter —
+              to preview the supplier&apos;s inbox (until the merchant app generates these for
+              real).
             </p>
-            <SampleRequestButton supplierId={supplier.id} />
+            <SampleRequestForm supplierId={supplier.id} products={products ?? []} />
           </section>
 
           <section className="rounded-2xl border border-ink-100 bg-white p-5">

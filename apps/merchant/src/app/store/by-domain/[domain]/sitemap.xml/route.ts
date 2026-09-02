@@ -1,6 +1,7 @@
 import { resolveStoreIdByDomain } from "@/lib/storefront";
 import { listStoreCategories, listStoreProducts } from "@/lib/storefront-api";
 import { listPublishedPosts } from "@/lib/blog-api";
+import { listStorePages } from "@/lib/pages-api";
 
 export const runtime = "nodejs";
 
@@ -40,6 +41,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ domain:
     urls.push(urlTag(`${base}/blog`, "weekly", 0.5));
     for (const p of posts) urls.push(urlTag(`${base}/blog/${p.slug}`, "monthly", 0.4));
   }
+
+  const pages = await listStorePages(storeId);
+  for (const p of pages) urls.push(urlTag(`${base}/${p.slug}`, "monthly", 0.4));
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">${urls.join("")}</urlset>`;
   return new Response(xml, { headers: { "Content-Type": "application/xml" } });

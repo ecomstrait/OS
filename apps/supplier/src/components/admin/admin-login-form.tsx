@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { createClient } from "@ecomstrait/auth/client";
-import { Button, TextField } from "@/components/ui";
+import { Button, TextField, PasswordField } from "@/components/ui";
 
 export function AdminLoginForm() {
   const router = useRouter();
@@ -55,10 +55,9 @@ export function AdminLoginForm() {
         value={email}
         onChange={(e) => setEmail(e.target.value)}
       />
-      <TextField
+      <PasswordField
         id="password"
         label="Password"
-        type="password"
         required
         autoComplete="current-password"
         value={password}

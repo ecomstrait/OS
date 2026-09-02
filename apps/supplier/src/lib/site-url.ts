@@ -21,3 +21,10 @@ export function siteUrl(): string {
 export function authCallbackUrl(): string {
   return `${siteUrl()}/auth/callback`;
 }
+
+/** The marketing site's canonical origin — for linking out to it (e.g. Terms
+ *  of Service, Privacy Policy), not for anything Supabase redirects to. */
+export function websiteUrl(): string {
+  const configured = process.env.NEXT_PUBLIC_WEBSITE_URL?.trim();
+  return (configured || "https://ecomstrait.com").replace(/\/+$/, "");
+}
