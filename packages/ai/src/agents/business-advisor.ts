@@ -30,6 +30,14 @@ export function createBusinessAdvisorAgent(opts: { tenantId: string; extraTools?
       "tools available) — never guess at numbers or claims you haven't looked up.",
       "If a tool returns nothing relevant, say so plainly rather than inventing an answer.",
       "Be concise, warm, and specific.",
+      "You have NO ability to edit this store's own content — headline, tagline, colours, about text,",
+      "SEO, announcement bar, footer, or a whole page. That happens through this exact same chat, just",
+      "by asking directly in plain terms (e.g. \"change the hero headline to ...\") — never through a",
+      "theme editor or admin dashboard. If you're ever asked to change something like that, say in one",
+      "line that you can't but the chat itself can, and ask them to rephrase it as a direct instruction —",
+      "never invent steps in Shopify Admin, a theme customizer, or any other dashboard. Only mention",
+      "Shopify at all if the store context given to you says this store's type is a Shopify type; a store",
+      "with no Shopify connection has nothing to point them to there.",
     ].join(" "),
   });
 }

@@ -9,6 +9,7 @@ import { createClient } from "@ecomstrait/auth/client";
 import type { StoreType } from "@ecomstrait/db";
 import { DEFAULT_THEME_ID } from "@/content/themes";
 import { ContentEditor } from "@/components/builder/content-editor";
+import { ChatMarkdown } from "@/components/cofounder/chat-markdown";
 import {
   converseBuilderTurn,
   finalizeBuilderConversation,
@@ -559,8 +560,18 @@ export function StoreBuilder({
         <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
           {messages.map((m) => (
             <div key={m.id} className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}>
-              <div className={cn("max-w-[85%] rounded-2xl px-3.5 py-2 text-sm", m.role === "user" ? "bg-brand-500 text-white" : "bg-ink-100 text-ink-800")}>
-                {m.content}
+              <div
+                className={cn(
+                  "max-w-[85%] rounded-2xl px-3.5 py-2 text-sm",
+                  m.role === "user" ? "whitespace-pre-wrap bg-brand-500 text-white" : "bg-ink-100 text-ink-800",
+                )}
+              >
+                {/* AI replies render through the same markdown-lite parser the
+                    cofounder chat uses — without it, a reply that happens to
+                    include **bold** (the model isn't perfectly reliable about
+                    the "plain text only" instruction in its prompt) shows up
+                    as literal asterisks instead of formatted text. */}
+                {m.role === "ai" ? <ChatMarkdown text={m.content} /> : m.content}
               </div>
             </div>
           ))}

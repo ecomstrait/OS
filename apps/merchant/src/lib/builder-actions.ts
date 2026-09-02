@@ -430,13 +430,25 @@ export async function editStore(storeId: string, instruction: string): Promise<E
   // A question or a request we can't act on must not write to the store, nor
   // burn a version-history slot describing an edit that never happened.
   if (!ai.changed.length) {
-    // Phase 4 (Docs/AI-Native-Migration-Plan.md): a question — never an edit,
-    // so still nothing written above — gets a RAG+tool-grounded answer from
-    // the new orchestrator instead of the inline model reply, behind a flag.
-    // Falls back to the inline reply on any failure; a broken advisor call
-    // must never turn "I don't know" into a dead end.
+    // Phase 4 (Docs/AI-Native-Migration-Plan.md): a genuine question — never
+    // an edit, so still nothing written above — gets a RAG+tool-grounded
+    // answer from the orchestrator instead of the inline model reply, behind
+    // a flag. Falls back to the inline reply on any failure; a broken advisor
+    // call must never turn "I don't know" into a dead end.
+    //
+    // Gated on `ai.intent === "question"`, NOT just "nothing changed": an
+    // "edit"/"page" request that only needs one more detail (e.g. "change
+    // the hero text" with no new text given) also leaves `changed` empty,
+    // but is not a question — escalating it here sent a real bug report:
+    // the advisor has no idea this chat can edit store content, and
+    // confidently told a merchant with no Shopify store at all to go find
+    // the hero section in "Shopify Admin → Online Store → Themes →
+    // Customize". Same for "unsupported": that reply is already correct and
+    // specific (see MERCHANT_SYSTEM in ecomai.ts) — the advisor can't act on
+    // those requests either, so asking it again only risks it inventing
+    // different, wrong instructions for the same thing.
     let reply = ai.reply;
-    if (process.env.AI_ADVISOR_ENABLED === "true") {
+    if (ai.intent === "question" && process.env.AI_ADVISOR_ENABLED === "true") {
       try {
         const advisor = await askBusinessAdvisor({ tenantId: user.id, storeId, message: instruction });
         reply = advisor.reply;

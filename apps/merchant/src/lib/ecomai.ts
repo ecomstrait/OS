@@ -269,6 +269,18 @@ export type MerchantReply = {
   tokensUsed: number;
   /** Set only when the merchant asked for a whole page, not a field edit. */
   pageAction?: PageAction;
+  /**
+   * The model's own classification of the request — NOT the same thing as
+   * `changed.length === 0`. An "edit"/"page" request that needed
+   * clarification (or a "unsupported" one, which already has a correct,
+   * specific reply) also leaves `changed` empty, but neither is a genuine
+   * question. Callers must only escalate to a business-question fallback
+   * (e.g. the LangGraph advisor) when this is exactly `"question"` — that
+   * advisor has no idea this chat can edit store content at all, and will
+   * happily invent wrong instructions (like "go into Shopify Admin") for a
+   * request this function already understands perfectly well.
+   */
+  intent: "edit" | "page" | "question" | "unsupported";
 };
 
 /** Human labels, so a fallback summary reads like a sentence. */
@@ -350,7 +362,15 @@ const MERCHANT_SYSTEM = [
   "",
   '"edit"        they asked you to change an existing field. Put ONLY the fields',
   "              you are changing in changes — omit every field you are leaving",
-  '              alone. "page" must be null.',
+  '              alone. "page" must be null. Bias toward "edit" for ANYTHING',
+  "              about the store's own presentation — the hero text/headline,",
+  "              subheading, tagline, colours, about text, SEO, announcement,",
+  "              or footer — even if the message is garbled, has typos, or",
+  "              doesn't say what the new text should be yet. In that last",
+  '              case leave changes empty and use reply to ask exactly what',
+  "              they want it to say — that is still intent \"edit\", not",
+  '              "question": you already know how to make this change, you',
+  "              just need one more detail before you can.",
   '"page"        they want to add, change, or remove a WHOLE PAGE — "add a',
   '              Contact Us page", "make a FAQ page", "remove the Shipping',
   '              page", "update the About page to mention our new hours".',
@@ -371,8 +391,12 @@ const MERCHANT_SYSTEM = [
   "                        actually have — if the merchant hasn't told you what",
   "                        a page should say, ask them instead of making it up.",
   "                        Omit for a delete.",
-  '"question"    they asked something. Answer it in reply. changes and page must',
-  "              be empty/null.",
+  '"question"    a genuine question that ISN\'T about editing this store\'s own',
+  "              content — a how-to question, or something that needs looking",
+  "              up (an order, a number, a policy). Answer it in reply. changes",
+  '              and page must be empty/null. Never use "question" for a',
+  "              request to change the store's own presentation — see \"edit\"",
+  "              and \"page\" above, which cover that even when incomplete.",
   '"unsupported" they want something genuinely outside this chat (adding',
   "              products, uploading images, prices, shipping rates, payments,",
   "              domains — anything that isn't a store-plan field or a page).",
@@ -397,6 +421,7 @@ const MERCHANT_SYSTEM = [
   "",
   "reply is spoken to the merchant: one or two sentences, first person, and",
   'specific about what you actually changed. Never reply with just "updated".',
+  "Plain text only — no markdown (no **bold**, no bullet lists, no headings).",
 ].join("\n");
 
 /**
@@ -416,7 +441,10 @@ export async function applyMerchantRequest(
 ): Promise<MerchantReply> {
   const text = instruction.trim();
   if (text.length < 2) {
-    return { plan, reply: "Tell me what you'd like to change.", changed: [], tokensUsed: 0 };
+    // "unsupported", not "question" — there's nothing here for a business
+    // advisor to answer either, and this intent value is what stops the
+    // caller from escalating a near-empty message to one.
+    return { plan, reply: "Tell me what you'd like to change.", changed: [], tokensUsed: 0, intent: "unsupported" };
   }
   if (!isGatewayConfigured()) {
     return {
@@ -425,6 +453,7 @@ export async function applyMerchantRequest(
         "I can't reach the AI service right now, so nothing has changed. You can still edit everything by hand under Content.",
       changed: [],
       tokensUsed: 200,
+      intent: "unsupported",
     };
   }
 
@@ -473,6 +502,7 @@ export async function applyMerchantRequest(
           reply: modelReply || "Which page, and what should it say?",
           changed: [],
           tokensUsed,
+          intent: "page",
         };
       }
       return {
@@ -480,6 +510,7 @@ export async function applyMerchantRequest(
         reply: modelReply || "On it.",
         changed: [],
         tokensUsed,
+        intent: "page",
         pageAction: {
           action,
           slug,
@@ -497,6 +528,7 @@ export async function applyMerchantRequest(
         reply: modelReply || "I'm not sure how to help with that one — could you rephrase it?",
         changed: [],
         tokensUsed,
+        intent,
       };
     }
 
@@ -504,6 +536,9 @@ export async function applyMerchantRequest(
 
     // Trust the diff over the model's account of itself. Claiming success when
     // nothing valid came back is a lie the merchant finds in the preview.
+    // Still intent "edit" — the model recognised this as a content change, it
+    // just needs one more detail (e.g. what the new hero text should say).
+    // This must never be treated as a "question" and escalated elsewhere.
     if (!changed.length) {
       const vague = !modelReply || /^(updated|done|ok)\b/i.test(modelReply);
       return {
@@ -513,6 +548,7 @@ export async function applyMerchantRequest(
           : modelReply,
         changed: [],
         tokensUsed,
+        intent: "edit",
       };
     }
 
@@ -521,6 +557,7 @@ export async function applyMerchantRequest(
       reply: modelReply || `Updated the ${listFields(changed)}.`,
       changed,
       tokensUsed,
+      intent: "edit",
     };
   } catch {
     return {
@@ -528,6 +565,7 @@ export async function applyMerchantRequest(
       reply:
         "That didn't go through — the AI service didn't answer in time. Nothing was changed, so try again in a moment.",
       changed: [],
+      intent: "unsupported",
       tokensUsed: 200,
     };
   }
