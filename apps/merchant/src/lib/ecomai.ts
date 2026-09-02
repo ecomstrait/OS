@@ -52,19 +52,43 @@ export type StorePlan = {
   footerText?: string;
 };
 
-function presetPlan(idea: string): StorePlan {
-  const clean = idea.trim().replace(/\.$/, "");
-  const name = clean.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() + w.slice(1)).join(" ") || "Your Store";
+/**
+ * What `generateStorePlan` needs to build a plan around — the builder
+ * conversation's own answers, kept as separate fields rather than one
+ * flattened string. `presetPlan` needs that separation to stay sane: fed a
+ * single pre-joined "Business: shoes. Customers: pakistan and my brand name
+ * g4shoes. Preferred name: g4shoes" string (which is fine as context for the
+ * *model* to parse — it's a poor sentence, not ambiguous — but is not
+ * English on its own), a template built from `idea` verbatim put THAT whole
+ * string in the tagline, hero headline and about text, verbatim, any time
+ * the AI call fell back — including a partial fallback, where the model
+ * came back fine but omitted just one of these keys. A real bug report: a
+ * merchant's hero text read "Discover Business: Shoes. Customers: Pakistan
+ * and my brand name g4shoes. Preferred name: g4shoes" word for word.
+ */
+export type PlanAnswers = {
+  niche: string;
+  audience?: string | null;
+  styleKeyword?: string | null;
+  storeName?: string | null;
+};
+
+function presetPlan(answers: PlanAnswers): StorePlan {
+  const niche = answers.niche.trim().replace(/\.$/, "") || "your products";
+  const name =
+    answers.storeName?.trim() ||
+    niche.split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() + w.slice(1)).join(" ") ||
+    "Your Store";
   return {
     storeName: name,
-    tagline: `Premium ${clean.toLowerCase()}, delivered.`,
+    tagline: `Premium ${niche.toLowerCase()}, delivered.`,
     brandColors: ["#0f172a", "#10b981", "#3b82f6"],
-    heroHeadline: `Discover ${clean}`,
-    heroSub: `Curated ${clean.toLowerCase()} for people who care about quality.`,
-    about: `We started ${name} to make great ${clean.toLowerCase()} easy to find and love. Every product is chosen for quality, value, and the experience it brings.`,
+    heroHeadline: `Discover ${niche}`,
+    heroSub: `Curated ${niche.toLowerCase()} for people who care about quality.`,
+    about: `We started ${name} to make great ${niche.toLowerCase()} easy to find and love. Every product is chosen for quality, value, and the experience it brings.`,
     collections: ["Best Sellers", "New Arrivals", "Featured"],
-    seoTitle: `${name} — Shop ${clean}`,
-    seoDescription: `Shop curated ${clean.toLowerCase()} at ${name}. Quality products, fast shipping, and a store built by AI.`,
+    seoTitle: `${name} — Shop ${niche}`,
+    seoDescription: `Shop curated ${niche.toLowerCase()} at ${name}. Quality products, fast shipping, and a store built by AI.`,
     source: "preset",
   };
 }
@@ -571,65 +595,87 @@ export async function applyMerchantRequest(
   }
 }
 
+const PLAN_SYSTEM = [
+  "You are EcomAI, building an online store for an entrepreneur.",
+  "Given a business idea and their selected products, return a concise, on-brand",
+  "store plan. Warm, confident, no hype, no emojis in text fields.",
+  "Respond with ONLY JSON using these exact keys:",
+  "{",
+  '  "storeName": string,',
+  '  "tagline": string,',
+  '  "brandColors": string[],      // 3 hex colors',
+  '  "heroHeadline": string,',
+  '  "heroSub": string,',
+  '  "about": string,              // 2-3 sentences',
+  '  "collections": string[],      // 3-5 names',
+  '  "seoTitle": string,',
+  '  "seoDescription": string',
+  "}",
+].join("\n");
+
+/** "Business: shoes. Customers: Pakistan. Style: minimal. Preferred name: G4Shoes" — the model's own context, not shown to the merchant. */
+function describeIdea(answers: PlanAnswers): string {
+  return [
+    `Business: ${answers.niche}`,
+    answers.audience ? `Customers: ${answers.audience}` : "",
+    answers.styleKeyword ? `Style: ${answers.styleKeyword}` : "",
+    answers.storeName ? `Preferred name: ${answers.storeName}` : "",
+  ]
+    .filter(Boolean)
+    .join(". ");
+}
+
+const PLAN_ATTEMPTS = 2;
+
 export async function generateStorePlan(
-  idea: string,
+  answers: PlanAnswers,
   productTitles: string[],
 ): Promise<{ plan: StorePlan; tokensUsed: number }> {
-  if (!isGatewayConfigured() || idea.trim().length < 2) {
-    return { plan: presetPlan(idea), tokensUsed: 400 };
+  if (!isGatewayConfigured() || answers.niche.trim().length < 2) {
+    return { plan: presetPlan(answers), tokensUsed: 400 };
   }
 
-  const system = [
-    "You are EcomAI, building an online store for an entrepreneur.",
-    "Given a business idea and their selected products, return a concise, on-brand",
-    "store plan. Warm, confident, no hype, no emojis in text fields.",
-    "Respond with ONLY JSON using these exact keys:",
-    "{",
-    '  "storeName": string,',
-    '  "tagline": string,',
-    '  "brandColors": string[],      // 3 hex colors',
-    '  "heroHeadline": string,',
-    '  "heroSub": string,',
-    '  "about": string,              // 2-3 sentences',
-    '  "collections": string[],      // 3-5 names',
-    '  "seoTitle": string,',
-    '  "seoDescription": string',
-    "}",
-  ].join("\n");
-
-  const user = `Business idea: ${idea}\nSelected products: ${
+  const user = `Business idea: ${describeIdea(answers)}\nSelected products: ${
     productTitles.slice(0, 20).join(", ") || "(none yet)"
   }`;
 
-  try {
-    const { content, tokensUsed } = await chat(
-      "workhorse",
-      [
-        { role: "system", content: system },
-        { role: "user", content: user },
-      ],
-      { temperature: 0.7, maxTokens: 900, responseFormatJson: true, timeoutMs: 12000 },
-    );
-    const p = JSON.parse(content) as Partial<StorePlan>;
-    const base = presetPlan(idea);
-    return {
-      plan: {
-        storeName: p.storeName || base.storeName,
-        tagline: p.tagline || base.tagline,
-        brandColors: Array.isArray(p.brandColors) && p.brandColors.length ? p.brandColors.slice(0, 3) : base.brandColors,
-        heroHeadline: p.heroHeadline || base.heroHeadline,
-        heroSub: p.heroSub || base.heroSub,
-        about: p.about || base.about,
-        collections: Array.isArray(p.collections) && p.collections.length ? p.collections.slice(0, 5) : base.collections,
-        seoTitle: p.seoTitle || base.seoTitle,
-        seoDescription: p.seoDescription || base.seoDescription,
-        source: "groq",
-      },
-      tokensUsed,
-    };
-  } catch {
-    return { plan: presetPlan(idea), tokensUsed: 400 };
+  // A merchant's whole storefront is riding on this one call — worth one
+  // retry on a transient failure before falling all the way back to the
+  // generic preset, same principle as `askCoFounder`'s retry.
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= PLAN_ATTEMPTS; attempt++) {
+    try {
+      const { content, tokensUsed } = await chat(
+        "workhorse",
+        [
+          { role: "system", content: PLAN_SYSTEM },
+          { role: "user", content: user },
+        ],
+        { temperature: 0.7, maxTokens: 900, responseFormatJson: true, timeoutMs: 12000 },
+      );
+      const p = JSON.parse(content) as Partial<StorePlan>;
+      const base = presetPlan(answers);
+      return {
+        plan: {
+          storeName: p.storeName || base.storeName,
+          tagline: p.tagline || base.tagline,
+          brandColors: Array.isArray(p.brandColors) && p.brandColors.length ? p.brandColors.slice(0, 3) : base.brandColors,
+          heroHeadline: p.heroHeadline || base.heroHeadline,
+          heroSub: p.heroSub || base.heroSub,
+          about: p.about || base.about,
+          collections: Array.isArray(p.collections) && p.collections.length ? p.collections.slice(0, 5) : base.collections,
+          seoTitle: p.seoTitle || base.seoTitle,
+          seoDescription: p.seoDescription || base.seoDescription,
+          source: "groq",
+        },
+        tokensUsed,
+      };
+    } catch (err) {
+      lastErr = err;
+    }
   }
+  console.error("[ai] generateStorePlan failed after retry:", lastErr);
+  return { plan: presetPlan(answers), tokensUsed: 400 };
 }
 
 // ---------------------------------------------------------------------------

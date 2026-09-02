@@ -97,16 +97,7 @@ export async function finalizeBuilderConversation(
     // Fall back to auto-pick if the basket emptied between pages.
     const picked = chosen.length ? chosen : await autoSelectProducts(answers.niche, 8);
 
-    const idea = [
-      `Business: ${answers.niche}`,
-      answers.audience ? `Customers: ${answers.audience}` : "",
-      answers.styleKeyword ? `Style: ${answers.styleKeyword}` : "",
-      answers.storeName ? `Preferred name: ${answers.storeName}` : "",
-    ]
-      .filter(Boolean)
-      .join(". ");
-
-    const { plan, tokensUsed } = await generateStorePlan(idea, picked.map((p) => p.title));
+    const { plan, tokensUsed } = await generateStorePlan(answers, picked.map((p) => p.title));
     await recordTokenUsage(tokensUsed);
 
     if (answers.storeName) plan.storeName = answers.storeName.trim();
