@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useState } from "react";
 import Link from "next/link";
-import { ShoppingBag, Plus, Minus, Loader2, X } from "lucide-react";
+import { ShoppingBag, Plus, Minus, Loader2, X, Menu } from "lucide-react";
 import type { Storefront } from "@/lib/storefront";
 import { useStorefrontCart } from "@/components/storefront/use-storefront";
 import { usePreviewCart } from "@/components/storefront/use-preview-cart";
@@ -77,6 +77,7 @@ function ChromeBody({
 }: Omit<ChromeProps, "previewMode"> & { cartApi: CartApi; previewMode: boolean }) {
   const { cart, busy, error, setQuantity, remove, checkout } = cartApi;
   const [open, setOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const line = "color-mix(in srgb, var(--ink) 12%, transparent)";
   const surface = "color-mix(in srgb, var(--ink) 4%, var(--bg))";
 
@@ -125,22 +126,55 @@ function ChromeBody({
             </nav>
           )}
 
-          <button
-            onClick={() => setOpen(true)}
-            className="relative grid h-9 w-9 place-items-center transition hover:opacity-60"
-            aria-label={`Cart, ${cart.itemCount} item${cart.itemCount === 1 ? "" : "s"}`}
-          >
-            <ShoppingBag className="h-5 w-5" />
-            {cart.itemCount > 0 && (
-              <span
-                className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full px-1 text-[10px] font-bold"
-                style={{ background: "var(--brand)", color: "#fff" }}
+          <div className="flex items-center gap-2">
+            {navLinks.length > 0 && (
+              <button
+                onClick={() => setMenuOpen((v) => !v)}
+                className="grid h-9 w-9 place-items-center transition hover:opacity-60 sm:hidden"
+                aria-label={menuOpen ? "Close menu" : "Menu"}
+                aria-expanded={menuOpen}
               >
-                {cart.itemCount}
-              </span>
+                {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              </button>
             )}
-          </button>
+            <button
+              onClick={() => setOpen(true)}
+              className="relative grid h-9 w-9 place-items-center transition hover:opacity-60"
+              aria-label={`Cart, ${cart.itemCount} item${cart.itemCount === 1 ? "" : "s"}`}
+            >
+              <ShoppingBag className="h-5 w-5" />
+              {cart.itemCount > 0 && (
+                <span
+                  className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full px-1 text-[10px] font-bold"
+                  style={{ background: "var(--brand)", color: "#fff" }}
+                >
+                  {cart.itemCount}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
+
+        {/* Mobile nav — the header's own <nav> is hidden below `sm`
+            (`hidden ... sm:flex` above) with nothing replacing it, so
+            categories/Shop all/Sale/About were completely unreachable except
+            by scrolling to the footer. `sm:hidden` here means this can never
+            show once the real nav reappears at 640px+. */}
+        {menuOpen && navLinks.length > 0 && (
+          <nav className="flex flex-col border-t px-6 py-3 sm:hidden" style={{ borderColor: line }}>
+            {navLinks.map((l) => (
+              <a
+                key={l.href}
+                href={l.href}
+                onClick={() => setMenuOpen(false)}
+                className="py-2.5 text-xs font-semibold uppercase opacity-70 transition hover:opacity-100"
+                style={{ letterSpacing: "0.1em" }}
+              >
+                {l.label}
+              </a>
+            ))}
+          </nav>
+        )}
       </header>
 
       {children}

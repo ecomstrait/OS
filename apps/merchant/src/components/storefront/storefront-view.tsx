@@ -118,7 +118,7 @@ export function StorefrontView({
                 <p className="mb-4 text-xs font-semibold uppercase opacity-60" style={{ letterSpacing: "0.2em" }}>
                   Featured
                 </p>
-                <h2 className="text-2xl font-semibold" style={{ fontFamily: "var(--font-heading)", letterSpacing: "-0.01em" }}>
+                <h2 className="text-2xl font-semibold sm:text-3xl" style={{ fontFamily: "var(--font-heading)", letterSpacing: "-0.01em" }}>
                   {spotlight.title}
                 </h2>
                 <p className="mt-4 text-base leading-relaxed opacity-75">{spotlight.description}</p>

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Sparkles, Loader2, Send, Store, Globe, ShoppingBag, ImagePlus, X, Check, ExternalLink, ArrowLeft, Pencil, Trash2 } from "lucide-react";
+import { Sparkles, Loader2, Send, Store, Globe, ShoppingBag, ImagePlus, X, Check, ExternalLink, ArrowLeft, Pencil, Trash2, Smartphone, Tablet, Monitor } from "lucide-react";
 import { cn } from "@ecomstrait/ui";
 import { createClient } from "@ecomstrait/auth/client";
 import type { StoreType } from "@ecomstrait/db";
@@ -84,6 +84,16 @@ const PATH_LABELS: Record<StoreType, string> = {
   shopify_liquid_theme: "Shopify store",
   shopify_shopify_theme: "Shopify store",
 };
+
+/** Preview width per device — lets a merchant actually see the responsive
+ *  layout instead of only ever viewing the preview at the editor pane's own
+ *  (desktop-ish) width. `null` means no cap, i.e. today's default behavior. */
+type Device = "mobile" | "tablet" | "desktop";
+const DEVICES: { type: Device; label: string; icon: typeof Smartphone; maxWidth: number | null }[] = [
+  { type: "mobile", label: "Mobile", icon: Smartphone, maxWidth: 390 },
+  { type: "tablet", label: "Tablet", icon: Tablet, maxWidth: 768 },
+  { type: "desktop", label: "Desktop", icon: Monitor, maxWidth: null },
+];
 
 export function StoreBuilder({
   userId,
@@ -185,6 +195,7 @@ export function StoreBuilder({
 
   const [name, setName] = useState(existing?.name ?? resumed?.name ?? "");
   const [type, setType] = useState<StoreType>(existing?.type ?? resumed?.type ?? "own_platform");
+  const [device, setDevice] = useState<Device>("desktop");
   const [theme, setTheme] = useState(
     existing?.theme || resumed?.theme || context?.presetTheme || initialTheme || DEFAULT_THEME_ID,
   );
@@ -626,12 +637,38 @@ export function StoreBuilder({
             </div>
           ) : previewStore ? (
             <div className="p-4">
+              {/* Lets a merchant actually see the responsive layout — the
+                  preview otherwise only ever renders at this pane's own
+                  (desktop-ish) width, so a mobile layout bug would never be
+                  visible here even once fixed. */}
+              <div className="mb-3 flex justify-center">
+                <div className="flex items-center gap-1 rounded-lg border border-ink-200 p-0.5">
+                  {DEVICES.map((d) => (
+                    <button
+                      key={d.type}
+                      type="button"
+                      onClick={() => setDevice(d.type)}
+                      title={d.label}
+                      className={cn(
+                        "inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-semibold transition",
+                        device === d.type ? "bg-ink-950 text-white" : "text-ink-600 hover:bg-ink-100",
+                      )}
+                    >
+                      <d.icon className="h-3.5 w-3.5" /> <span className="hidden sm:inline">{d.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* The theme's tokens, so the shared storefront components resolve
                   var(--radius)/var(--brand) to the same values they will on the
                   live store rather than to nothing. */}
               <div
-                className="overflow-hidden rounded-xl border border-ink-100 bg-white shadow-sm"
-                style={tokenStyle(storeTokens(theme, plan.brandColors))}
+                className="mx-auto overflow-hidden rounded-xl border border-ink-100 bg-white shadow-sm transition-all"
+                style={{
+                  ...tokenStyle(storeTokens(theme, plan.brandColors)),
+                  maxWidth: DEVICES.find((d) => d.type === device)?.maxWidth ?? undefined,
+                }}
               >
                 <div className="flex items-center gap-1.5 border-b border-ink-100 bg-ink-50 px-3 py-2">
                   <span className="h-2.5 w-2.5 rounded-full bg-ink-200" />

@@ -108,7 +108,7 @@ function Gallery({ product, surface }: { product: ApiProduct; surface: string })
         )}
       </div>
       {images.length > 1 && (
-        <div className="mt-4 grid grid-cols-5 gap-3">
+        <div className="mt-4 grid grid-cols-3 gap-3 sm:grid-cols-5">
           {images.map((src, i) => (
             <button
               key={src + i}
