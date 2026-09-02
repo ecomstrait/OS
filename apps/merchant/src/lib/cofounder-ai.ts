@@ -56,11 +56,19 @@ export async function askCoFounder(
     try {
       const { content, tokensUsed } = await chat("reasoning", messages, {
         temperature: 0.5,
-        maxTokens: 700,
+        // Real bug, not a transient one: at 700 (even 2000), the reasoning
+        // model behind this role spent its ENTIRE budget on invisible
+        // "thinking" and returned empty content every time — never a random
+        // blip, so the retry above never once helped. Confirmed by hand
+        // against the live gateway with a realistic snapshot: it took
+        // reasoningEffort "low" AND ~3500 tokens of headroom to reliably
+        // leave room for the actual answer once its thinking was done.
+        maxTokens: 4000,
+        reasoningEffort: "low",
         // Reasoning-role models can spend a variable amount of time
         // "thinking" before the final answer, so give this more room than a
         // typical short call before treating it as failed.
-        timeoutMs: 25000,
+        timeoutMs: 45000,
       });
       return { reply: content, tokensUsed };
     } catch (err) {

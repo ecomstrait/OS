@@ -12,7 +12,10 @@ import type { ModelRole } from "../types";
  * to OpenAI's actual API, and the resolved model can be anything the
  * gateway's own config maps the role to — including a self-hosted model.
  */
-export function createChatModel(role: ModelRole, opts: { temperature?: number } = {}): ChatOpenAI {
+export function createChatModel(
+  role: ModelRole,
+  opts: { temperature?: number; reasoningEffort?: "none" | "low" | "medium" | "high" } = {},
+): ChatOpenAI {
   const baseURL = process.env.AI_GATEWAY_URL?.trim();
   const apiKey = process.env.AI_GATEWAY_API_KEY?.trim();
   if (!baseURL || !apiKey) {
@@ -23,5 +26,11 @@ export function createChatModel(role: ModelRole, opts: { temperature?: number } 
     apiKey,
     temperature: opts.temperature ?? 0.3,
     configuration: { baseURL },
+    // `modelKwargs` merges straight into the request body LangChain sends —
+    // this is how a provider-specific param like `reasoning_effort` reaches
+    // the gateway from here. See `gateway.ts`'s own note: a reasoning-
+    // capable model behind a role not expecting deep thought can otherwise
+    // spend its whole token budget "thinking" and return nothing.
+    ...(opts.reasoningEffort ? { modelKwargs: { reasoning_effort: opts.reasoningEffort } } : {}),
   });
 }

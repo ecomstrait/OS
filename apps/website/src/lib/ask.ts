@@ -112,7 +112,11 @@ async function aiAnswer(messages: ChatMessage[]): Promise<AskResult | null> {
     const { content } = await chat(
       "workhorse",
       [{ role: "system", content: systemPrompt() }, ...history],
-      { temperature: 0.5, maxTokens: 220, timeoutMs: 8000 },
+      // reasoningEffort: "none" — a reasoning-capable model can otherwise
+      // spend the entire maxTokens budget "thinking" and return empty
+      // content (see @ecomstrait/ai's gateway.ts); this role is meant to be
+      // fast and general-purpose, never a deep thinker.
+      { temperature: 0.5, maxTokens: 220, timeoutMs: 8000, reasoningEffort: "none" },
     );
     if (!content.trim()) return null;
     return { answer: content.trim(), source: "groq" };

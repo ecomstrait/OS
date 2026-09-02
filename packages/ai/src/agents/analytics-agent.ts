@@ -10,7 +10,7 @@ import { supabaseQueryTool } from "./tools/supabase-query-tool";
  * result in plain language.
  */
 export function createAnalyticsAgent() {
-  const llm = createChatModel("workhorse", { temperature: 0.2 });
+  const llm = createChatModel("workhorse", { temperature: 0.2, reasoningEffort: "none" });
 
   return createReactAgent({
     llm,

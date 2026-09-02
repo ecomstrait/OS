@@ -213,7 +213,12 @@ export async function converseBuilder(
     const { content, tokensUsed } = await chat(
       "workhorse",
       [{ role: "system", content: system }, ...history],
-      { temperature: 0.7, maxTokens: 500, responseFormatJson: true, timeoutMs: 12000 },
+      // `reasoningEffort: "none"` matters here, not just for speed: the
+      // reasoning-capable model now behind this role can otherwise spend the
+      // ENTIRE maxTokens budget on invisible "thinking" and return empty
+      // content — see gateway.ts's own note on this failure mode. `workhorse`
+      // is meant to be the fast, general-purpose role; it never needs to think.
+      { temperature: 0.7, maxTokens: 500, responseFormatJson: true, timeoutMs: 12000, reasoningEffort: "none" },
     );
     const parsed = JSON.parse(content) as {
       done?: boolean;
@@ -498,7 +503,13 @@ export async function applyMerchantRequest(
           }\n\nMerchant says: ${text}`,
         },
       ],
-      { temperature: 0.4, maxTokens: 900, responseFormatJson: true, timeoutMs: 15000 },
+      // reasoningEffort: "none" — see the note on the converseBuilder call
+      // above. Real bug this fixed: "do it yourself, what's the best" (an
+      // open-ended edit request) made the reasoning-capable model behind
+      // this role spend its whole 900-token budget "thinking" and return
+      // empty content — surfaced to the merchant as "the AI service didn't
+      // answer in time," even though the actual issue was never a timeout.
+      { temperature: 0.4, maxTokens: 900, responseFormatJson: true, timeoutMs: 15000, reasoningEffort: "none" },
     );
 
     const parsed = JSON.parse(content) as {
@@ -651,7 +662,8 @@ export async function generateStorePlan(
           { role: "system", content: PLAN_SYSTEM },
           { role: "user", content: user },
         ],
-        { temperature: 0.7, maxTokens: 900, responseFormatJson: true, timeoutMs: 12000 },
+        // reasoningEffort: "none" — see the note in converseBuilder above.
+        { temperature: 0.7, maxTokens: 900, responseFormatJson: true, timeoutMs: 12000, reasoningEffort: "none" },
       );
       const p = JSON.parse(content) as Partial<StorePlan>;
       const base = presetPlan(answers);
@@ -742,7 +754,8 @@ export async function generateBlogDraft(
         { role: "system", content: BLOG_SYSTEM },
         { role: "user", content: `Store: ${storeName}\nBlog post topic: ${topic}` },
       ],
-      { temperature: 0.7, maxTokens: 1200, responseFormatJson: true, timeoutMs: 20000 },
+      // reasoningEffort: "none" — see the note in converseBuilder above.
+      { temperature: 0.7, maxTokens: 1200, responseFormatJson: true, timeoutMs: 20000, reasoningEffort: "none" },
     );
     const p = JSON.parse(content) as Partial<BlogDraft>;
     const base = presetBlogDraft(topic, storeName);

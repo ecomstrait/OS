@@ -71,7 +71,11 @@ export async function enrichProduct(input: EnrichInput): Promise<Enrichment> {
         { role: "system", content: system },
         { role: "user", content: user },
       ],
-      { temperature: 0.6, maxTokens: 500, responseFormatJson: true, timeoutMs: 8000 },
+      // reasoningEffort: "none" — a reasoning-capable model can otherwise
+      // spend the entire maxTokens budget "thinking" and return empty
+      // content (see @ecomstrait/ai's gateway.ts); this role is meant to be
+      // fast and general-purpose, never a deep thinker.
+      { temperature: 0.6, maxTokens: 500, responseFormatJson: true, timeoutMs: 8000, reasoningEffort: "none" },
     );
     const p = JSON.parse(content) as Partial<Enrichment> & { suggestedRetailPrice?: number };
     const base = presetEnrichment(input);
