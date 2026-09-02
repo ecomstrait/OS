@@ -36,12 +36,15 @@ export function StorefrontView({
   navLinks,
   categoryBands,
   basePath,
+  previewMode,
 }: {
   store: Storefront;
   navLinks: StorefrontNavLink[];
   categoryBands: CategoryBand[];
   /** `/store/<uuid>` on the id-path route, `""` on a connected domain. */
   basePath: string;
+  /** See StorefrontChrome — set inside the Store Builder's preview. */
+  previewMode?: boolean;
 }) {
   const t = storeTokens(store.theme, store.plan.brandColors);
   const heroMedia = store.plan.heroMedia ?? [];
@@ -66,7 +69,7 @@ export function StorefrontView({
         fontFamily: "var(--font-body)",
       }}
     >
-      <StorefrontChrome store={store} navLinks={navLinks} basePath={basePath}>
+      <StorefrontChrome store={store} navLinks={navLinks} basePath={basePath} previewMode={previewMode}>
         {/* ---- Hero — a real editorial moment, not a banner strip ---- */}
         <section className="relative flex min-h-[68vh] items-center overflow-hidden px-6 py-20 text-center text-white sm:min-h-[80vh]">
           <HeroCarousel media={heroMedia} gradient={grad} />

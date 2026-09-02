@@ -1,6 +1,5 @@
-import Link from "next/link";
 import type { Metadata } from "next";
-import { Package, ArrowRight, SearchX } from "lucide-react";
+import { Package, SearchX } from "lucide-react";
 import { createClient } from "@ecomstrait/auth/server";
 import type { OrderStatus } from "@ecomstrait/db/types";
 import { getMySupplier } from "@/lib/supplier-context";
@@ -8,20 +7,13 @@ import { EmptyState } from "@/components/app/empty-state";
 import { PendingGate } from "@/components/app/pending-gate";
 import { SearchBar } from "@/components/app/search-bar";
 import { Pagination } from "@/components/app/pagination";
-import { ORDER_STATUS_STYLE, ORDER_STATUS_ORDER } from "@/lib/order-status";
+import { OrdersList, type OrderRow } from "@/components/orders/orders-list";
+import { ORDER_STATUS_ORDER } from "@/lib/order-status";
 import { clampPage, likeTerm, pageSlice, parseTableParams, type RawParams } from "@/lib/table-params";
 
 export const metadata: Metadata = { title: "Orders" };
 
-type Row = {
-  id: string;
-  number: number;
-  store_name: string | null;
-  customer_name: string | null;
-  status: OrderStatus;
-  created_at: string;
-  order_items: { product_name: string; quantity: number }[];
-};
+type Row = OrderRow;
 
 export default async function OrdersPage({
   searchParams,
@@ -113,35 +105,7 @@ export default async function OrdersPage({
               <EmptyState icon={SearchX} title="No matches" body={`No orders match “${q}”.`} />
             ) : (
               <>
-                <div className="overflow-hidden rounded-2xl border border-ink-100 bg-white">
-                  {orders.map((o) => {
-                    const items = o.order_items ?? [];
-                    const summaryText =
-                      items.length === 0
-                        ? "—"
-                        : `${items[0].quantity}× ${items[0].product_name}${items.length > 1 ? ` +${items.length - 1} more` : ""}`;
-                    return (
-                      <Link
-                        key={o.id}
-                        href={`/orders/${o.id}`}
-                        className="flex items-center justify-between gap-4 border-b border-ink-50 px-4 py-4 transition last:border-0 hover:bg-ink-50/50"
-                      >
-                        <div className="min-w-0">
-                          <p className="font-medium text-ink-900">
-                            #{o.number} · {o.store_name || o.customer_name || "Customer"}
-                          </p>
-                          <p className="truncate text-sm text-ink-500">{summaryText}</p>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-3">
-                          <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${ORDER_STATUS_STYLE[o.status]}`}>
-                            {o.status}
-                          </span>
-                          <ArrowRight className="h-4 w-4 text-ink-300" />
-                        </div>
-                      </Link>
-                    );
-                  })}
-                </div>
+                <OrdersList orders={orders} />
                 <Pagination basePath="/orders" params={params} page={page} total={total} size={size} />
               </>
             )}

@@ -49,7 +49,7 @@ export default async function EditStorePage({ params }: { params: Promise<{ id: 
   if (ids.length) {
     const { data: prods } = await supabase
       .from("products")
-      .select("id, title, images, retail_price")
+      .select("id, title, images, retail_price, category")
       .in("id", ids);
     const priceMap = new Map((sp ?? []).map((r) => [r.product_id, r.price]));
     products = (prods ?? []).map((p) => ({
@@ -57,6 +57,7 @@ export default async function EditStorePage({ params }: { params: Promise<{ id: 
       title: p.title,
       price: priceMap.get(p.id) ?? p.retail_price,
       image: productImage(p.images?.[0]),
+      category: p.category,
     }));
   }
 

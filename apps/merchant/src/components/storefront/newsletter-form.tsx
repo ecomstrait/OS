@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Loader2, Check } from "lucide-react";
 
 /** Footer newsletter signup — one email field, posts straight to the store's own list. */
-export function NewsletterForm({ storeId }: { storeId: string }) {
+export function NewsletterForm({ storeId, previewMode }: { storeId: string; previewMode?: boolean }) {
   const [email, setEmail] = useState("");
   const [state, setState] = useState<"idle" | "sending" | "done">("idle");
   const [error, setError] = useState<string | null>(null);
@@ -14,6 +14,14 @@ export function NewsletterForm({ storeId }: { storeId: string }) {
     e.preventDefault();
     if (state === "sending") return;
     setError(null);
+    // Inside the Store Builder's preview: no real store to subscribe to yet
+    // (an unlaunched store's id is refused by the real API anyway, the same
+    // way getStorefront refuses it) — skip the request entirely rather than
+    // let a merchant testing the preview create a real subscriber row.
+    if (previewMode) {
+      setError("You'll be able to collect real signups once you launch.");
+      return;
+    }
     setState("sending");
     try {
       const res = await fetch(`/api/storefront/${storeId}/newsletter`, {

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ShoppingBag, Plus, Minus, Loader2, X } from "lucide-react";
 import type { Storefront } from "@/lib/storefront";
 import { useStorefrontCart } from "@/components/storefront/use-storefront";
+import { usePreviewCart } from "@/components/storefront/use-preview-cart";
 import { NewsletterForm } from "@/components/storefront/newsletter-form";
 
 /**
@@ -27,19 +28,53 @@ export function useStorefrontCartContext(): CartApi {
 
 export type NavLink = { label: string; href: string };
 
-export function StorefrontChrome({
-  store,
-  navLinks,
-  basePath,
-  children,
-}: {
+type ChromeProps = {
   store: Storefront;
   navLinks: NavLink[];
   /** `/store/<uuid>` on the id-path route, `""` on a connected domain. */
   basePath: string;
   children: React.ReactNode;
-}) {
-  const cartApi = useStorefrontCart(store.id);
+  /** Inside the Store Builder's live preview, for an unlaunched/draft store.
+   *  Swaps the real, backend-backed cart for a local one (see below) and
+   *  tells NewsletterForm not to actually submit — both because a draft
+   *  store's id is refused by the real APIs (the same way getStorefront
+   *  refuses it, storefront.ts), and because a merchant clicking around
+   *  their own in-progress store shouldn't create real cart/subscriber rows
+   *  against a store nobody can actually buy from yet. */
+  previewMode?: boolean;
+};
+
+/**
+ * `previewMode` picks between two real hooks, not a runtime branch inside
+ * one — `useStorefrontCart` fires a network request on mount regardless of
+ * whether its result is used, so it can't be called and then ignored, and a
+ * hook can't be called conditionally within a single component body either
+ * way (rules of hooks). Dispatching to one of two thin wrapper components
+ * keeps each hook call unconditional within its own component, and
+ * `previewMode` doesn't change for the lifetime of a mounted instance (a
+ * given render is either a preview or the real thing, never both), so this
+ * never actually remounts anything in practice.
+ */
+export function StorefrontChrome(props: ChromeProps) {
+  return props.previewMode ? <PreviewChrome {...props} /> : <LiveChrome {...props} />;
+}
+
+function LiveChrome(props: Omit<ChromeProps, "previewMode">) {
+  return <ChromeBody {...props} cartApi={useStorefrontCart(props.store.id)} previewMode={false} />;
+}
+
+function PreviewChrome(props: Omit<ChromeProps, "previewMode">) {
+  return <ChromeBody {...props} cartApi={usePreviewCart(props.store.products)} previewMode />;
+}
+
+function ChromeBody({
+  store,
+  navLinks,
+  basePath,
+  children,
+  cartApi,
+  previewMode,
+}: Omit<ChromeProps, "previewMode"> & { cartApi: CartApi; previewMode: boolean }) {
   const { cart, busy, error, setQuantity, remove, checkout } = cartApi;
   const [open, setOpen] = useState(false);
   const line = "color-mix(in srgb, var(--ink) 12%, transparent)";
@@ -130,7 +165,7 @@ export function StorefrontChrome({
             <p className="text-xs font-semibold uppercase opacity-70" style={{ letterSpacing: "0.1em" }}>
               Stay in the loop
             </p>
-            <NewsletterForm storeId={store.id} />
+            <NewsletterForm storeId={store.id} previewMode={previewMode} />
           </div>
           <p className="text-xs opacity-50" style={{ letterSpacing: "0.04em" }}>
             {store.plan.footerText || `${store.name} · Powered by EcomStrait`}

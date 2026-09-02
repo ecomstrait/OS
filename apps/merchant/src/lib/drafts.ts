@@ -64,7 +64,7 @@ export async function loadDraftStore(
   if (ids.length) {
     const { data: prods } = await supabase
       .from("products")
-      .select("id, title, images, retail_price")
+      .select("id, title, images, retail_price, category")
       .in("id", ids);
 
     const priceById = new Map(picks.map((p) => [p.id, p.price]));
@@ -81,6 +81,7 @@ export async function loadDraftStore(
           title: p.title,
           price: priceById.get(id) ?? p.retail_price,
           image: productImage(p.images?.[0]),
+          category: p.category,
         },
       ];
     });

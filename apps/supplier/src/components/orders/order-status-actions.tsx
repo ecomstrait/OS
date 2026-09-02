@@ -2,22 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Truck, PackageCheck, X, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import type { OrderStatus } from "@ecomstrait/db/types";
 import { setOrderStatus } from "@/lib/order-actions";
-
-const ACTIONS: Record<
-  OrderStatus,
-  { to: OrderStatus; label: string; icon: typeof Truck; tone: "brand" | "red" }[]
-> = {
-  processing: [
-    { to: "shipped", label: "Mark shipped", icon: Truck, tone: "brand" },
-    { to: "cancelled", label: "Cancel order", icon: X, tone: "red" },
-  ],
-  shipped: [{ to: "delivered", label: "Mark delivered", icon: PackageCheck, tone: "brand" }],
-  delivered: [],
-  cancelled: [],
-};
+import { ORDER_STATUS_TRANSITIONS } from "@/lib/order-status";
 
 export function OrderStatusActions({
   orderId,
@@ -30,7 +18,7 @@ export function OrderStatusActions({
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  const actions = ACTIONS[status];
+  const actions = ORDER_STATUS_TRANSITIONS[status];
   if (actions.length === 0) {
     return <p className="text-sm text-ink-400">This order is {status}.</p>;
   }

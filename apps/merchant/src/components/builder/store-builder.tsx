@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Sparkles, Loader2, Send, Store, Globe, ShoppingBag, ImageOff, ImagePlus, X, Check, ExternalLink, ArrowLeft, Pencil, Trash2 } from "lucide-react";
+import { Sparkles, Loader2, Send, Store, Globe, ShoppingBag, ImagePlus, X, Check, ExternalLink, ArrowLeft, Pencil, Trash2 } from "lucide-react";
 import { cn } from "@ecomstrait/ui";
 import { createClient } from "@ecomstrait/auth/client";
 import type { StoreType } from "@ecomstrait/db";
@@ -23,17 +23,15 @@ import {
   type BuilderTurn,
   type ConverseResult,
 } from "@/lib/builder-actions";
-import {
-  AboutBlock,
-  HeroCarousel,
-  StoreSections,
-  TrustBadges,
-} from "@/components/storefront/store-content";
 import { storeTokens, tokenStyle } from "@/lib/theme-tokens";
 import type { DraftStore } from "@/lib/drafts";
 import { draftExpiryLabel } from "@/lib/store-status";
 import type { StorePlan } from "@/lib/ecomai";
 import { VersionHistory } from "@/components/builder/version-history";
+import { StorefrontView, type CategoryBand } from "@/components/storefront/storefront-view";
+import type { Storefront } from "@/lib/storefront";
+import type { ApiProduct, StorefrontNavLink } from "@/lib/storefront-api";
+import { categoryLabel, UNCATEGORIZED } from "@/lib/storefront-shared";
 
 /**
  * An already-launched store, opened in the same workbench used to build it.
@@ -467,9 +465,61 @@ export function StoreBuilder({
     }
   }
 
-  // Always a valid gradient: it backs the hero whenever there's no hero image,
-  // and the shared backdrop helper needs something to fall back to.
-  const grad = `linear-gradient(135deg, ${plan?.brandColors[0] ?? "#0f172a"}, ${plan?.brandColors[1] ?? "#10b981"})`;
+  // Preview props for the real StorefrontView, built from state already
+  // here — draft/unlaunched stores are deliberately refused by
+  // getStorefront/getStorefrontNav (storefront.ts), so this can't call the
+  // same server functions the live route does; it constructs the same
+  // shapes locally instead. Recomputed only when the underlying state
+  // actually changes, not on every render (this panel re-renders on every
+  // chat token).
+  const previewStore: Storefront | null = useMemo(() => {
+    if (!plan) return null;
+    return {
+      id: existing?.id ?? draftId ?? "preview",
+      name: name || plan.storeName,
+      logoUrl,
+      theme,
+      status: "draft",
+      plan,
+      products: products.map((p) => ({ id: p.id, title: p.title, image: p.image, price: p.price, supplierId: null })),
+    };
+  }, [plan, existing?.id, draftId, name, logoUrl, theme, products]);
+
+  const previewCategoryBands: CategoryBand[] = useMemo(() => {
+    if (!products.length) return [];
+    const groups = new Map<string, PreviewProduct[]>();
+    for (const p of products) {
+      const key = p.category?.trim() || UNCATEGORIZED;
+      groups.set(key, [...(groups.get(key) ?? []), p]);
+    }
+    const toApiProduct = (p: PreviewProduct): ApiProduct => ({
+      id: p.id,
+      title: p.title,
+      description: null,
+      category: p.category,
+      image: p.image,
+      images: p.image ? [p.image] : [],
+      price: p.price,
+      compareAtPrice: null,
+      available: 99,
+      inStock: true,
+    });
+    return [...groups.entries()].map(([category, items]) => ({
+      category,
+      products: items.map(toApiProduct),
+      total: items.length,
+    }));
+  }, [products]);
+
+  const previewNavLinks: StorefrontNavLink[] = useMemo(() => {
+    const links: StorefrontNavLink[] = previewCategoryBands
+      .filter((b) => b.category !== UNCATEGORIZED)
+      .map((b) => ({ label: categoryLabel(b.category), href: `/store/preview/products?category=${encodeURIComponent(b.category)}` }));
+    links.push({ label: "Shop all", href: "/store/preview/products" });
+    links.push({ label: "Sale", href: "/store/preview#sale" });
+    if (plan?.about) links.push({ label: "About", href: "/store/preview#about" });
+    return links;
+  }, [previewCategoryBands, plan?.about]);
 
   return (
     <div className="flex h-[80vh] min-h-[560px] flex-col overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-xl shadow-ink-950/5 lg:flex-row">
@@ -574,7 +624,7 @@ export function StoreBuilder({
                 <p className="mt-4 text-sm text-ink-500">Answer EcomAI&apos;s questions and your full store appears here.</p>
               </div>
             </div>
-          ) : (
+          ) : previewStore ? (
             <div className="p-4">
               {/* The theme's tokens, so the shared storefront components resolve
                   var(--radius)/var(--brand) to the same values they will on the
@@ -590,74 +640,30 @@ export function StoreBuilder({
                   <span className="ml-2 truncate text-xs text-ink-400">{name || plan.storeName}</span>
                 </div>
 
-                {plan.announcement && (
-                  <div
-                    className="px-4 py-2 text-center text-xs font-medium text-white"
-                    style={{ background: "var(--brand)" }}
-                  >
-                    {plan.announcement}
-                  </div>
-                )}
-
-                <div className="relative overflow-hidden px-6 py-10 text-center text-white">
-                  <HeroCarousel media={plan.heroMedia} gradient={grad} />
-                  <div className="relative">
-                    {logoUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={logoUrl} alt="Store logo" className="mx-auto mb-4 h-10 object-contain" />
-                    ) : (
-                      <p className="mb-3 text-sm font-bold uppercase tracking-wide text-white/90">{name || plan.storeName}</p>
-                    )}
-                    <p className="text-lg font-bold sm:text-2xl">{plan.heroHeadline}</p>
-                    <p className="mx-auto mt-2 max-w-md text-sm text-white/85">{plan.heroSub}</p>
-                    <span className="mt-4 inline-block rounded-full bg-white px-4 py-1.5 text-xs font-semibold text-ink-950">Shop now</span>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap justify-center gap-2 px-6 py-4">
-                  {plan.collections.map((c) => (
-                    <span key={c} className="rounded-full bg-ink-100 px-3 py-1 text-xs font-medium text-ink-600">{c}</span>
-                  ))}
-                </div>
-
-                <div className="border-y border-ink-100 px-6 py-5">
-                  <TrustBadges compact />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 px-6 pb-6 pt-6 sm:grid-cols-3">
-                  {(products.length ? products : Array.from({ length: 3 }).map((_, i) => ({ id: `x${i}`, title: "Product", price: null, image: null }))).slice(0, 6).map((p) => (
-                    <div key={p.id} className="overflow-hidden rounded-lg border border-ink-100">
-                      <div className="aspect-square bg-ink-50">
-                        {p.image ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={p.image} alt="" className="h-full w-full object-cover" />
-                        ) : (
-                          <div className="grid h-full w-full place-items-center text-ink-300"><ImageOff className="h-5 w-5" /></div>
-                        )}
-                      </div>
-                      <div className="p-2">
-                        <p className="line-clamp-1 text-xs font-medium text-ink-800">{p.title}</p>
-                        <p className="text-xs text-ink-500">{p.price != null ? `$${p.price}` : ""}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Same components the live storefront uses, so anything the
-                    merchant adds in Content shows here exactly as it will ship. */}
-                <div className="px-6 pb-6">
-                  <AboutBlock plan={plan} />
-                  <StoreSections plan={plan} />
-                </div>
-
-                <div className="border-t border-ink-100 px-6 py-4 text-center">
-                  <p className="text-xs opacity-60">
-                    {plan.footerText || `${name || plan.storeName} · Powered by EcomStrait`}
-                  </p>
+                {/* The real storefront's own component tree — nav, cart, real
+                    per-category sections, spotlight, footer — fed from the
+                    builder's live state, so this is what the store actually
+                    looks like at launch, not a separate hand-rolled mockup.
+                    Links are inert (this is a preview, not a real page to
+                    navigate away into) and the cart/newsletter are local-only
+                    (previewMode) since there's no launched store to buy from
+                    or subscribe to yet. */}
+                <div
+                  onClickCapture={(e) => {
+                    if ((e.target as HTMLElement).closest("a")) e.preventDefault();
+                  }}
+                >
+                  <StorefrontView
+                    store={previewStore}
+                    navLinks={previewNavLinks}
+                    categoryBands={previewCategoryBands}
+                    basePath="/store/preview"
+                    previewMode
+                  />
                 </div>
               </div>
             </div>
-          )}
+          ) : null}
         </div>
 
         <div className="border-t border-ink-100 bg-white p-3">

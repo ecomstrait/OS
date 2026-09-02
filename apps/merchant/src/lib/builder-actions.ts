@@ -24,7 +24,13 @@ import { purgeStoreMedia } from "@/lib/draft-sweep";
 import { askBusinessAdvisor } from "@/lib/agents/business-advisor";
 import { listStorePages } from "@/lib/pages-api";
 
-export type PreviewProduct = { id: string; title: string; price: number | null; image: string | null };
+export type PreviewProduct = {
+  id: string;
+  title: string;
+  price: number | null;
+  image: string | null;
+  category: string | null;
+};
 
 export type BuildResult = {
   plan?: StorePlan;
@@ -110,6 +116,7 @@ export async function finalizeBuilderConversation(
       title: p.title,
       price: p.retail_price,
       image: productImage(p.images?.[0]),
+      category: p.category,
     }));
 
     return { plan, products, theme: themeForStyle(answers.styleKeyword ?? undefined) };
