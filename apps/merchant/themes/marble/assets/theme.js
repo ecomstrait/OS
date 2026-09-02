@@ -47,6 +47,16 @@
     on($("[data-nav-close]"), "click", close);
     on(drawer, "click", function (e) { if (e.target === drawer) close(); });
     on(document, "keydown", function (e) { if (e.key === "Escape") close(); });
+
+    // The toggle button is hidden above 900px (theme.css), but the drawer's
+    // own open/closed state is driven purely by .is-open -- so widening the
+    // window (or rotating a tablet) while it's open left a full-screen
+    // overlay stuck blocking the page, with the button that opened it
+    // already gone. Close it the moment the layout crosses back to desktop.
+    var desktopQuery = window.matchMedia("(min-width: 900px)");
+    var onDesktopChange = function (e) { if (e.matches) close(); };
+    if (desktopQuery.addEventListener) desktopQuery.addEventListener("change", onDesktopChange);
+    else if (desktopQuery.addListener) desktopQuery.addListener(onDesktopChange); // older Safari
   }
 
   /* ------------------------------------------------------------ variants --

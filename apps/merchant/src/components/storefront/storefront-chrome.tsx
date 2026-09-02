@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import Link from "next/link";
 import { ShoppingBag, Plus, Minus, Loader2, X, Menu } from "lucide-react";
 import type { Storefront } from "@/lib/storefront";
@@ -78,6 +78,29 @@ function ChromeBody({
   const { cart, busy, error, setQuantity, remove, checkout } = cartApi;
   const [open, setOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // Mirrors the Shopify Liquid themes' own nav drawer (assets/theme.js,
+  // initNav): closing on Escape and on crossing back to desktop width isn't
+  // just for parity — without the resize handler, narrowing the window back
+  // down again (without ever touching the hamburger) would show the mobile
+  // nav already open.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const desktopQuery = window.matchMedia("(min-width: 640px)");
+    const onDesktopChange = (e: MediaQueryListEvent) => {
+      if (e.matches) setMenuOpen(false);
+    };
+    const onKeydown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    desktopQuery.addEventListener("change", onDesktopChange);
+    document.addEventListener("keydown", onKeydown);
+    return () => {
+      desktopQuery.removeEventListener("change", onDesktopChange);
+      document.removeEventListener("keydown", onKeydown);
+    };
+  }, [menuOpen]);
+
   const line = "color-mix(in srgb, var(--ink) 12%, transparent)";
   const surface = "color-mix(in srgb, var(--ink) 4%, var(--bg))";
 
