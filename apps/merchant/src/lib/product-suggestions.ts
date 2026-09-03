@@ -50,6 +50,18 @@ export async function suggestProductsForStore(opts: {
     }
   }
 
+  // A freeform niche phrase pulled from conversation ("women's garments")
+  // is not the same string a product's own `category` column holds — an
+  // exact-match filter on that is likely to match NOTHING, not just "not
+  // much" (confirmed: a real merchant asking about "women's garments" got
+  // zero suggestions back even though the platform has real sales). An
+  // empty result here reads as "nothing sells on this whole platform,"
+  // which is never true — fall back to genuinely platform-wide results
+  // with no category filter at all rather than show nothing.
+  if (pool.length === 0 && category) {
+    return suggestProductsForStore({ excludeIds: opts.excludeIds, limit });
+  }
+
   return pool
     .map((p) => {
       const marginPct = economicsFor(p).marginPct;

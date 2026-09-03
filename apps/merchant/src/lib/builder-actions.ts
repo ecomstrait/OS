@@ -62,6 +62,18 @@ const DELEGATE_PATTERN =
   /^(you\s*(tell|decide|pick|choose)|whatever you (think|want|suggest)|your call|surprise( me)?|i\s*don'?t\s*know|idk)\b/i;
 
 /**
+ * A backstop for the clearest "show me products" phrasings, checked
+ * whenever the model itself didn't classify the message as `show_products`.
+ * Live-tested sending the same message 3 times: the model correctly caught
+ * this on its own only 2 of 3 tries — good enough as the primary mechanism
+ * (the phrasing space is too open-ended for a fixed pattern to be the ONLY
+ * mechanism), not good enough to be the only one. This only needs to catch
+ * the unambiguous cases; anything subtler still relies on the model.
+ */
+const SHOW_PRODUCTS_PATTERN =
+  /\bshow me\b|\bsuggest\b|\brecommend\b|what'?s selling|what sells|best[\s-]?sellers?|top[\s-]?sellers?|top products|high[\s-]?(profit[\s-]?)?margins?/i;
+
+/**
  * One turn of the builder conversation — the AI decides what to ask next
  * (or that it's ready to build), rather than a fixed question script.
  */
@@ -93,6 +105,33 @@ export async function converseBuilderTurn(
 
     const result = await converseBuilder(history, context);
     await recordTokenUsage(result.tokensUsed);
+
+    // Same idea as the deterministic branch above, but for a request to see
+    // products that can come at ANY point in the conversation, not just the
+    // opening question — "show me some products with high profit margins"
+    // was previously just ignored and treated as a non-answer to whatever
+    // question was pending. Primarily left to the model (via `type:
+    // "show_products"` in BUILDER_SYSTEM) since the phrasing is too
+    // open-ended for a fixed pattern to be the only mechanism — backed up
+    // by SHOW_PRODUCTS_PATTERN for the clearest phrasings, since the model
+    // alone caught this only ~2 of 3 times in testing.
+    const backstopFired = !result.showProducts && SHOW_PRODUCTS_PATTERN.test(lastUser);
+    if (result.showProducts || backstopFired) {
+      const suggestions = await suggestProductsForStore({ category: result.niche ?? context.inferredNiche, limit: 6 });
+      if (suggestions.length) {
+        return {
+          ...result,
+          done: false,
+          // The model's own `reply` is whatever it decided to say for
+          // whatever it thought this was (often its next scripted
+          // question) — wrong to show alongside product cards it never
+          // planned for. Only override it when the backstop is what fired.
+          reply: backstopFired ? "Here's what's doing well right now:" : result.reply,
+          productSuggestions: suggestions,
+        };
+      }
+    }
+
     return result;
   } catch (err) {
     // This is the one call the builder makes automatically, before a

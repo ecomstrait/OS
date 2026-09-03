@@ -13,12 +13,15 @@ export function ProductDetailView({
   product,
   navLinks,
   basePath,
+  previewMode,
 }: {
   store: Storefront;
   product: ApiProduct;
   navLinks: StorefrontNavLink[];
   /** `/store/<uuid>` on the id-path route, `""` on a connected domain. */
   basePath: string;
+  /** See StorefrontChrome — set from the Store Builder's live preview. */
+  previewMode?: boolean;
 }) {
   const t = storeTokens(store.theme, store.plan.brandColors);
   const line = "color-mix(in srgb, var(--ink) 12%, transparent)";
@@ -34,7 +37,7 @@ export function ProductDetailView({
         fontFamily: "var(--font-body)",
       }}
     >
-      <StorefrontChrome store={store} navLinks={navLinks} basePath={basePath}>
+      <StorefrontChrome store={store} navLinks={navLinks} basePath={basePath} previewMode={previewMode}>
         <section className="mx-auto max-w-6xl px-6 py-14 sm:py-20">
           <a href={`${basePath}/products`} className="mb-10 inline-block text-xs font-semibold uppercase opacity-60 hover:opacity-100" style={{ letterSpacing: "0.08em" }}>
             ← Back to shop

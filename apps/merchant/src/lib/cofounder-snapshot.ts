@@ -207,25 +207,31 @@ export function summarizeMerchantForAdvisor(s: MerchantSnapshot): string {
     `Revenue (all-time, paid/processing/fulfilled orders): $${s.revenue.total.toFixed(2)} across ${
       s.revenue.orderCount
     } orders, avg order $${s.revenue.avgOrder.toFixed(2)}, ${s.revenue.units} units sold.`,
+    // Below: an empty string, not a "no X yet" sentence, whenever a
+    // category has nothing — see SYSTEM_PROMPT in cofounder-ai.ts for why.
+    // A co-founder who's actually IN the business doesn't narrate which
+    // systems aren't built yet; feeding the model an explicit "No traffic
+    // data yet" line was a real bug report — it kept opening replies with
+    // "we're flying blind" instead of just working with what's here.
     s.revenueByStore.length
       ? `Revenue by store: ${s.revenueByStore.map((r) => `${r.name} $${r.total.toFixed(2)}`).join(", ")}.`
-      : `No store-level revenue yet.`,
+      : "",
     s.topProducts.length
       ? `Top products by revenue: ${s.topProducts
           .slice(0, 3)
           .map((p) => `${p.name} ($${p.revenue.toFixed(2)}, ${p.units} units)`)
           .join("; ")}.`
-      : `No product sales data yet.`,
+      : "",
     `Wallet balance: $${s.walletBalance.toFixed(2)}.`,
     s.heldOrders.count > 0
       ? `${s.heldOrders.count} order(s) worth $${s.heldOrders.value.toFixed(2)} are on hold, not yet sent to suppliers because the wallet balance doesn't cover them.`
       : `No orders currently blocked by low wallet credits.`,
     s.customers.total > 0
       ? `Customers (estimated): ${s.customers.total} total, ${s.customers.repeatCount} repeat (${s.customers.repeatPct}%), avg lifetime value $${s.customers.avgLifetimeValue.toFixed(2)}.`
-      : `No customer data yet.`,
+      : "",
     s.trafficBySource.length
       ? `Traffic mix (estimated, last 30 days): ${s.trafficBySource.map((t) => `${t.source.replace("_", " ")} ${t.pct}%`).join(", ")}.`
-      : `No traffic data yet.`,
+      : "",
     s.storeDesign.length
       ? `Store design: ${s.storeDesign.map((d) => `${d.name} — ${d.theme ?? "no theme set"}, colors ${d.brandColors.join("/") || "default"}`).join("; ")}.`
       : "",

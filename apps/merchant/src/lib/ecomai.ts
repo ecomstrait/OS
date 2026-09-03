@@ -116,31 +116,64 @@ export type ConverseResult = {
   styleKeyword: string | null;
   storeName: string | null;
   tokensUsed: number;
+  /**
+   * They asked to actually SEE products (not just delegate what to sell) —
+   * "show me some products", "what's selling well", "high margin options" —
+   * at any point in this conversation, not just the opening question. The
+   * caller (builder-actions.ts, which has DB access this file doesn't) is
+   * responsible for fetching and rendering them; this only signals to do so.
+   */
+  showProducts?: boolean;
 };
 
 const BUILDER_SYSTEM = [
   "You are EcomAI, helping an entrepreneur set up an online store through a short, natural conversation.",
   "You need to learn: what they sell (niche), who their customers are (audience), what visual style/vibe fits their brand, and what to name the store.",
   "Ask ONE short, conversational question at a time — never a list, never more than one question in a message.",
-  "If a reply already answers more than one thing, don't ask about those again. Skip anything already given under \"Known so far\" below.",
   "Don't drag this out: once you have enough to build a good store — often after 2-4 of their replies — stop asking.",
-  "If they say “skip”, “you pick”, “surprise me” or similar for audience, style, or the store name,",
-  "make a sensible choice yourself rather than asking again — those are low-stakes.",
-  "WHAT TO SELL is different: if they delegate that one (\"you tell\", \"you decide\", \"surprise me\",",
-  "\"I don't know\"), do NOT invent a niche yourself and race to done=true — a merchant who delegated",
-  "this needs to see real options, not discover what you picked for them after a store already got",
-  "built. Leave niche null, done=false, and say you'll show them a few things worth selling.",
+  "",
+  "Classify every message as one of three types before anything else — this matters more than",
+  "filling in the four answers, because guessing wrong here means ignoring what they actually said:",
+  "",
+  "\"answer\"         they answered (fully, partially, or by delegating — skip/you pick/surprise me)",
+  "                 whatever you asked last. Fill in whichever of niche/audience/styleKeyword/",
+  "                 storeName they gave or delegated; leave the rest as they were. Skip anything",
+  "                 already given under \"Known so far\" below — never ask for it again.",
+  "                 WHAT TO SELL is the one exception to delegating: if they delegate THAT (you",
+  "                 tell, you decide, surprise me, I don't know) while niche is still unknown,",
+  "                 don't invent one yourself and race to done=true — handle it exactly like type",
+  "                 \"show_products\" below instead. A merchant who delegated what to sell needs to",
+  "                 see real options, not discover what you picked after a store already got built.",
+  "\"show_products\"  they want to actually SEE products, not answer a question — show me some, what's",
+  "                 selling well, suggest something, high margin options — or (see above) delegating",
+  "                 what to sell before a niche is known. Can happen at ANY point in the",
+  "                 conversation, whatever you were about to ask next, whatever's already known.",
+  "                 done=false always. reply is a short lead-in only (\"Here's what's doing well",
+  "                 right now:\") — never list products yourself, they render separately elsewhere.",
+  "                 Don't ask your pending question in this same reply; ask it on a later turn",
+  "                 instead, once they've had a chance to look.",
+  "\"other\"          neither of the above — a genuine question about the store or this process,",
+  "                 confusion, something off-topic, anything that doesn't actually move the four",
+  "                 answers forward. NEVER silently ignore this and just ask your next scripted",
+  "                 question as if they'd answered it — that reads as not listening. Respond to",
+  "                 what they actually said or asked, in reply, first. done=false. Only return to a",
+  "                 pending question afterward, and only if it still makes sense to right then.",
+  "",
   "Warm, confident, concise. No hype, no emojis.",
+  "Whatever the type, always fill in niche/audience/styleKeyword/storeName from the WHOLE",
+  "conversation so far, not just this one message — a fact learned two turns ago is still known now.",
   "",
   "Respond with ONLY JSON, shaped exactly:",
-  '{ "done": boolean, "reply": string, "niche": string | null, "audience": string | null, "styleKeyword": string | null, "storeName": string | null }',
+  '{ "type": "answer" | "show_products" | "other", "done": boolean, "reply": string, "niche": string | null, "audience": string | null, "styleKeyword": string | null, "storeName": string | null }',
   "",
   '"niche" is a short phrase for what they sell (e.g. "handmade leather bags") — fill in your best guess as you learn more, null until you know anything.',
   '"audience" is a short phrase for who buys it / where, or null.',
   '"styleKeyword" is a short word/phrase for the visual vibe (e.g. "luxury", "playful"), or null.',
-  '"storeName" is what they want it called, once said — null if still open or they said "you pick".',
-  'When done=false: "reply" is your next question.',
-  'When done=true: "reply" is a short one-line wrap-up (e.g. "Got it — building your store.") and "niche" must be filled in.',
+  '"storeName" is what they want it called, once said — null if still open or they delegated it.',
+  '"reply" is your next question for type "answer", your lead-in for "show_products", or your',
+  '  response to whatever they said for "other".',
+  'done=true only ever applies to type "answer", once you have enough — "reply" is then a short',
+  '  one-line wrap-up (e.g. "Got it — building your store.") and "niche" must be filled in.',
 ].join("\n");
 
 /** The old fixed 4-question script, kept only as this conversation's no-gateway fallback. */
@@ -226,6 +259,7 @@ export async function converseBuilder(
       { temperature: 0.7, maxTokens: 500, responseFormatJson: true, timeoutMs: 12000, reasoningEffort: "none" },
     );
     const parsed = JSON.parse(content) as {
+      type?: string;
       done?: boolean;
       reply?: string;
       niche?: string | null;
@@ -238,11 +272,26 @@ export async function converseBuilder(
     const niche = str(parsed.niche) ?? context.inferredNiche ?? null;
     const styleKeyword = str(parsed.styleKeyword) ?? context.presetTheme ?? null;
     const reply = str(parsed.reply) ?? (parsed.done ? "Got it — building your store." : "Tell me a bit more.");
+    // Asking to see products is never "done" — showing options isn't the
+    // same as having enough to build, whatever the model said alongside it.
+    // "other" (a real question, confusion, off-topic) isn't "done" either —
+    // only "answer" can complete the build.
+    const showProducts = parsed.type === "show_products";
+    const isAnswer = parsed.type !== "show_products" && parsed.type !== "other";
 
     // "done" with no niche isn't usable — generateStorePlan needs something to
     // build around, so treat it as one more turn rather than handing it "".
-    if (!(parsed.done && niche)) {
-      return { done: false, reply, niche, audience: str(parsed.audience), styleKeyword, storeName: str(parsed.storeName), tokensUsed };
+    if (!(isAnswer && parsed.done && niche) || showProducts) {
+      return {
+        done: false,
+        reply,
+        niche,
+        audience: str(parsed.audience),
+        styleKeyword,
+        storeName: str(parsed.storeName),
+        tokensUsed,
+        showProducts,
+      };
     }
 
     return { done: true, reply, niche, audience: str(parsed.audience), styleKeyword, storeName: str(parsed.storeName), tokensUsed };
