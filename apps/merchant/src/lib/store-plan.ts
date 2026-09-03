@@ -9,7 +9,7 @@ import type { StorePlan, PlanMedia, PlanSection } from "@/lib/ecomai";
 
 const FALLBACK_COLORS = ["#0f172a", "#10b981", "#3b82f6"];
 
-const SECTION_TYPES: PlanSection["type"][] = ["text", "image", "video", "gallery", "features"];
+const SECTION_TYPES: PlanSection["type"][] = ["text", "image", "video", "gallery", "features", "products"];
 
 function str(value: unknown, fallback: string): string {
   return typeof value === "string" && value.trim() ? value : fallback;
@@ -75,6 +75,10 @@ function sections(value: unknown): PlanSection[] {
       const m = mediaList(raw.media);
       if (m.length) section.media = m;
       if (items.length) section.items = items;
+      const productIds = Array.isArray(raw.productIds)
+        ? raw.productIds.filter((id): id is string => typeof id === "string" && id.trim().length > 0)
+        : [];
+      if (productIds.length) section.productIds = productIds;
       return section;
     })
     .filter((s): s is PlanSection => s !== null);

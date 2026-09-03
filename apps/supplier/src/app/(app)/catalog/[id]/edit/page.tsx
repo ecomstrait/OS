@@ -44,6 +44,9 @@ export default async function EditProductPage({
     seo_title: product.seo_title ?? "",
     seo_description: product.seo_description ?? "",
     images: product.images ?? [],
+    sizes: product.sizes ?? "",
+    material: product.material ?? "",
+    fit_note: product.fit_note ?? "",
   };
 
   return (

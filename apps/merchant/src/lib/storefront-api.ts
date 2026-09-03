@@ -37,6 +37,12 @@ export type ApiProduct = {
   /** Units a customer can actually buy right now. */
   available: number;
   inStock: boolean;
+  /** Supplier-set, same on every store — see products.sizes/material/fit_note. */
+  sizes: string | null;
+  material: string | null;
+  fitNote: string | null;
+  /** Merchant-set, per store — see store_products.shipping_note. */
+  shippingNote: string | null;
 };
 
 export type CartLine = {
@@ -121,18 +127,21 @@ export async function resolveStoreForNewsletter(storeId: string): Promise<{ id: 
   return { id: data.id, name: data.name ?? "Store" };
 }
 
-type ListingRow = { product_id: string; price: number | null };
+type ListingRow = { product_id: string; price: number | null; shipping_note: string | null };
+type Listing = { price: number | null; shippingNote: string | null };
 
 /** Approved listings for a store, keyed by product id. */
 async function approvedListings(db: Admin, storeId: string, productIds?: string[]) {
   let query = db
     .from("store_products")
-    .select("product_id, price")
+    .select("product_id, price, shipping_note")
     .eq("store_id", storeId)
     .eq("status", "approved");
   if (productIds?.length) query = query.in("product_id", productIds);
   const { data } = await query;
-  return new Map((data ?? []).map((r: ListingRow) => [r.product_id, r.price]));
+  return new Map<string, Listing>(
+    (data ?? []).map((r: ListingRow) => [r.product_id, { price: r.price, shippingNote: r.shipping_note }]),
+  );
 }
 
 function toApiProduct(
@@ -145,9 +154,13 @@ function toApiProduct(
     retail_price: number | null;
     stock: number;
     reserved: number;
+    sizes: string | null;
+    material: string | null;
+    fit_note: string | null;
   },
-  listedPrice: number | null,
+  listing: Listing | undefined,
 ): ApiProduct {
+  const listedPrice = listing?.price ?? null;
   const available = Math.max(0, (p.stock ?? 0) - (p.reserved ?? 0));
   const price = listedPrice ?? p.retail_price;
   // A real markdown, not a fabricated "was" price: only set when the
@@ -167,10 +180,15 @@ function toApiProduct(
     compareAtPrice,
     available,
     inStock: available > 0,
+    sizes: p.sizes,
+    material: p.material,
+    fitNote: p.fit_note,
+    shippingNote: listing?.shippingNote ?? null,
   };
 }
 
-const PRODUCT_COLUMNS = "id, title, description, category, images, retail_price, stock, reserved, status";
+const PRODUCT_COLUMNS =
+  "id, title, description, category, images, retail_price, stock, reserved, status, sizes, material, fit_note";
 
 export type ProductQuery = { q?: string; category?: string; page?: number; limit?: number };
 
@@ -211,7 +229,7 @@ export async function listStoreProducts(
   const { data, count } = await build().range(from, from + size - 1);
 
   return {
-    products: (data ?? []).map((p) => toApiProduct(p, listed.get(p.id) ?? null)),
+    products: (data ?? []).map((p) => toApiProduct(p, listed.get(p.id))),
     total: count ?? 0,
     page: Math.max(1, page),
     limit: size,
@@ -334,7 +352,34 @@ export async function getStoreProduct(
     .eq("status", "published")
     .maybeSingle();
   if (!data) return null;
-  return toApiProduct(data, listed.get(productId) ?? null);
+  return toApiProduct(data, listed.get(productId));
+}
+
+/**
+ * Multiple approved+published products by id, in the order requested — the
+ * data behind a curated "Best sellers" section on the custom storefront.
+ * Silently drops ids that are no longer approved/published rather than
+ * rendering a hole: a section a merchant curated shouldn't break because one
+ * pick got delisted.
+ */
+export async function getStoreProductsByIds(storeId: string, ids: string[]): Promise<ApiProduct[]> {
+  const db = admin();
+  if (!db || !ids.length) return [];
+  const listed = await approvedListings(db, storeId, ids);
+  const approvedIds = [...listed.keys()];
+  if (!approvedIds.length) return [];
+
+  const { data } = await db
+    .from("products")
+    .select(PRODUCT_COLUMNS)
+    .in("id", approvedIds)
+    .eq("status", "published");
+  const byId = new Map((data ?? []).map((p) => [p.id, p]));
+
+  return ids.flatMap((id) => {
+    const p = byId.get(id);
+    return p ? [toApiProduct(p, listed.get(id))] : [];
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -416,7 +461,7 @@ export async function priceCart(storeId: string, lines: RawLine[]): Promise<Pric
       out.removed.push({ productId: line.productId, reason: "unavailable" });
       continue;
     }
-    const api = toApiProduct(product, listed.get(line.productId) ?? null);
+    const api = toApiProduct(product, listed.get(line.productId));
     if (api.available <= 0) {
       out.removed.push({ productId: line.productId, reason: "out_of_stock" });
       continue;

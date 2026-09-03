@@ -52,6 +52,10 @@ const DEMO_PRODUCTS: ApiProduct[] = [
   compareAtPrice: p.compareAtPrice,
   available: 10,
   inStock: true,
+  sizes: null,
+  material: null,
+  fitNote: null,
+  shippingNote: null,
 }));
 
 // Grouped the same way the real homepage groups categories — one band per

@@ -1,18 +1,24 @@
 "use client";
 
-import { Plus, ImageOff } from "lucide-react";
 import Link from "next/link";
 import type { Storefront } from "@/lib/storefront";
 import { storeTokens, tokenStyle } from "@/lib/theme-tokens";
 import type { ApiProduct, StorefrontNavLink } from "@/lib/storefront-api";
 import { categoryLabel } from "@/lib/storefront-shared";
-import { StorefrontChrome, useStorefrontCartContext } from "@/components/storefront/storefront-chrome";
+import { StorefrontChrome } from "@/components/storefront/storefront-chrome";
 import {
   AboutBlock,
   HeroCarousel,
+  PriceTag,
+  ProductGrid,
   StoreSections,
   TrustBadges,
 } from "@/components/storefront/store-content";
+
+// PriceTag/ProductGrid now live in store-content.tsx (shared with the
+// "products" section renderer) — re-exported so existing importers of this
+// module keep working.
+export { PriceTag, ProductGrid };
 
 /**
  * Every color below comes from the theme tokens — `var(--ink)`/`var(--bg)`/
@@ -35,12 +41,16 @@ export function StorefrontView({
   store,
   navLinks,
   categoryBands,
+  productsBySection,
   basePath,
   previewMode,
 }: {
   store: Storefront;
   navLinks: StorefrontNavLink[];
   categoryBands: CategoryBand[];
+  /** `type: "products"` plan sections resolved to live product data — see
+   *  StorefrontHome, which fetches this server-side before rendering. */
+  productsBySection?: Record<string, ApiProduct[]>;
   /** `/store/<uuid>` on the id-path route, `""` on a connected domain. */
   basePath: string;
   /** See StorefrontChrome — set inside the Store Builder's preview. */
@@ -160,7 +170,12 @@ export function StorefrontView({
 
           {store.plan.sections?.length ? (
             <div className="mt-24">
-              <StoreSections plan={store.plan} />
+              <StoreSections
+                plan={store.plan}
+                productsBySection={productsBySection}
+                basePath={basePath}
+                surface={surface}
+              />
             </div>
           ) : null}
         </section>
@@ -234,85 +249,3 @@ function CategoryBand({
   );
 }
 
-/** Price, with a struck-through "compare at" when this listing is a real markdown. */
-export function PriceTag({ product, className = "" }: { product: ApiProduct; className?: string }) {
-  return (
-    <p className={`flex items-baseline gap-2 font-semibold ${className}`}>
-      <span>{product.price != null ? `$${product.price}` : "—"}</span>
-      {product.compareAtPrice != null && (
-        <span className="text-sm font-normal opacity-45 line-through">${product.compareAtPrice}</span>
-      )}
-    </p>
-  );
-}
-
-export function ProductGrid({
-  products,
-  basePath,
-  surface,
-}: {
-  products: ApiProduct[];
-  basePath: string;
-  surface: string;
-}) {
-  const { add, busy } = useStorefrontCartContext();
-
-  if (!products.length) {
-    return <p className="py-10 text-center text-sm opacity-50">No products here yet.</p>;
-  }
-
-  return (
-    <div className="grid gap-x-6 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
-      {products.map((p) => (
-        <div key={p.id} className="group flex flex-col">
-          <Link href={`${basePath}/products/${p.id}`} className="block">
-            <div className="relative aspect-[4/5] shrink-0 overflow-hidden" style={{ background: surface, borderRadius: "var(--radius)" }}>
-              {p.image ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={p.image}
-                  alt={p.title}
-                  className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
-                />
-              ) : (
-                <div className="grid h-full w-full place-items-center opacity-30">
-                  <ImageOff className="h-8 w-8" />
-                </div>
-              )}
-              <div className="absolute left-3 top-3 flex flex-col gap-1.5">
-                {!p.inStock && (
-                  <span
-                    className="px-2.5 py-1 text-[10px] font-semibold uppercase"
-                    style={{ background: "var(--bg)", color: "var(--ink)", letterSpacing: "0.08em", borderRadius: "var(--radius)" }}
-                  >
-                    Sold out
-                  </span>
-                )}
-                {p.compareAtPrice != null && (
-                  <span
-                    className="px-2.5 py-1 text-[10px] font-semibold uppercase text-white"
-                    style={{ background: "var(--brand)", letterSpacing: "0.08em", borderRadius: "var(--radius)" }}
-                  >
-                    Sale
-                  </span>
-                )}
-              </div>
-            </div>
-            <div className="flex flex-1 flex-col gap-2 pt-4">
-              <p className="line-clamp-2 text-sm font-medium">{p.title}</p>
-              <PriceTag product={p} className="text-sm" />
-            </div>
-          </Link>
-          <button
-            onClick={() => add(p.id, 1)}
-            disabled={busy || !p.inStock}
-            className="mt-3 inline-flex h-10 items-center justify-center gap-1.5 text-xs font-semibold uppercase text-white transition hover:opacity-85 disabled:opacity-40"
-            style={{ background: "var(--brand)", borderRadius: "var(--radius)", letterSpacing: "0.08em" }}
-          >
-            <Plus className="h-3.5 w-3.5" /> {p.inStock ? "Add to cart" : "Sold out"}
-          </button>
-        </div>
-      ))}
-    </div>
-  );
-}

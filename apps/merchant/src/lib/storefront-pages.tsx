@@ -1,7 +1,14 @@
 import { after } from "next/server";
 import { notFound } from "next/navigation";
 import { getStorefront } from "@/lib/storefront";
-import { getStorefrontNav, getStoreProduct, listStoreCategories, listStoreProducts } from "@/lib/storefront-api";
+import {
+  getStorefrontNav,
+  getStoreProduct,
+  getStoreProductsByIds,
+  listStoreCategories,
+  listStoreProducts,
+  type ApiProduct,
+} from "@/lib/storefront-api";
 import { categoryLabel } from "@/lib/storefront-shared";
 import { ensureCategoryDescription, getCachedCategoryDescription } from "@/lib/category-content";
 import { listPublishedPosts, getPublishedPost } from "@/lib/blog-api";
@@ -72,13 +79,32 @@ export async function StorefrontHome({
     }),
   );
 
+  // "products" sections (e.g. "Best sellers") only store ids — resolved to
+  // live product data here, the same way categoryBands already are, so the
+  // homepage never ships a section a merchant curated but can't actually see.
+  const productSections = (store.plan.sections ?? []).filter((s) => s.type === "products");
+  const productsBySection: Record<string, ApiProduct[]> = {};
+  if (productSections.length) {
+    await Promise.all(
+      productSections.map(async (s) => {
+        productsBySection[s.id] = await getStoreProductsByIds(storeId, s.productIds ?? []);
+      }),
+    );
+  }
+
   const origin = await requestOrigin();
 
   return (
     <>
       <JsonLdScript data={organizationJsonLd({ name: store.name, origin, logoUrl: store.logoUrl })} />
       <JsonLdScript data={websiteJsonLd({ name: store.name, origin })} />
-      <StorefrontView store={store} navLinks={navLinks} categoryBands={categoryBands} basePath={basePath} />
+      <StorefrontView
+        store={store}
+        navLinks={navLinks}
+        categoryBands={categoryBands}
+        productsBySection={productsBySection}
+        basePath={basePath}
+      />
     </>
   );
 }

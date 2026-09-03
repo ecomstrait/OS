@@ -24,6 +24,9 @@ export type ProductInput = {
   seo_title?: string;
   seo_description?: string;
   images?: string[];
+  sizes?: string;
+  material?: string;
+  fit_note?: string;
 };
 
 function num(v?: string): number | null {
@@ -46,6 +49,9 @@ function toRow(input: ProductInput) {
     seo_title: input.seo_title?.trim() || null,
     seo_description: input.seo_description?.trim() || null,
     images: input.images ?? [],
+    sizes: input.sizes?.trim() || null,
+    material: input.material?.trim() || null,
+    fit_note: input.fit_note?.trim() || null,
   };
 }
 

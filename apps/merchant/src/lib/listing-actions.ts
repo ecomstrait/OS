@@ -160,6 +160,50 @@ export async function updateListingPrice(
   return {};
 }
 
+const SHIPPING_NOTE_MAX = 140;
+
+/**
+ * Set the merchant's own one-line shipping/returns note for a listing.
+ *
+ * Store-specific by design (a merchant may run different shipping/returns
+ * terms per store even for the same supplier product), so it lives on
+ * `store_products` rather than `products`. An empty string clears it.
+ */
+export async function updateListingShippingNote(
+  storeId: string,
+  productId: string,
+  note: string,
+): Promise<{ error?: string }> {
+  const trimmed = note.trim();
+  if (trimmed.length > SHIPPING_NOTE_MAX) {
+    return { error: `Keep it under ${SHIPPING_NOTE_MAX} characters.` };
+  }
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated." };
+
+  const { data: store } = await supabase
+    .from("stores")
+    .select("id")
+    .eq("id", storeId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!store) return { error: "Store not found." };
+
+  const { error } = await supabase
+    .from("store_products")
+    .update({ shipping_note: trimmed || null })
+    .eq("store_id", storeId)
+    .eq("product_id", productId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/inventory");
+  return {};
+}
+
 /** Remove a listing (or withdraw a pending request) from one of the merchant's stores. */
 export async function removeListing(
   storeId: string,

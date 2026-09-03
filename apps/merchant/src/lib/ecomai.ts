@@ -24,11 +24,14 @@ export type PlanMedia = {
  */
 export type PlanSection = {
   id: string;
-  type: "text" | "image" | "video" | "gallery" | "features";
+  type: "text" | "image" | "video" | "gallery" | "features" | "products";
   heading?: string;
   body?: string;
   media?: PlanMedia[];
   items?: { title: string; description: string }[];
+  /** `type: "products"` only — merchant-curated picks (e.g. "Best sellers"),
+   *  in display order. Resolved to live product data at render/sync time. */
+  productIds?: string[];
 };
 
 export type StorePlan = {

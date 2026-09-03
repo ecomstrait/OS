@@ -594,6 +594,10 @@ export function StoreBuilder({
       compareAtPrice: null,
       available: 99,
       inStock: true,
+      sizes: null,
+      material: null,
+      fitNote: null,
+      shippingNote: null,
     });
     return [...groups.entries()].map(([category, items]) => ({
       category,

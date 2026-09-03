@@ -101,7 +101,11 @@ export async function POST(req: Request) {
         if (created) {
           await admin
             .from("store_products")
-            .update({ shopify_product_id: created, shopify_synced_at: new Date().toISOString() })
+            .update({
+              shopify_product_id: created.id,
+              shopify_handle: created.handle,
+              shopify_synced_at: new Date().toISOString(),
+            })
             .eq("store_id", storeId)
             .eq("product_id", productId);
         }

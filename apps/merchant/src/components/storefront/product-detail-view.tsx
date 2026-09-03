@@ -77,6 +77,33 @@ export function ProductDetailView({
                 <p className="mt-6 max-w-md text-base leading-relaxed opacity-75">{product.description}</p>
               )}
 
+              {(product.sizes || product.material || product.fitNote) && (
+                <dl className="mt-6 max-w-md text-sm leading-relaxed">
+                  {product.sizes && (
+                    <div className="flex gap-2 py-1">
+                      <dt className="w-20 shrink-0 opacity-50">Sizes</dt>
+                      <dd className="opacity-80">{product.sizes}</dd>
+                    </div>
+                  )}
+                  {product.material && (
+                    <div className="flex gap-2 py-1">
+                      <dt className="w-20 shrink-0 opacity-50">Material</dt>
+                      <dd className="opacity-80">{product.material}</dd>
+                    </div>
+                  )}
+                  {product.fitNote && (
+                    <div className="flex gap-2 py-1">
+                      <dt className="w-20 shrink-0 opacity-50">Fit</dt>
+                      <dd className="opacity-80">{product.fitNote}</dd>
+                    </div>
+                  )}
+                </dl>
+              )}
+
+              {product.shippingNote && (
+                <p className="mt-4 max-w-md text-sm font-medium opacity-70">{product.shippingNote}</p>
+              )}
+
               <div className="mt-8 border-t pt-8" style={{ borderColor: line }}>
                 <AddToCart product={product} />
                 <div className="mt-6">

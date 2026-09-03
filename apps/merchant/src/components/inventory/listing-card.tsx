@@ -2,11 +2,13 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Clock, ImageOff, Loader2, Pencil, Store, Trash2, X, XCircle } from "lucide-react";
+import { Check, Clock, ImageOff, Loader2, Pencil, Store, Trash2, Truck, X, XCircle } from "lucide-react";
 import { cn } from "@ecomstrait/ui";
 import type { ListingStatus } from "@ecomstrait/db/types";
 import type { MerchantListing } from "@/lib/listings";
-import { removeListing, updateListingPrice } from "@/lib/listing-actions";
+import { removeListing, updateListingPrice, updateListingShippingNote } from "@/lib/listing-actions";
+
+const SHIPPING_NOTE_MAX = 140;
 
 const STATUS: Record<ListingStatus, { label: string; cls: string; icon: typeof Clock | null }> = {
   pending: { label: "Awaiting supplier", cls: "bg-amber-50 text-amber-700", icon: Clock },
@@ -21,6 +23,8 @@ export function ListingCard({ listing }: { listing: MerchantListing }) {
   const [error, setError] = useState<string | null>(null);
   const [editingPrice, setEditingPrice] = useState(false);
   const [priceInput, setPriceInput] = useState(listing.price != null ? String(listing.price) : "");
+  const [editingNote, setEditingNote] = useState(false);
+  const [noteInput, setNoteInput] = useState(listing.shippingNote ?? "");
 
   const state = STATUS[listing.status];
   const Icon = state.icon;
@@ -53,6 +57,23 @@ export function ListingCard({ listing }: { listing: MerchantListing }) {
         return;
       }
       setEditingPrice(false);
+      router.refresh();
+    });
+  }
+
+  function saveNote() {
+    if (noteInput.length > SHIPPING_NOTE_MAX) {
+      setError(`Keep it under ${SHIPPING_NOTE_MAX} characters.`);
+      return;
+    }
+    setError(null);
+    start(async () => {
+      const res = await updateListingShippingNote(listing.storeId, listing.productId, noteInput);
+      if (res.error) {
+        setError(res.error);
+        return;
+      }
+      setEditingNote(false);
       router.refresh();
     });
   }
@@ -148,6 +169,54 @@ export function ListingCard({ listing }: { listing: MerchantListing }) {
               {listing.price != null ? `$${listing.price}` : "—"}
             </span>
             <Pencil className="h-3 w-3 text-ink-300 opacity-0 transition group-hover:opacity-100" />
+          </button>
+        )}
+
+        {editingNote ? (
+          <div className="mt-1 flex items-center gap-1.5">
+            <input
+              type="text"
+              autoFocus
+              maxLength={SHIPPING_NOTE_MAX}
+              placeholder="Free shipping over $50, 30-day returns"
+              value={noteInput}
+              onChange={(e) => setNoteInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") saveNote();
+                if (e.key === "Escape") setEditingNote(false);
+              }}
+              className="h-8 min-w-0 flex-1 rounded-lg border border-ink-200 px-2 text-xs outline-none focus:border-brand-400"
+            />
+            <button
+              onClick={saveNote}
+              disabled={pending}
+              aria-label="Save shipping note"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-brand-500 text-white hover:bg-brand-600 disabled:opacity-50"
+            >
+              {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+            </button>
+            <button
+              onClick={() => {
+                setEditingNote(false);
+                setError(null);
+                setNoteInput(listing.shippingNote ?? "");
+              }}
+              aria-label="Cancel"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-ink-400 hover:bg-ink-100"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setEditingNote(true)}
+            className="group mt-1 inline-flex items-center gap-1.5 text-left"
+          >
+            <Truck className="h-3 w-3 shrink-0 text-ink-300" />
+            <span className="line-clamp-1 text-xs text-ink-500">
+              {listing.shippingNote || "Add shipping/returns note"}
+            </span>
+            <Pencil className="h-3 w-3 shrink-0 text-ink-300 opacity-0 transition group-hover:opacity-100" />
           </button>
         )}
 

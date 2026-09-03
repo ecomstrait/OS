@@ -58,7 +58,7 @@ function mediaInput(p: PushProduct) {
 const PRODUCT_CREATE = `
 mutation productCreate($product: ProductCreateInput!, $media: [CreateMediaInput!]) {
   productCreate(product: $product, media: $media) {
-    product { id variants(first: 1) { nodes { id } } }
+    product { id handle variants(first: 1) { nodes { id } } }
     userErrors { field message }
   }
 }`;
@@ -225,7 +225,7 @@ type GraphqlError = { message: string };
 type ProductCreateResp = {
   data?: {
     productCreate?: {
-      product?: { id: string; variants?: { nodes?: { id: string }[] } } | null;
+      product?: { id: string; handle?: string | null; variants?: { nodes?: { id: string }[] } } | null;
       userErrors?: { message: string }[];
     };
   };
@@ -365,12 +365,12 @@ export async function pushProductsToShopify(
   shop: string,
   token: string,
   products: PushProduct[],
-): Promise<{ created: number; errors: string[]; ids: Map<string, string> }> {
+): Promise<{ created: number; errors: string[]; ids: Map<string, { id: string; handle: string | null }> }> {
   const gql = shopifyGraphql(shop, token);
   let created = 0;
   const errors: string[] = [];
-  /** our product id (sent as the SKU) -> the Shopify product gid it became. */
-  const ids = new Map<string, string>();
+  /** our product id (sent as the SKU) -> the Shopify product gid/handle it became. */
+  const ids = new Map<string, { id: string; handle: string | null }>();
 
   // One lookup each for the whole batch. Null when the scope isn't granted.
   const locationId = await fetchPrimaryLocation(shop, token);
@@ -404,7 +404,7 @@ export async function pushProductsToShopify(
         continue;
       }
       created += 1;
-      if (p.sku) ids.set(p.sku, product.id);
+      if (p.sku) ids.set(p.sku, { id: product.id, handle: product.handle ?? null });
 
       // Without this the product exists in admin but never reaches the storefront.
       if (publicationId) {

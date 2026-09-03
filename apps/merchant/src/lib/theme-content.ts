@@ -17,6 +17,19 @@ import type { PlanSection, StorePlan } from "@/lib/ecomai";
 /** The one theme file the builder generates per store. */
 export const CUSTOM_CONTENT_FILE = "sections/custom-content.liquid";
 
+/**
+ * A `type: "products"` section's picks, resolved to what's needed to render
+ * a static card — title/image/price the same way the custom storefront shows
+ * them, plus a live Shopify product URL (relative, so it works under a
+ * custom domain too) once that product's handle has been captured by a sync.
+ */
+export type SectionProduct = {
+  title: string;
+  image: string | null;
+  price: number | null;
+  url: string | null;
+};
+
 /** Liquid delimiters in merchant copy would execute; HTML entities would not. */
 function esc(s: string): string {
   return s
@@ -33,15 +46,39 @@ function heading(section: PlanSection): string {
   return h ? `    <h2 class="es-block__heading">${esc(h)}</h2>\n` : "";
 }
 
-function renderSection(section: PlanSection): string {
+function renderSection(section: PlanSection, products: SectionProduct[] = []): string {
   const body = section.body?.trim();
   const media = section.media ?? [];
   const items = section.items ?? [];
-  if (!section.heading?.trim() && !body && !media.length && !items.length) return "";
+  // A "products" section with nothing resolved skips entirely, heading
+  // included — same reasoning as the custom storefront's StoreSections.
+  if (section.type === "products") {
+    if (!products.length) return "";
+  } else if (!section.heading?.trim() && !body && !media.length && !items.length) {
+    return "";
+  }
 
   let inner = "";
 
   switch (section.type) {
+    case "products":
+      inner =
+        `    <div class="es-grid es-grid--3">\n` +
+        products
+          .map((p) => {
+            const img = p.image
+              ? `<img class="es-media es-media--square" src="${esc(p.image)}" alt="${esc(p.title)}" loading="lazy" width="600" height="600">\n        `
+              : "";
+            const price = p.price != null ? `<p class="muted">$${esc(String(p.price))}</p>` : "";
+            const inner2 = `${img}<p class="es-block__body">${esc(p.title)}</p>\n        ${price}`;
+            return p.url
+              ? `      <a href="${esc(p.url)}">\n        ${inner2}\n      </a>`
+              : `      <div>\n        ${inner2}\n      </div>`;
+          })
+          .join("\n") +
+        `\n    </div>\n`;
+      break;
+
     case "features":
       if (items.length) {
         inner =
@@ -120,8 +157,14 @@ const BANNER = `{% comment %}
  * package's placeholder only on the way in would leave stale markup on a live
  * theme, since the re-sync overwrites this file rather than diffing it.
  */
-export function customContentSection(plan: Pick<StorePlan, "sections"> | null): string {
-  const rendered = (plan?.sections ?? []).map(renderSection).filter(Boolean).join("\n");
+export function customContentSection(
+  plan: Pick<StorePlan, "sections"> | null,
+  productsBySection: Record<string, SectionProduct[]> = {},
+): string {
+  const rendered = (plan?.sections ?? [])
+    .map((s) => renderSection(s, productsBySection[s.id]))
+    .filter(Boolean)
+    .join("\n");
   return `${BANNER}\n\n${rendered}${SCHEMA}`;
 }
 
@@ -132,6 +175,7 @@ export function customContentSection(plan: Pick<StorePlan, "sections"> | null): 
 export function themeFilesWithContent(
   files: Record<string, string>,
   plan: Pick<StorePlan, "sections"> | null,
+  productsBySection: Record<string, SectionProduct[]> = {},
 ): Record<string, string> {
-  return { ...files, [CUSTOM_CONTENT_FILE]: customContentSection(plan) };
+  return { ...files, [CUSTOM_CONTENT_FILE]: customContentSection(plan, productsBySection) };
 }

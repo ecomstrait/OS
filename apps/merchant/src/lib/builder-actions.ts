@@ -23,6 +23,7 @@ import {
 import { normalizePlan } from "@/lib/store-plan";
 import { purgeStoreMedia } from "@/lib/draft-sweep";
 import { listStorePages } from "@/lib/pages-api";
+import { listStoreProducts } from "@/lib/storefront-api";
 
 export type PreviewProduct = {
   id: string;
@@ -389,6 +390,39 @@ export async function listStoreVersions(storeId: string): Promise<StoreVersion[]
     .limit(VERSION_LIMIT);
 
   return (data ?? []).map((v) => ({ id: v.id, label: v.label, createdAt: v.created_at }));
+}
+
+/**
+ * The store's own approved+published products, for the content editor's
+ * "Best sellers" product picker. Scoped to the caller's own store — a
+ * merchant can only curate a section from products actually listed on it.
+ */
+export async function searchStoreProductsForPicker(
+  storeId: string,
+  q = "",
+): Promise<PreviewProduct[]> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data: store } = await supabase
+    .from("stores")
+    .select("id")
+    .eq("id", storeId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!store) return [];
+
+  const { products } = await listStoreProducts(storeId, { q, limit: 40 });
+  return products.map((p) => ({
+    id: p.id,
+    title: p.title,
+    price: p.price,
+    image: p.image,
+    category: p.category,
+  }));
 }
 
 /**

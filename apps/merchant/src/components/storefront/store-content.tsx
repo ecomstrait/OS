@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ShieldCheck, PackageCheck, BadgeCheck } from "lucide-react";
+import Link from "next/link";
+import { ShieldCheck, PackageCheck, BadgeCheck, ImageOff, Plus } from "lucide-react";
 import type { PlanMedia, StorePlan } from "@/lib/ecomai";
+import type { ApiProduct } from "@/lib/storefront-api";
+import { useStorefrontCartContext } from "@/components/storefront/storefront-chrome";
 
 /**
  * The parts of a storefront that render the merchant's own content.
@@ -157,7 +160,19 @@ export function AboutBlock({ plan }: { plan: StorePlan }) {
  * is free-form JSON and a block half-filled in the editor shouldn't leave a
  * hole on a live storefront.
  */
-export function StoreSections({ plan }: { plan: StorePlan }) {
+export function StoreSections({
+  plan,
+  productsBySection,
+  basePath = "",
+  surface = "color-mix(in srgb, var(--ink) 4%, var(--bg))",
+}: {
+  plan: StorePlan;
+  /** `type: "products"` sections resolved to live product data, keyed by
+   *  section id — see StorefrontHome, which fetches this server-side. */
+  productsBySection?: Record<string, ApiProduct[]>;
+  basePath?: string;
+  surface?: string;
+}) {
   const sections = plan.sections ?? [];
   if (!sections.length) return null;
 
@@ -168,7 +183,13 @@ export function StoreSections({ plan }: { plan: StorePlan }) {
         const body = s.body?.trim();
         const media = s.media ?? [];
         const items = s.items ?? [];
-        if (!heading && !body && !media.length && !items.length) return null;
+        const products = s.type === "products" ? (productsBySection?.[s.id] ?? []) : [];
+        // A "products" section with nothing resolved (no picks yet, or every
+        // pick got delisted) skips entirely — a heading over an empty grid
+        // reads as broken, not as "coming soon".
+        if (s.type === "products" ? !products.length : !heading && !body && !media.length && !items.length) {
+          return null;
+        }
 
         return (
           <section key={s.id}>
@@ -181,7 +202,9 @@ export function StoreSections({ plan }: { plan: StorePlan }) {
               </h2>
             )}
 
-            {s.type === "features" ? (
+            {s.type === "products" ? (
+              <ProductGrid products={products} basePath={basePath} surface={surface} />
+            ) : s.type === "features" ? (
               <div className="grid gap-8 sm:grid-cols-3">
                 {items.map((it, i) => (
                   <div key={i} className="text-center">
@@ -256,6 +279,89 @@ const TRUST_ITEMS = [
   { icon: PackageCheck, label: "Real-time stock", detail: "What you see is what ships" },
   { icon: BadgeCheck, label: "Vetted suppliers", detail: "Every product is supplier-verified" },
 ] as const;
+
+/** Price, with a struck-through "compare at" when this listing is a real markdown. */
+export function PriceTag({ product, className = "" }: { product: ApiProduct; className?: string }) {
+  return (
+    <p className={`flex items-baseline gap-2 font-semibold ${className}`}>
+      <span>{product.price != null ? `$${product.price}` : "—"}</span>
+      {product.compareAtPrice != null && (
+        <span className="text-sm font-normal opacity-45 line-through">${product.compareAtPrice}</span>
+      )}
+    </p>
+  );
+}
+
+export function ProductGrid({
+  products,
+  basePath,
+  surface,
+}: {
+  products: ApiProduct[];
+  basePath: string;
+  surface: string;
+}) {
+  const { add, busy } = useStorefrontCartContext();
+
+  if (!products.length) {
+    return <p className="py-10 text-center text-sm opacity-50">No products here yet.</p>;
+  }
+
+  return (
+    <div className="grid gap-x-6 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
+      {products.map((p) => (
+        <div key={p.id} className="group flex flex-col">
+          <Link href={`${basePath}/products/${p.id}`} className="block">
+            <div className="relative aspect-[4/5] shrink-0 overflow-hidden" style={{ background: surface, borderRadius: "var(--radius)" }}>
+              {p.image ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={p.image}
+                  alt={p.title}
+                  className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
+                />
+              ) : (
+                <div className="grid h-full w-full place-items-center opacity-30">
+                  <ImageOff className="h-8 w-8" />
+                </div>
+              )}
+              <div className="absolute left-3 top-3 flex flex-col gap-1.5">
+                {!p.inStock && (
+                  <span
+                    className="px-2.5 py-1 text-[10px] font-semibold uppercase"
+                    style={{ background: "var(--bg)", color: "var(--ink)", letterSpacing: "0.08em", borderRadius: "var(--radius)" }}
+                  >
+                    Sold out
+                  </span>
+                )}
+                {p.compareAtPrice != null && (
+                  <span
+                    className="px-2.5 py-1 text-[10px] font-semibold uppercase text-white"
+                    style={{ background: "var(--brand)", letterSpacing: "0.08em", borderRadius: "var(--radius)" }}
+                  >
+                    Sale
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-1 flex-col gap-2 pt-4">
+              <p className="line-clamp-2 text-sm font-medium">{p.title}</p>
+              <PriceTag product={p} className="text-sm" />
+            </div>
+          </Link>
+          <button
+            onClick={() => add(p.id, 1)}
+            disabled={busy || !p.inStock}
+            className="mt-3 inline-flex h-10 items-center justify-center gap-1.5 text-xs font-semibold uppercase text-white transition hover:opacity-85 disabled:opacity-40"
+            style={{ background: "var(--brand)", borderRadius: "var(--radius)", letterSpacing: "0.08em" }}
+          >
+            <Plus className="h-3.5 w-3.5" /> {p.inStock ? "Add to cart" : "Sold out"}
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function TrustBadges({ compact = false }: { compact?: boolean }) {
   return (

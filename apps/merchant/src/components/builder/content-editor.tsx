@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronUp, ImagePlus, Plus, Trash2, X } from "lucide-react";
+import { ChevronDown, ChevronUp, ImageOff, ImagePlus, Plus, Trash2, X } from "lucide-react";
 import { MediaPicker } from "@/components/builder/media-picker";
+import { ProductPicker } from "@/components/builder/product-picker";
+import type { PreviewProduct } from "@/lib/builder-actions";
 import type { PlanMedia, PlanSection, StorePlan } from "@/lib/ecomai";
 
 /**
@@ -20,6 +22,7 @@ const SECTION_LABELS: Record<PlanSection["type"], string> = {
   video: "Video",
   gallery: "Gallery",
   features: "Feature list",
+  products: "Best sellers",
 };
 
 /** Section types that use the `media` array, and how many entries make sense. */
@@ -126,6 +129,14 @@ export function ContentEditor({
   const [picking, setPicking] = useState<
     { slot: "hero" } | { slot: "about" } | { slot: "section"; index: number } | null
   >(null);
+  /** Index of the "products" section currently being edited, or null when
+   *  the product picker is closed. Separate from `picking` — a different
+   *  modal, picking many ids rather than filling one media slot. */
+  const [pickingProducts, setPickingProducts] = useState<number | null>(null);
+  /** Best-effort id → product cache, filled as the picker fetches results, so
+   *  a section can show real titles/thumbnails for its picks without a
+   *  separate fetch of its own. */
+  const [productCache, setProductCache] = useState<Record<string, PreviewProduct>>({});
 
   const sections = plan.sections ?? [];
 
@@ -149,10 +160,16 @@ export function ContentEditor({
         // serialises identically twice — the save path diffs on JSON.
         id: `s${sections.length + 1}-${type}`,
         type,
-        heading: "",
+        heading: type === "products" ? "Best sellers" : "",
         ...(type === "features" ? { items: [{ title: "", description: "" }] } : {}),
+        ...(type === "products" ? { productIds: [] } : {}),
       },
     ]);
+  }
+
+  function cacheProducts(products: PreviewProduct[]) {
+    if (!products.length) return;
+    setProductCache((c) => ({ ...c, ...Object.fromEntries(products.map((p) => [p.id, p])) }));
   }
 
   function move(index: number, by: -1 | 1) {
@@ -424,6 +441,58 @@ export function ContentEditor({
                   </button>
                 </div>
               )}
+
+              {section.type === "products" && (
+                <div>
+                  <span className="mb-1 block text-xs font-semibold text-ink-600">
+                    Products <span className="font-normal text-ink-400">(shown in this order)</span>
+                  </span>
+                  <div className="flex flex-wrap gap-2">
+                    {(section.productIds ?? []).map((id) => {
+                      const p = productCache[id];
+                      return (
+                        <div
+                          key={id}
+                          className="flex items-center gap-2 rounded-lg border border-ink-200 py-1 pl-1 pr-2"
+                        >
+                          <div className="h-8 w-8 shrink-0 overflow-hidden rounded bg-ink-50">
+                            {p?.image ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={p.image} alt="" className="h-full w-full object-cover" />
+                            ) : (
+                              <div className="grid h-full w-full place-items-center text-ink-300">
+                                <ImageOff className="h-3 w-3" />
+                              </div>
+                            )}
+                          </div>
+                          <span className="max-w-[8rem] truncate text-xs text-ink-700">
+                            {p?.title ?? "Product"}
+                          </span>
+                          <button
+                            type="button"
+                            aria-label="Remove product"
+                            onClick={() =>
+                              updateSection(i, {
+                                productIds: (section.productIds ?? []).filter((x) => x !== id),
+                              })
+                            }
+                            className="text-ink-400 hover:text-red-600"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => setPickingProducts(i)}
+                      className="inline-flex h-10 items-center gap-1 rounded-lg border border-dashed border-ink-300 px-3 text-xs font-semibold text-ink-500 hover:border-brand-400 hover:text-brand-600"
+                    >
+                      <Plus className="h-3.5 w-3.5" /> Add products
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         ))}
@@ -445,6 +514,17 @@ export function ContentEditor({
         kind={pickerKind as "image" | "video" | undefined}
         onClose={() => setPicking(null)}
         onPick={pickedMedia}
+      />
+
+      <ProductPicker
+        storeId={storeId}
+        open={pickingProducts !== null}
+        selectedIds={pickingProducts != null ? (sections[pickingProducts]?.productIds ?? []) : []}
+        onClose={() => setPickingProducts(null)}
+        onChange={(ids) => {
+          if (pickingProducts != null) updateSection(pickingProducts, { productIds: ids });
+        }}
+        onResults={cacheProducts}
       />
     </div>
   );

@@ -71,6 +71,8 @@ export type MerchantListing = {
   storeName: string;
   status: ListingStatus;
   declineReason: string | null;
+  /** Merchant-set, per store — see updateListingShippingNote. */
+  shippingNote: string | null;
 };
 
 /**
@@ -97,7 +99,7 @@ export async function getMerchantListings(storeId?: string): Promise<MerchantLis
 
   const { data: rows } = await supabase
     .from("store_products")
-    .select("store_id, product_id, price, status, decline_reason, created_at")
+    .select("store_id, product_id, price, status, decline_reason, shipping_note, created_at")
     .in(
       "store_id",
       mine.map((s) => s.id),
@@ -140,6 +142,7 @@ export async function getMerchantListings(storeId?: string): Promise<MerchantLis
         storeName: storeNames.get(r.store_id) ?? "Untitled store",
         status: r.status,
         declineReason: r.decline_reason,
+        shippingNote: r.shipping_note,
       },
     ];
   });

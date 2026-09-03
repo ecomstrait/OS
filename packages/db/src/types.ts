@@ -180,6 +180,12 @@ export type Database = {
           status: ProductStatus;
           seo_title: string | null;
           seo_description: string | null;
+          /** Human-readable size list, e.g. "6, 7, 8, 9, 10" — informational
+           *  display only, not wired into `variants`/checkout. */
+          sizes: string | null;
+          material: string | null;
+          /** Short fit guidance, e.g. "Runs true to size". */
+          fit_note: string | null;
           variants: ProductVariant[];
           created_at: string;
           updated_at: string;
@@ -465,6 +471,12 @@ export type Database = {
           decline_reason: string | null;
           shopify_product_id: string | null;
           shopify_synced_at: string | null;
+          /** Merchant-set, per store — varies store to store, unlike the
+           *  supplier-owned product content. */
+          shipping_note: string | null;
+          /** Captured alongside shopify_product_id at sync time; lets a
+           *  generated theme link back to the product's live page. */
+          shopify_handle: string | null;
           created_at: string;
         };
         Insert: {

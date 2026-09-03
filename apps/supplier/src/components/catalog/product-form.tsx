@@ -21,6 +21,9 @@ export type ProductFormValues = {
   seo_title: string;
   seo_description: string;
   images: string[];
+  sizes: string;
+  material: string;
+  fit_note: string;
 };
 
 const EMPTY: ProductFormValues = {
@@ -36,6 +39,9 @@ const EMPTY: ProductFormValues = {
   seo_title: "",
   seo_description: "",
   images: [],
+  sizes: "",
+  material: "",
+  fit_note: "",
 };
 
 const BUCKET = "product-images";
@@ -258,6 +264,35 @@ export function ProductForm({
           <div className="grid gap-4">
             <TextField id="category" label="Category" value={form.category} onChange={(e) => set("category", e.target.value)} />
             <TextField id="sku" label="SKU" value={form.sku} onChange={(e) => set("sku", e.target.value)} />
+          </div>
+        </Card>
+
+        <Card title="Sizing & fit">
+          <div className="grid gap-4">
+            <div>
+              <TextField
+                id="sizes"
+                label="Sizes"
+                placeholder="6, 7, 8, 9, 10"
+                value={form.sizes}
+                onChange={(e) => set("sizes", e.target.value)}
+              />
+              <p className="mt-1 text-xs text-ink-400">Shown on the product page as-is.</p>
+            </div>
+            <TextField
+              id="material"
+              label="Material"
+              placeholder="Genuine leather, canvas upper"
+              value={form.material}
+              onChange={(e) => set("material", e.target.value)}
+            />
+            <TextField
+              id="fit_note"
+              label="Fit note"
+              placeholder="Runs true to size"
+              value={form.fit_note}
+              onChange={(e) => set("fit_note", e.target.value)}
+            />
           </div>
         </Card>
 

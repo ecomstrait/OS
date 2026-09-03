@@ -27,11 +27,61 @@ import {
   themeFilesWithContent,
   customContentSection,
   CUSTOM_CONTENT_FILE,
+  type SectionProduct,
 } from "@/lib/theme-content";
 import { normalizePlan } from "@/lib/store-plan";
+import type { StorePlan } from "@/lib/ecomai";
+import { getStoreProductsByIds } from "@/lib/storefront-api";
 import { liquidThemeForStyle } from "@/lib/themes";
 
 type AdminClient = NonNullable<ReturnType<typeof createAdminClient>>;
+
+/**
+ * Resolve every `type: "products"` section's picks (e.g. "Best sellers")
+ * into what `theme-content.ts` needs to render them — the same title/image/
+ * price the custom storefront shows, plus each product's Shopify handle
+ * (captured onto `store_products` at push time, see pushProductsToShopify)
+ * so the generated card can link to the live product.
+ *
+ * Static markup rather than a native Shopify collection + featured-collection
+ * section on purpose: it reuses the sync path every other content block
+ * already goes through, with no new Shopify API surface (collectionCreate
+ * etc.) and no settings_data.json shape to get right for a statically-
+ * included section.
+ */
+async function resolveSectionProducts(
+  admin: AdminClient,
+  storeId: string,
+  plan: Pick<StorePlan, "sections">,
+): Promise<Record<string, SectionProduct[]>> {
+  const productSections = (plan.sections ?? []).filter((s) => s.type === "products");
+  if (!productSections.length) return {};
+
+  const allIds = [...new Set(productSections.flatMap((s) => s.productIds ?? []))];
+  if (!allIds.length) return {};
+
+  const [products, { data: rows }] = await Promise.all([
+    getStoreProductsByIds(storeId, allIds),
+    admin
+      .from("store_products")
+      .select("product_id, shopify_handle")
+      .eq("store_id", storeId)
+      .in("product_id", allIds),
+  ]);
+  const byId = new Map(products.map((p) => [p.id, p]));
+  const handleById = new Map((rows ?? []).map((r) => [r.product_id, r.shopify_handle]));
+
+  const out: Record<string, SectionProduct[]> = {};
+  for (const s of productSections) {
+    out[s.id] = (s.productIds ?? []).flatMap((id) => {
+      const p = byId.get(id);
+      if (!p) return [];
+      const handle = handleById.get(id);
+      return [{ title: p.title, image: p.image, price: p.price, url: handle ? `/products/${handle}` : null }];
+    });
+  }
+  return out;
+}
 
 /**
  * Take a genuinely free, working store from the pool.
@@ -194,10 +244,14 @@ export async function provisionShopifyStore(storeId: string): Promise<{ error?: 
     return { error: `Couldn't reach Shopify: ${e instanceof Error ? e.message : "unknown error"}` };
   }
 
-  for (const [ourId, shopifyId] of result.ids) {
+  for (const [ourId, shopifyProduct] of result.ids) {
     await admin
       .from("store_products")
-      .update({ shopify_product_id: shopifyId, shopify_synced_at: new Date().toISOString() })
+      .update({
+        shopify_product_id: shopifyProduct.id,
+        shopify_handle: shopifyProduct.handle,
+        shopify_synced_at: new Date().toISOString(),
+      })
       .eq("store_id", storeId)
       .eq("product_id", ourId);
   }
@@ -223,13 +277,16 @@ export async function provisionShopifyStore(storeId: string): Promise<{ error?: 
     // now reads media and section blocks out of it that a bare cast wouldn't
     // guarantee are well formed.
     const plan = normalizePlan(store.content, store.name ?? undefined);
+    // Picks for any "Best sellers"-style section — resolved before upload so
+    // it ships in the same package as everything else, not a second sync.
+    const productsBySection = await resolveSectionProducts(admin, storeId, plan);
     let themeRes: Awaited<ReturnType<typeof uploadAndPublishTheme>>;
     try {
       themeRes = await uploadAndPublishTheme(shopRow.shop_domain, shopRow.access_token, {
         themeName: liquid.name,
         // The merchant's content blocks are rendered into the package here —
         // they can't be theme settings, because Liquid can't read a JSON array.
-        files: themeFilesWithContent(liquid.files, plan),
+        files: themeFilesWithContent(liquid.files, plan, productsBySection),
         settings: settingsFromPlan(plan, store.name, store.theme, store.id),
         logo: logoAssetFrom(store.logo_url),
       });
@@ -318,6 +375,7 @@ export async function resyncShopifyTheme(storeId: string): Promise<{ error?: str
   }
 
   const plan = normalizePlan(store.content, store.name ?? undefined);
+  const productsBySection = await resolveSectionProducts(admin, storeId, plan);
 
   const res = await pushThemeSettings(
     shopRow.shop_domain,
@@ -326,7 +384,7 @@ export async function resyncShopifyTheme(storeId: string): Promise<{ error?: str
     settingsFromPlan(plan, store.name, store.theme, store.id),
     {
       logo: logoAssetFrom(store.logo_url),
-      files: { [CUSTOM_CONTENT_FILE]: customContentSection(plan) },
+      files: { [CUSTOM_CONTENT_FILE]: customContentSection(plan, productsBySection) },
     },
   );
   if (!res.ok) return { error: res.error };
@@ -498,10 +556,14 @@ export async function syncProductsToShopify(
   );
 
   // Record which Shopify product each listing became.
-  for (const [ourId, shopifyId] of result.ids) {
+  for (const [ourId, shopifyProduct] of result.ids) {
     await admin
       .from("store_products")
-      .update({ shopify_product_id: shopifyId, shopify_synced_at: new Date().toISOString() })
+      .update({
+        shopify_product_id: shopifyProduct.id,
+        shopify_handle: shopifyProduct.handle,
+        shopify_synced_at: new Date().toISOString(),
+      })
       .eq("store_id", storeId)
       .eq("product_id", ourId);
   }
