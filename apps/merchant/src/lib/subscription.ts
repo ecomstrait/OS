@@ -1,5 +1,5 @@
 import { createClient } from "@ecomstrait/auth/server";
-import { createAdminClient, PROMO_USER_LIMIT } from "@ecomstrait/db";
+import { createAdminClient } from "@ecomstrait/db";
 import type { PlanTier, Subscription, SubscriptionStatus } from "@ecomstrait/db";
 import { getStripe, planForPrice, mapStripeStatus, periodEndIso } from "@/lib/stripe";
 
@@ -11,12 +11,14 @@ type SubInsert = {
   promo_eligible: boolean;
 };
 
-const TRIAL_DAYS = 30;
-
 /**
- * Ensure the current user has a subscription row. First-100 merchants get FULL
- * free for a month (trialing, no card); everyone else starts on Free. All
- * subscription writes go through the service role — users can only read theirs.
+ * Ensure the current user has a subscription row. Every new signup starts on
+ * Free — the first-100-merchants "free FULL month" promo has been retired, so
+ * this no longer auto-enrolls anyone into a trialing Full plan. (Existing
+ * promo rows created before this change keep working as-is via
+ * `effectivePlan`/`inPromoTrial` below; they just aren't handed out anymore.)
+ * All subscription writes go through the service role — users can only read
+ * theirs.
  */
 export async function ensureSubscription(): Promise<Subscription | null> {
   const supabase = await createClient();
@@ -39,21 +41,7 @@ export async function ensureSubscription(): Promise<Subscription | null> {
     .maybeSingle();
   if (existing) return existing;
 
-  // Promo: first PROMO_USER_LIMIT subscribers get the free FULL month.
-  const { count } = await admin
-    .from("subscriptions")
-    .select("user_id", { count: "exact", head: true });
-  const promo = (count ?? 0) < PROMO_USER_LIMIT;
-
-  const row: SubInsert = promo
-    ? {
-        user_id: user.id,
-        plan: "full",
-        status: "trialing",
-        trial_ends_at: new Date(Date.now() + TRIAL_DAYS * 86_400_000).toISOString(),
-        promo_eligible: true,
-      }
-    : { user_id: user.id, plan: "free", status: "active", promo_eligible: false };
+  const row: SubInsert = { user_id: user.id, plan: "free", status: "active", promo_eligible: false };
 
   const { data } = await admin.from("subscriptions").insert(row).select("*").single();
   return data ?? null;

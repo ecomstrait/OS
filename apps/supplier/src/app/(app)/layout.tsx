@@ -20,7 +20,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   );
 
   return (
-    <AppChrome email={user.email ?? ""} role={profile?.role ?? "supplier"} notifications={notifications}>
+    <AppChrome
+      email={user.email ?? ""}
+      role={profile?.role ?? "supplier"}
+      fullName={profile?.full_name}
+      avatarUrl={profile?.avatar_url}
+      notifications={notifications}
+    >
       {children}
     </AppChrome>
   );

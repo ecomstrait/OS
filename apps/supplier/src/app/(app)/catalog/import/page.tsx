@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { ArrowLeft } from "lucide-react";
 import { createClient } from "@ecomstrait/auth/server";
 import { getMySupplier } from "@/lib/supplier-context";
+import { getEntitlements } from "@/lib/entitlements";
 import { CsvImport } from "@/components/catalog/csv-import";
 
 export const metadata: Metadata = { title: "Import products" };
@@ -18,6 +19,8 @@ export default async function ImportPage() {
   const supplier = await getMySupplier();
   if (supplier?.status !== "approved") redirect("/catalog");
 
+  const entitlements = await getEntitlements();
+
   return (
     <div className="mx-auto max-w-3xl">
       <Link href="/catalog" className="inline-flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-800">
@@ -28,7 +31,7 @@ export default async function ImportPage() {
         Upload a CSV, map the columns, and bulk-create products as drafts.
       </p>
       <div className="mt-6">
-        <CsvImport />
+        <CsvImport canAddProduct={entitlements.canAddProduct} />
       </div>
     </div>
   );

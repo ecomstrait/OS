@@ -81,11 +81,15 @@ function Brand() {
 export function AppChrome({
   email,
   role,
+  fullName,
+  avatarUrl,
   notifications = [],
   children,
 }: {
   email: string;
   role: string;
+  fullName?: string | null;
+  avatarUrl?: string | null;
   notifications?: Notification[];
   children: React.ReactNode;
 }) {
@@ -183,12 +187,17 @@ export function AppChrome({
                 }}
                 className="flex items-center gap-2 rounded-lg py-1.5 pl-2 pr-1.5 text-left hover:bg-ink-100"
               >
-                <span className="grid h-8 w-8 place-items-center rounded-full bg-brand-500 text-sm font-bold text-white">
-                  {email[0]?.toUpperCase()}
+                <span className="grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full bg-brand-500 text-sm font-bold text-white">
+                  {avatarUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    (fullName || email)[0]?.toUpperCase()
+                  )}
                 </span>
                 <span className="hidden sm:block">
                   <span className="block max-w-[10rem] truncate text-sm font-medium text-ink-900">
-                    {email}
+                    {fullName || email}
                   </span>
                   <span className="block text-xs capitalize text-ink-400">{role}</span>
                 </span>

@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { ArrowLeft } from "lucide-react";
 import { createClient } from "@ecomstrait/auth/server";
 import { getMySupplier } from "@/lib/supplier-context";
+import { getEntitlements } from "@/lib/entitlements";
 import { ProductForm } from "@/components/catalog/product-form";
 
 export const metadata: Metadata = { title: "New product" };
@@ -18,6 +19,8 @@ export default async function NewProductPage() {
   const supplier = await getMySupplier();
   if (supplier?.status !== "approved") redirect("/catalog");
 
+  const entitlements = await getEntitlements();
+
   return (
     <div className="mx-auto max-w-4xl">
       <Link href="/catalog" className="inline-flex items-center gap-1.5 text-sm text-ink-500 hover:text-ink-800">
@@ -25,7 +28,7 @@ export default async function NewProductPage() {
       </Link>
       <h1 className="mt-3 text-2xl font-bold text-ink-950">New product</h1>
       <div className="mt-6">
-        <ProductForm userId={user.id} />
+        <ProductForm userId={user.id} canAddProduct={entitlements.canAddProduct} />
       </div>
     </div>
   );

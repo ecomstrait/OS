@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import { createClient } from "@ecomstrait/auth/server";
+import { getProfile } from "@ecomstrait/auth/session";
 import type { StoreType } from "@ecomstrait/db";
 import { domainTarget } from "@/lib/domain";
 import { DomainCard } from "@/components/settings/domain-card";
+import { ProfileCard } from "@/components/settings/profile-card";
 
 export const metadata: Metadata = { title: "Settings" };
 
@@ -20,6 +22,7 @@ export default async function SettingsPage() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  const profile = await getProfile();
 
   const { data: stores } = await supabase
     .from("stores")
@@ -32,11 +35,19 @@ export default async function SettingsPage() {
       <h1 className="text-2xl font-bold text-ink-950">Settings</h1>
       <p className="mt-1 text-sm text-ink-500">Your account and store domains.</p>
 
-      <section className="mt-6 rounded-2xl border border-ink-100 bg-white p-5">
+      <div className="mt-6">
+        <ProfileCard
+          userId={user?.id ?? ""}
+          email={user?.email ?? ""}
+          initialFullName={profile?.full_name ?? (user?.user_metadata?.full_name as string) ?? ""}
+          initialAvatarUrl={profile?.avatar_url ?? null}
+        />
+      </div>
+
+      <section className="mt-4 rounded-2xl border border-ink-100 bg-white p-5">
         <h2 className="text-sm font-semibold text-ink-950">Account</h2>
         <dl className="mt-2">
           <Row label="Email" value={user?.email ?? ""} />
-          <Row label="Name" value={(user?.user_metadata?.full_name as string) ?? ""} />
         </dl>
       </section>
 

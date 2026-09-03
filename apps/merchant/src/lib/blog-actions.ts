@@ -160,13 +160,16 @@ export async function createPost(storeId: string, title: string): Promise<{ post
 }
 
 /** An AI-drafted post from a topic — the merchant still reviews and edits before publishing. */
-export async function generatePostDraft(storeId: string, topic: string): Promise<{ post?: Post; error?: string }> {
+export async function generatePostDraft(
+  storeId: string,
+  topic: string,
+): Promise<{ post?: Post; error?: string; upgrade?: boolean }> {
   const s = await ownStore(storeId);
   if (!s.ok) return { error: s.error };
   if (topic.trim().length < 2) return { error: "Tell me what the post should be about." };
 
   const budget = await assertTokenBudget(900);
-  if (!budget.ok) return { error: budget.error };
+  if (!budget.ok) return { error: budget.error, upgrade: true };
 
   const { draft, tokensUsed } = await generateBlogDraft(topic, s.store.name ?? "the store");
   await recordTokenUsage(tokensUsed);

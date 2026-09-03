@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { Loader2 } from "lucide-react";
 import { createClient } from "@ecomstrait/auth/client";
 import { Button, TextField, PasswordField } from "@/components/ui";
@@ -52,6 +53,9 @@ export function LoginForm() {
         value={password}
         onChange={(e) => setPassword(e.target.value)}
       />
+      <Link href="/forgot-password" className="-mt-2 self-end text-xs font-semibold text-brand-600 hover:underline">
+        Forgot password?
+      </Link>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <Button type="submit" disabled={status === "loading"}>
         {status === "loading" ? <Loader2 className="h-4 w-4 animate-spin" /> : "Log in"}

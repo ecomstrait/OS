@@ -68,12 +68,14 @@ export async function getEntitlements(): Promise<Entitlements> {
 /** Gate an AI action: fail if today's budget can't cover `estimated` tokens. */
 export async function assertTokenBudget(
   estimated = 1,
-): Promise<{ ok: true; remaining: number } | { ok: false; error: string }> {
+): Promise<{ ok: true; remaining: number } | { ok: false; error: string; upgrade: true }> {
   const e = await getEntitlements();
   if (e.tokensRemaining <= 0 || e.tokensRemaining < estimated) {
     return {
       ok: false,
       error: `Daily AI limit reached (${e.tokensPerDay.toLocaleString()} tokens/day on ${PLAN_ENTITLEMENTS[e.plan].label}). Upgrade for more.`,
+      // Callers surface this as an Upgrade popup instead of a plain error.
+      upgrade: true,
     };
   }
   return { ok: true, remaining: e.tokensRemaining };
@@ -102,12 +104,15 @@ export async function recordTokenUsage(tokens: number): Promise<void> {
 }
 
 /** Gate store creation against the plan's store limit. */
-export async function assertCanCreateStore(): Promise<{ ok: true } | { ok: false; error: string }> {
+export async function assertCanCreateStore(): Promise<
+  { ok: true } | { ok: false; error: string; upgrade: true }
+> {
   const e = await getEntitlements();
   if (!e.canCreateStore) {
     return {
       ok: false,
       error: `You've reached your plan's store limit (${e.storeLimit}). Upgrade to add more.`,
+      upgrade: true,
     };
   }
   return { ok: true };

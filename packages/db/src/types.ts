@@ -74,11 +74,12 @@ export type Database = {
           user_id: string;
           role: UserRole;
           full_name: string | null;
+          avatar_url: string | null;
           created_at: string;
           updated_at: string;
         };
-        Insert: { user_id: string; role?: UserRole; full_name?: string | null };
-        Update: { role?: UserRole; full_name?: string | null };
+        Insert: { user_id: string; role?: UserRole; full_name?: string | null; avatar_url?: string | null };
+        Update: { role?: UserRole; full_name?: string | null; avatar_url?: string | null };
         Relationships: [];
       };
       suppliers: {

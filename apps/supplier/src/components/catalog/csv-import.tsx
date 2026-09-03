@@ -6,8 +6,9 @@ import { Check, Loader2, Upload } from "lucide-react";
 import { Button } from "@/components/ui";
 import { parseCsv, autoMap, IMPORT_FIELDS } from "@/lib/csv";
 import { bulkImportProducts, type ProductInput } from "@/lib/product-actions";
+import { UpgradeModal } from "@/components/billing/upgrade-modal";
 
-export function CsvImport() {
+export function CsvImport({ canAddProduct = true }: { canAddProduct?: boolean }) {
   const router = useRouter();
   const [headers, setHeaders] = useState<string[]>([]);
   const [rows, setRows] = useState<string[][]>([]);
@@ -15,6 +16,7 @@ export function CsvImport() {
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [upgradeMsg, setUpgradeMsg] = useState<string | null>(null);
 
   async function onFile(file: File) {
     setError(null);
@@ -52,12 +54,17 @@ export function CsvImport() {
   }
 
   async function doImport() {
+    if (!canAddProduct) {
+      setUpgradeMsg("You've reached your plan's catalog limit. Upgrade to add more products.");
+      return;
+    }
     setImporting(true);
     setError(null);
     const res = await bulkImportProducts(buildRows());
     setImporting(false);
     if (res.error) {
-      setError(res.error);
+      if (res.upgrade) setUpgradeMsg(res.error);
+      else setError(res.error);
       return;
     }
     setResult(`Imported ${res.imported} product${res.imported === 1 ? "" : "s"}.`);
@@ -169,6 +176,7 @@ export function CsvImport() {
           </div>
         </>
       )}
+      {upgradeMsg && <UpgradeModal message={upgradeMsg} onClose={() => setUpgradeMsg(null)} />}
     </div>
   );
 }

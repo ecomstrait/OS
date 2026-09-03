@@ -9,13 +9,13 @@ import { assertTokenBudget, recordTokenUsage } from "@/lib/entitlements";
 export async function askCoFounderAction(
   history: CoFounderTurn[],
   message: string,
-): Promise<{ reply: string } | { error: string }> {
+): Promise<{ reply: string } | { error: string; upgrade?: boolean }> {
   const ctx = await requireApprovedSupplier();
   if ("error" in ctx) return ctx;
   if (!message.trim()) return { error: "Say something first." };
 
   const budget = await assertTokenBudget(700);
-  if (!budget.ok) return { error: budget.error };
+  if (!budget.ok) return { error: budget.error, upgrade: true };
 
   // Full row (not just business_name): getSupplierAnalytics needs it for the
   // quality-score/profile-completeness factors.

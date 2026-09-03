@@ -5,6 +5,7 @@ import { Send, Loader2, Sparkles } from "lucide-react";
 import { askCoFounderAction } from "@/lib/cofounder-actions";
 import type { CoFounderTurn } from "@/lib/cofounder-ai";
 import { ChatMarkdown } from "@/components/cofounder/chat-markdown";
+import { UpgradeModal } from "@/components/billing/upgrade-modal";
 
 type Message = CoFounderTurn;
 
@@ -12,6 +13,7 @@ export function CoFounderChat({ businessName }: { businessName: string | null })
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [upgradeMsg, setUpgradeMsg] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -30,7 +32,8 @@ export function CoFounderChat({ businessName }: { businessName: string | null })
     start(async () => {
       const res = await askCoFounderAction(messages, text);
       if ("error" in res) {
-        setError(res.error);
+        if (res.upgrade) setUpgradeMsg(res.error);
+        else setError(res.error);
         return;
       }
       setMessages((m) => [...m, { role: "assistant", content: res.reply }]);
@@ -94,6 +97,7 @@ export function CoFounderChat({ businessName }: { businessName: string | null })
           <Send className="h-4 w-4" />
         </button>
       </form>
+      {upgradeMsg && <UpgradeModal message={upgradeMsg} onClose={() => setUpgradeMsg(null)} />}
     </div>
   );
 }

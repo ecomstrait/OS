@@ -5,6 +5,7 @@ import { getProfile } from "@ecomstrait/auth/session";
 import { createClient } from "@ecomstrait/auth/server";
 import { getMySupplier } from "@/lib/supplier-context";
 import { TeamManager } from "@/components/settings/team-manager";
+import { ProfileCard } from "@/components/settings/profile-card";
 
 export const metadata: Metadata = { title: "Settings" };
 
@@ -43,11 +44,19 @@ export default async function SettingsPage() {
       <h1 className="text-2xl font-bold text-ink-950">Settings</h1>
       <p className="mt-1 text-sm text-ink-500">Your account, business details, and team.</p>
 
-      <section className="mt-6 rounded-2xl border border-ink-100 bg-white p-5">
+      <div className="mt-6">
+        <ProfileCard
+          userId={user?.id ?? ""}
+          email={user?.email ?? ""}
+          initialFullName={profile?.full_name ?? (user?.user_metadata?.full_name as string) ?? ""}
+          initialAvatarUrl={profile?.avatar_url ?? null}
+        />
+      </div>
+
+      <section className="mt-4 rounded-2xl border border-ink-100 bg-white p-5">
         <h2 className="text-sm font-semibold text-ink-950">Account</h2>
         <dl className="mt-2">
           <Row label="Email" value={user?.email ?? ""} />
-          <Row label="Name" value={(user?.user_metadata?.full_name as string) ?? ""} />
           <Row label="Role" value={(profile?.role ?? "supplier").replace("_", " ")} />
           {my && !my.isOwner && <Row label="Access" value="Staff member" />}
         </dl>

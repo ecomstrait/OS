@@ -7,6 +7,7 @@ import { cn } from "@ecomstrait/ui";
 import type { ProductStatus } from "@ecomstrait/db/types";
 import { Button, TextField } from "@/components/ui";
 import { createProduct, updateProduct, enrichProductAction } from "@/lib/product-actions";
+import { UpgradeModal } from "@/components/billing/upgrade-modal";
 
 export type ProductFormValues = {
   title: string;
@@ -50,16 +51,20 @@ export function ProductForm({
   userId,
   productId,
   initial,
+  canAddProduct = true,
 }: {
   userId: string;
   productId?: string;
   initial?: Partial<ProductFormValues>;
+  /** Omitted (and defaulted true) on the edit form — the catalog limit only gates adding a new product. */
+  canAddProduct?: boolean;
 }) {
   const [form, setForm] = useState<ProductFormValues>({ ...EMPTY, ...initial });
   const [saving, setSaving] = useState(false);
   const [enriching, setEnriching] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [upgradeMsg, setUpgradeMsg] = useState<string | null>(null);
 
   const supabase = createClient();
   const publicUrl = (path: string) =>
@@ -83,7 +88,8 @@ export function ProductForm({
         wholesalePrice: form.wholesale_price ? Number(form.wholesale_price) : undefined,
       });
       if ("error" in r) {
-        setError(r.error);
+        if (r.upgrade) setUpgradeMsg(r.error);
+        else setError(r.error);
         return;
       }
       // Explicit action → regenerate and replace the AI-authored fields.
@@ -128,6 +134,13 @@ export function ProductForm({
       setError("A title is required.");
       return;
     }
+    // Checked client-side first (canAddProduct is passed in from the server)
+    // so hitting the catalog limit shows the Upgrade popup right away —
+    // createProduct() below still enforces the same limit server-side.
+    if (!productId && !canAddProduct) {
+      setUpgradeMsg("You've reached your plan's catalog limit. Upgrade to add more products.");
+      return;
+    }
     setSaving(true);
     setError(null);
     const payload = { ...form };
@@ -136,7 +149,8 @@ export function ProductForm({
       : await createProduct(payload);
     // Success redirects; only errors return.
     if (res && "error" in res) {
-      setError(res.error);
+      if (res.upgrade) setUpgradeMsg(res.error);
+      else setError(res.error);
       setSaving(false);
     }
   }
@@ -302,6 +316,7 @@ export function ProductForm({
           {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : productId ? "Save changes" : "Create product"}
         </Button>
       </div>
+      {upgradeMsg && <UpgradeModal message={upgradeMsg} onClose={() => setUpgradeMsg(null)} />}
     </form>
   );
 }

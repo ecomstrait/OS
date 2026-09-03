@@ -58,7 +58,7 @@ async function detectStoreTarget(
 export async function askCoFounderAction(
   history: CoFounderTurn[],
   message: string,
-): Promise<{ reply: string } | { error: string }> {
+): Promise<{ reply: string } | { error: string; upgrade?: boolean }> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -68,7 +68,7 @@ export async function askCoFounderAction(
   if (!text) return { error: "Say something first." };
 
   const budget = await assertTokenBudget(700);
-  if (!budget.ok) return { error: budget.error };
+  if (!budget.ok) return { error: budget.error, upgrade: true };
 
   const [{ data: profile }, { data: storeRows }, entitlements] = await Promise.all([
     supabase.from("profiles").select("full_name").eq("user_id", user.id).maybeSingle(),

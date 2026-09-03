@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Loader2, Plus, Sparkles, Trash2, ExternalLink } from "lucide-react";
 import { cn } from "@ecomstrait/ui";
 import { createPost, generatePostDraft, deletePost, setPostStatus, type Post } from "@/lib/blog-actions";
+import { UpgradeModal } from "@/components/billing/upgrade-modal";
 
 const STATUS_STYLE: Record<Post["status"], string> = {
   draft: "bg-ink-100 text-ink-500",
@@ -31,6 +32,7 @@ export function BlogManager({
   const [title, setTitle] = useState("");
   const [topic, setTopic] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [upgradeMsg, setUpgradeMsg] = useState<string | null>(null);
   const [creating, startCreating] = useTransition();
   const [drafting, startDrafting] = useTransition();
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -54,7 +56,8 @@ export function BlogManager({
     startDrafting(async () => {
       const res = await generatePostDraft(storeId, topic);
       if (res.error) {
-        setError(res.error);
+        if (res.upgrade) setUpgradeMsg(res.error);
+        else setError(res.error);
         return;
       }
       if (res.post) router.push(`/stores/${storeId}/blog/${res.post.id}`);
@@ -184,6 +187,7 @@ export function BlogManager({
           ))}
         </div>
       )}
+      {upgradeMsg && <UpgradeModal message={upgradeMsg} onClose={() => setUpgradeMsg(null)} />}
     </div>
   );
 }

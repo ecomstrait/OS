@@ -55,7 +55,9 @@ function toRow(input: ProductInput) {
   };
 }
 
-export async function createProduct(input: ProductInput): Promise<{ error: string } | never> {
+export async function createProduct(
+  input: ProductInput,
+): Promise<{ error: string; upgrade?: boolean } | never> {
   const ctx = await requireApprovedSupplier();
   if ("error" in ctx) return ctx;
   const limit = await assertCanAddProduct();
@@ -71,7 +73,7 @@ export async function createProduct(input: ProductInput): Promise<{ error: strin
 export async function updateProduct(
   id: string,
   input: ProductInput,
-): Promise<{ error: string } | never> {
+): Promise<{ error: string; upgrade?: boolean } | never> {
   const ctx = await requireApprovedSupplier();
   if ("error" in ctx) return ctx;
 
@@ -201,13 +203,13 @@ export async function bulkDeleteProducts(ids: string[]): Promise<BulkResult> {
 
 export async function bulkImportProducts(
   rows: ProductInput[],
-): Promise<{ imported: number; error?: string }> {
+): Promise<{ imported: number; error?: string; upgrade?: boolean }> {
   const ctx = await requireApprovedSupplier();
   if ("error" in ctx) return { imported: 0, error: ctx.error };
   const clean = rows.filter((r) => r.title?.trim());
   if (!clean.length) return { imported: 0, error: "No valid rows found." };
   const limit = await assertCanAddProduct(clean.length);
-  if (!limit.ok) return { imported: 0, error: limit.error };
+  if (!limit.ok) return { imported: 0, error: limit.error, upgrade: true };
   const { error, count } = await ctx.supabase
     .from("products")
     .insert(clean.map((r) => ({ supplier_id: ctx.supplierId, ...toRow(r) })), { count: "exact" });
@@ -216,9 +218,11 @@ export async function bulkImportProducts(
   return { imported: count ?? clean.length };
 }
 
-export async function enrichProductAction(input: EnrichInput): Promise<Enrichment | { error: string }> {
+export async function enrichProductAction(
+  input: EnrichInput,
+): Promise<Enrichment | { error: string; upgrade?: boolean }> {
   const budget = await assertTokenBudget(500);
-  if (!budget.ok) return { error: budget.error };
+  if (!budget.ok) return { error: budget.error, upgrade: true };
   const result = await enrichProduct(input);
   await recordTokenUsage(result.tokensUsed);
   return result;

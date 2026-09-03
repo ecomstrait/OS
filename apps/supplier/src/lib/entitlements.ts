@@ -60,12 +60,14 @@ export async function getEntitlements(): Promise<SupplierEntitlements> {
 /** Gate an AI action: fail if today's budget can't cover `estimated` tokens. */
 export async function assertTokenBudget(
   estimated = 1,
-): Promise<{ ok: true; remaining: number } | { ok: false; error: string }> {
+): Promise<{ ok: true; remaining: number } | { ok: false; error: string; upgrade: true }> {
   const e = await getEntitlements();
   if (e.tokensRemaining <= 0 || e.tokensRemaining < estimated) {
     return {
       ok: false,
       error: `Daily AI limit reached (${e.tokensPerDay.toLocaleString()} tokens/day on ${SUPPLIER_PLAN_ENTITLEMENTS[e.plan].label}). Upgrade for more.`,
+      // Callers surface this as an Upgrade popup instead of a plain error.
+      upgrade: true,
     };
   }
   return { ok: true, remaining: e.tokensRemaining };
@@ -93,12 +95,13 @@ export async function recordTokenUsage(tokens: number): Promise<void> {
 /** Gate adding N more products against the plan's catalog limit. */
 export async function assertCanAddProduct(
   count = 1,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true } | { ok: false; error: string; upgrade: true }> {
   const e = await getEntitlements();
   if (e.productLimit !== null && e.productsUsed + count > e.productLimit) {
     return {
       ok: false,
       error: `You've reached your plan's catalog limit (${e.productLimit} products). Upgrade to add more.`,
+      upgrade: true,
     };
   }
   return { ok: true };

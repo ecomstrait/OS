@@ -37,6 +37,7 @@ import type { Storefront } from "@/lib/storefront";
 import type { ApiProduct, StorefrontNavLink } from "@/lib/storefront-api";
 import { categoryLabel, UNCATEGORIZED } from "@/lib/storefront-shared";
 import { BUILDER_PREVIEW_READY, BUILDER_PREVIEW_DATA } from "@/lib/builder-preview-protocol";
+import { UpgradeModal } from "@/components/billing/upgrade-modal";
 
 /**
  * An already-launched store, opened in the same workbench used to build it.
@@ -223,6 +224,7 @@ export function StoreBuilder({
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [upgradeMsg, setUpgradeMsg] = useState<string | null>(null);
 
   /**
    * The unlaunched store row backing this build.
@@ -285,7 +287,8 @@ export function StoreBuilder({
       if (cancelled) return;
       setBusy(false);
       if ("error" in res) {
-        pushAi(res.error);
+        if (res.upgrade) setUpgradeMsg(res.error);
+        else pushAi(res.error);
         return;
       }
       setHistory([{ role: "assistant", content: res.reply }]);
@@ -322,7 +325,8 @@ export function StoreBuilder({
     );
     setBusy(false);
     if (res.error) {
-      pushAi(res.error);
+      if (res.upgrade) setUpgradeMsg(res.error);
+      else pushAi(res.error);
       return;
     }
     const p = res.plan!;
@@ -369,11 +373,12 @@ export function StoreBuilder({
     if (stage === "asking") {
       setBusy(true);
       const nextHistory: BuilderTurn[] = [...history, { role: "user", content: text }];
-      const res: (ConverseResult & { productSuggestions?: ProductSuggestion[] }) | { error: string } =
+      const res: (ConverseResult & { productSuggestions?: ProductSuggestion[] }) | { error: string; upgrade?: boolean } =
         await converseBuilderTurn(nextHistory, knownContext);
       setBusy(false);
       if ("error" in res) {
-        pushAi(res.error);
+        if (res.upgrade) setUpgradeMsg(res.error);
+        else pushAi(res.error);
         return;
       }
       setHistory([...nextHistory, { role: "assistant", content: res.reply }]);
@@ -394,7 +399,8 @@ export function StoreBuilder({
       const res = await editStore(existing.id, text);
       setBusy(false);
       if (res.error) {
-        pushAi(`⚠️ ${res.error}`);
+        if (res.upgrade) setUpgradeMsg(res.error);
+        else pushAi(`⚠️ ${res.error}`);
         return;
       }
       if (res.plan) setPlan(res.plan);
@@ -406,7 +412,8 @@ export function StoreBuilder({
     const res = await refineStore(plan, text, draftId);
     setBusy(false);
     if (res.error) {
-      pushAi(res.error);
+      if (res.upgrade) setUpgradeMsg(res.error);
+      else pushAi(res.error);
       return;
     }
     // EcomAI answers questions as well as making changes, so only repaint the
@@ -535,6 +542,14 @@ export function StoreBuilder({
 
   async function create() {
     if (!plan) return;
+    // Checked client-side first (canCreateStore is passed in from the server)
+    // so hitting the limit shows the Upgrade popup immediately instead of a
+    // disabled button with no explanation — createStore() below still
+    // enforces the same limit server-side as a backstop.
+    if (!canCreateStore) {
+      setUpgradeMsg("You've reached your plan's store limit. Upgrade to launch more stores.");
+      return;
+    }
     setSaving(true);
     setError(null);
     const res = await createStore({
@@ -549,7 +564,8 @@ export function StoreBuilder({
       products: products.map((p) => ({ id: p.id, price: p.price })),
     });
     if (res && "error" in res && res.error) {
-      setError(res.error);
+      if (res.upgrade) setUpgradeMsg(res.error);
+      else setError(res.error);
       setSaving(false);
     } else {
       router.refresh();
@@ -1024,7 +1040,7 @@ export function StoreBuilder({
                     <span className="hidden sm:inline">Discard</span>
                   </button>
                 )}
-                <button onClick={create} disabled={!plan || saving || !canCreateStore} className="inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-lg bg-brand-500 px-4 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:opacity-50">
+                <button onClick={create} disabled={!plan || saving} className="inline-flex h-9 shrink-0 items-center gap-2 whitespace-nowrap rounded-lg bg-brand-500 px-4 text-sm font-semibold text-white transition hover:bg-brand-600 disabled:opacity-50">
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><ShoppingBag className="h-4 w-4" /> <span className="whitespace-nowrap">Launch my store</span></>}
                 </button>
               </div>
@@ -1039,6 +1055,7 @@ export function StoreBuilder({
           {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
         </div>
       </div>
+      {upgradeMsg && <UpgradeModal message={upgradeMsg} onClose={() => setUpgradeMsg(null)} />}
     </div>
   );
 }

@@ -38,6 +38,8 @@ export type BuildResult = {
   products?: PreviewProduct[];
   theme?: string;
   error?: string;
+  /** True when `error` means "out of AI tokens" — show the Upgrade popup, not just the text. */
+  upgrade?: boolean;
 };
 
 // A direct re-export-from, not `export type { BuilderTurn, ConverseResult };`
@@ -81,10 +83,13 @@ const SHOW_PRODUCTS_PATTERN =
 export async function converseBuilderTurn(
   history: BuilderTurn[],
   context: BuilderKnownContext,
-): Promise<(ConverseResult & { productSuggestions?: ProductSuggestion[] }) | { error: string }> {
+): Promise<
+  | (ConverseResult & { productSuggestions?: ProductSuggestion[] })
+  | { error: string; upgrade?: boolean }
+> {
   try {
     const budget = await assertTokenBudget(500);
-    if (!budget.ok) return { error: budget.error };
+    if (!budget.ok) return { error: budget.error, upgrade: true };
 
     const lastUser = [...history].reverse().find((h) => h.role === "user")?.content.trim() ?? "";
     const nicheStillUnknown = !context.inferredNiche && history.filter((h) => h.role === "user").length <= 1;
@@ -160,7 +165,7 @@ export async function finalizeBuilderConversation(
 ): Promise<BuildResult> {
   try {
     const budget = await assertTokenBudget(1500);
-    if (!budget.ok) return { error: budget.error };
+    if (!budget.ok) return { error: budget.error, upgrade: true };
 
     const chosen = opts.useSelected ? await getSelectedProducts() : [];
     if (!opts.useSelected && answers.niche.trim().length < 2) {
@@ -281,10 +286,11 @@ export async function refineStore(
   reply?: string;
   changed?: string[];
   error?: string;
+  upgrade?: boolean;
   productSuggestions?: ProductSuggestion[];
 }> {
   const budget = await assertTokenBudget(500);
-  if (!budget.ok) return { error: budget.error };
+  if (!budget.ok) return { error: budget.error, upgrade: true };
 
   const existingPages = draftId ? await listStorePages(draftId) : [];
   const res = await applyMerchantRequest(plan, instruction, existingPages);
@@ -491,6 +497,8 @@ export type EditResult = {
   synced?: "live" | "shopify" | "draft";
   note?: string;
   error?: string;
+  /** True when `error` means "out of AI tokens" — show the Upgrade popup, not just the text. */
+  upgrade?: boolean;
   productSuggestions?: ProductSuggestion[];
 };
 
@@ -517,7 +525,7 @@ export async function editStore(storeId: string, instruction: string): Promise<E
   if (!store) return { error: "Store not found." };
 
   const budget = await assertTokenBudget(500);
-  if (!budget.ok) return { error: budget.error };
+  if (!budget.ok) return { error: budget.error, upgrade: true };
 
   const current = normalizePlan(store.content);
   const existingPages = await listStorePages(storeId);
@@ -858,9 +866,9 @@ export async function createStore(input: {
   logoUrl?: string | null;
   plan: StorePlan;
   products: { id: string; price: number | null }[];
-}): Promise<{ error?: string } | never> {
+}): Promise<{ error?: string; upgrade?: boolean } | never> {
   const gate = await assertCanCreateStore();
-  if (!gate.ok) return { error: gate.error };
+  if (!gate.ok) return { error: gate.error, upgrade: true };
 
   const supabase = await createClient();
   const {

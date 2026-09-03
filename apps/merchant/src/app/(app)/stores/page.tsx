@@ -32,7 +32,7 @@ export default async function StoresPage() {
   } = await supabase.auth.getUser();
   const { data: stores } = await supabase
     .from("stores")
-    .select("id, name, type, status, theme, live_url, shopify_store_id, created_at, launched_at, updated_at")
+    .select("id, name, type, status, theme, logo_url, live_url, shopify_store_id, created_at, launched_at, updated_at")
     .eq("user_id", user!.id)
     .order("created_at", { ascending: false });
 
@@ -114,9 +114,18 @@ export default async function StoresPage() {
                 return (
                   <div key={s.id} className="flex items-center justify-between gap-4 border-b border-ink-50 px-4 py-4 last:border-0">
                     <div className="flex items-center gap-3">
-                      <span className="grid h-10 w-10 place-items-center rounded-lg bg-ink-100 text-ink-400">
-                        <Sparkles className="h-5 w-5" />
-                      </span>
+                      {s.logo_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={s.logo_url}
+                          alt=""
+                          className="h-10 w-10 shrink-0 rounded-lg object-cover"
+                        />
+                      ) : (
+                        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-ink-100 text-ink-400">
+                          <Sparkles className="h-5 w-5" />
+                        </span>
+                      )}
                       <div>
                         <p className="font-medium text-ink-900">{s.name ?? "Untitled store"}</p>
                         <p className="text-xs text-ink-400">
@@ -143,9 +152,18 @@ export default async function StoresPage() {
               return (
               <div key={s.id} className="flex items-center justify-between gap-4 border-b border-ink-50 px-4 py-4 last:border-0">
                 <div className="flex items-center gap-3">
-                  <span className="grid h-10 w-10 place-items-center rounded-lg bg-ink-100 text-ink-500">
-                    {s.type === "own_platform" ? <Globe className="h-5 w-5" /> : <Store className="h-5 w-5" />}
-                  </span>
+                  {s.logo_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={s.logo_url}
+                      alt=""
+                      className="h-10 w-10 shrink-0 rounded-lg object-cover"
+                    />
+                  ) : (
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-ink-100 text-ink-500">
+                      {s.type === "own_platform" ? <Globe className="h-5 w-5" /> : <Store className="h-5 w-5" />}
+                    </span>
+                  )}
                   <div>
                     <p className="font-medium text-ink-900">{s.name}</p>
                     <p className="text-xs text-ink-400">{TYPE_LABEL[s.type]}{s.theme ? ` · ${s.theme}` : ""}</p>

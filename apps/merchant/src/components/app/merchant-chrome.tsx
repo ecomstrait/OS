@@ -77,9 +77,13 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 
 export function MerchantChrome({
   email,
+  fullName,
+  avatarUrl,
   children,
 }: {
   email: string;
+  fullName?: string | null;
+  avatarUrl?: string | null;
   children: React.ReactNode;
 }) {
   const [drawer, setDrawer] = useState(false);
@@ -119,11 +123,17 @@ export function MerchantChrome({
               onClick={() => setMenu((m) => !m)}
               className="flex items-center gap-2 rounded-lg py-1.5 pl-2 pr-1.5 text-left hover:bg-ink-100"
             >
-              <span className="grid h-8 w-8 place-items-center rounded-full bg-brand-500 text-sm font-bold text-white">
-                {email[0]?.toUpperCase()}
+              <span className="grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full bg-brand-500 text-sm font-bold text-white">
+                {avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  (fullName || email)[0]?.toUpperCase()
+                )}
               </span>
-              <span className="hidden max-w-[12rem] truncate text-sm font-medium text-ink-900 sm:block">
-                {email}
+              <span className="hidden max-w-[12rem] flex-col text-left sm:flex">
+                <span className="truncate text-sm font-medium text-ink-900">{fullName || email}</span>
+                {fullName && <span className="truncate text-xs text-ink-400">{email}</span>}
               </span>
               <ChevronDown className="h-4 w-4 text-ink-400" />
             </button>
