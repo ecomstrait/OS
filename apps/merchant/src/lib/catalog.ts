@@ -228,3 +228,61 @@ export async function getSelectedProducts(): Promise<CatalogProduct[]> {
   const { data } = await admin.from("products").select(SELECT).in("id", ids);
   return withSupplierNames(admin, data ?? []);
 }
+
+export type PlatformTopSeller = CatalogProduct & { unitsSold: number };
+
+/**
+ * Best-selling published products across the WHOLE platform — every
+ * merchant, every supplier — ranked by real units sold. Never one
+ * merchant's own numbers, only the aggregate: this is what makes it useful
+ * to a store with no sales history of its own (a pre-launch build has
+ * none), and it's the signal behind both the Product Suggestion agent and
+ * the "products similar stores sell well" line in the co-founder snapshot.
+ *
+ * Two plain queries rather than one join-with-a-filter-on-the-related-table
+ * — same shape as the supplier orders list's "pull sort keys, then hydrate"
+ * pattern (apps/supplier's `orders/page.tsx`), avoiding Supabase's fiddlier
+ * embedded-resource filter syntax for something this occasional.
+ */
+export async function getPlatformTopSellers(
+  opts: { category?: string; limit?: number } = {},
+): Promise<PlatformTopSeller[]> {
+  const admin = createAdminClient();
+  if (!admin) return [];
+  const limit = opts.limit ?? 8;
+
+  const { data: cancelled } = await admin.from("orders").select("id").eq("status", "cancelled");
+  const cancelledIds = new Set((cancelled ?? []).map((o) => o.id));
+
+  // Bounded scan, not a full aggregate query — fine at today's order volume;
+  // revisit with a real SQL aggregate (or a materialized view) if this ever
+  // shows up as slow.
+  const { data: items } = await admin
+    .from("order_items")
+    .select("order_id, product_id, quantity")
+    .not("product_id", "is", null)
+    .limit(20000);
+
+  const unitsByProduct = new Map<string, number>();
+  for (const it of items ?? []) {
+    if (!it.product_id || cancelledIds.has(it.order_id)) continue;
+    unitsByProduct.set(it.product_id, (unitsByProduct.get(it.product_id) ?? 0) + it.quantity);
+  }
+  if (!unitsByProduct.size) return [];
+
+  // Headroom before the published/category filter below trims some out.
+  const topIds = [...unitsByProduct.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit * 4)
+    .map(([id]) => id);
+
+  let productsQuery = admin.from("products").select(SELECT).eq("status", "published").in("id", topIds);
+  if (opts.category) productsQuery = productsQuery.eq("category", opts.category);
+  const { data: rows } = await productsQuery;
+
+  const withNames = await withSupplierNames(admin, (rows ?? []) as RawProduct[]);
+  return withNames
+    .map((p) => ({ ...p, unitsSold: unitsByProduct.get(p.id) ?? 0 }))
+    .sort((a, b) => b.unitsSold - a.unitsSold)
+    .slice(0, limit);
+}

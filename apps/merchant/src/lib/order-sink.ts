@@ -3,6 +3,7 @@ import type { OrderPaymentType } from "@ecomstrait/db";
 import { propagateStockAfterSale } from "@/lib/product-propagation";
 import { debitWallet, recordPayable, platformFee } from "@ecomstrait/db/wallet";
 import { sendEmail } from "@/lib/notify";
+import { recordSyntheticSignals } from "@/lib/synthetic-signals";
 
 type Admin = NonNullable<ReturnType<typeof createAdminClient>>;
 
@@ -96,6 +97,20 @@ export async function recordCustomerOrder(
     })
     .select("id")
     .single();
+
+  // Best-effort, placeholder-for-now signals (Docs/prompts — see
+  // synthetic-signals.ts) so the co-founder has customer/traffic data to
+  // reason over even though no real tracking exists yet. Never blocks or
+  // fails the real order above.
+  if (storeOrder) {
+    await recordSyntheticSignals(admin, {
+      storeId: opts.storeId,
+      orderId: storeOrder.id,
+      subtotal,
+      customerName: opts.customerName,
+      customerEmail: opts.customerEmail,
+    });
+  }
 
   const { data: store } = await admin
     .from("stores")

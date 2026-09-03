@@ -29,6 +29,7 @@ export {
   resolveApproval,
   recordUsage,
   assertCostBudget,
+  getOrComputeSnapshot,
   type Approval,
   type ApprovalStatus,
 } from "./guardrails";

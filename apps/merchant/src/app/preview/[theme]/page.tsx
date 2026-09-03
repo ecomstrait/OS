@@ -107,13 +107,19 @@ export default async function ThemePreviewPage({
         }}
         navLinks={[
           // Same categories as DEMO_BANDS — not a second hardcoded list.
-          ...DEMO_BANDS.map((b) => ({ label: b.category, href: "#" })),
-          { label: "Shop all", href: "#" },
-          { label: "Sale", href: "#" },
-          { label: "About", href: "#" },
+          // Distinct hrefs, not all "#": StorefrontChrome keys each link
+          // (header nav, mobile drawer, footer nav) by `href` — every link
+          // sharing the literal string "#" made React see duplicate keys in
+          // all three lists at once (confirmed via console: "Encountered two
+          // children with the same key, `#`").
+          ...DEMO_BANDS.map((b) => ({ label: b.category, href: `#${b.category}` })),
+          { label: "Shop all", href: "#shop-all" },
+          { label: "Sale", href: "#sale" },
+          { label: "About", href: "#about" },
         ]}
         categoryBands={DEMO_BANDS}
         basePath={`/store/preview-${theme}`}
+        previewMode
       />
     </div>
   );

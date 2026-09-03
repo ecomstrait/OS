@@ -299,6 +299,13 @@ export type MerchantReply = {
   /** Set only when the merchant asked for a whole page, not a field edit. */
   pageAction?: PageAction;
   /**
+   * Set only when the merchant asked what to sell — a category/niche hint
+   * for the caller's `suggestProductsForStore()` (this function has no DB
+   * access, so it can't rank products itself; see `builder-actions.ts`).
+   * `null`/omitted means use the store's own niche.
+   */
+  productCategory?: string | null;
+  /**
    * The model's own classification of the request — NOT the same thing as
    * `changed.length === 0`. An "edit"/"page" request that needed
    * clarification (or a "unsupported" one, which already has a correct,
@@ -309,7 +316,7 @@ export type MerchantReply = {
    * happily invent wrong instructions (like "go into Shopify Admin") for a
    * request this function already understands perfectly well.
    */
-  intent: "edit" | "page" | "question" | "unsupported";
+  intent: "edit" | "page" | "suggest_products" | "question" | "unsupported";
 };
 
 /** Human labels, so a fallback summary reads like a sentence. */
@@ -387,7 +394,7 @@ const MERCHANT_SYSTEM = [
   "You are EcomAI, an ecommerce co-founder helping a merchant with their store.",
   "",
   "Reply with JSON only, shaped exactly:",
-  '{ "intent": "edit" | "page" | "question" | "unsupported", "reply": "...", "changes": { }, "page": null | { "action": "create" | "update" | "delete", "slug": "...", "title": "...", "body": "..." } }',
+  '{ "intent": "edit" | "page" | "suggest_products" | "question" | "unsupported", "reply": "...", "changes": { }, "page": null | { "action": "create" | "update" | "delete", "slug": "...", "title": "...", "body": "..." }, "productCategory": null | "..." }',
   "",
   '"edit"        they asked you to change an existing field. Put ONLY the fields',
   "              you are changing in changes — omit every field you are leaving",
@@ -400,6 +407,16 @@ const MERCHANT_SYSTEM = [
   "              they want it to say — that is still intent \"edit\", not",
   '              "question": you already know how to make this change, you',
   "              just need one more detail before you can.",
+  "                SEO requests specifically (\"improve my SEO\", \"is my SEO",
+  "                good\", \"what keywords should I target\") are also \"edit\":",
+  "                you already see the current seoTitle/seoDescription/about",
+  "                below — actually look at them and call out concrete gaps in",
+  "                reply (missing or too-short meta description, a generic",
+  "                title, thin about text), not a vague \"looks fine\". Propose",
+  "                improved seoTitle/seoDescription in changes when you have",
+  "                enough context to write something real; ask what to focus",
+  "                on (a product line, a location, a differentiator) when you",
+  "                don't, rather than inventing generic keywords.",
   '"page"        they want to add, change, or remove a WHOLE PAGE — "add a',
   '              Contact Us page", "make a FAQ page", "remove the Shipping',
   '              page", "update the About page to mention our new hours".',
@@ -420,23 +437,35 @@ const MERCHANT_SYSTEM = [
   "                        actually have — if the merchant hasn't told you what",
   "                        a page should say, ask them instead of making it up.",
   "                        Omit for a delete.",
+  '"suggest_products" they want help deciding WHAT TO SELL — "what should I',
+  '              sell", "suggest some products", "what\'s selling well",',
+  '              "help me pick products for this store". This is a real,',
+  "              supported capability — never call it unsupported. changes",
+  '              and page must be empty/null. Set "productCategory" to a',
+  "              short category/niche hint if the conversation makes one",
+  "              clear (e.g. the store's own collections, or something they",
+  '              just said), otherwise null to use the store\'s own niche.',
+  "              reply is a short, one-line lead-in (\"Here's what's doing",
+  "              well right now:\") — the actual picks are rendered",
+  "              separately, don't list products yourself in reply.",
   '"question"    a genuine question that ISN\'T about editing this store\'s own',
   "              content — a how-to question, or something that needs looking",
   "              up (an order, a number, a policy). Answer it in reply. changes",
   '              and page must be empty/null. Never use "question" for a',
   "              request to change the store's own presentation — see \"edit\"",
   "              and \"page\" above, which cover that even when incomplete.",
-  '"unsupported" they want something genuinely outside this chat (adding',
-  "              products, uploading images, prices, shipping rates, payments,",
-  "              domains — anything that isn't a store-plan field or a page).",
-  "              Say so plainly and point them at the real dashboard section",
-  '              that handles it — never invent a section name. The only',
-  '              sections that exist are: "Find Suppliers" (browse products',
-  '              and add them to a store), "Selected Inventory" (products',
-  '              already chosen, before a store is built), "Stores",',
-  '              "Orders", "Sales", "Wallet", "Billing", and "Settings". There',
-  '              is no "Products" section and no "Navigation" section — a new',
-  "              product is added via Find Suppliers, not a product editor.",
+  '"unsupported" they want something genuinely outside this chat — adding a',
+  "              SPECIFIC product they already have in mind (not asking for",
+  '              suggestions — see "suggest_products" above), uploading',
+  "              images, prices, shipping rates, payments, domains — anything",
+  "              that isn't a store-plan field or a page. Say so plainly and",
+  "              point them at the real dashboard section that handles it —",
+  '              never invent a section name. The only sections that exist',
+  '              are: "Find Suppliers" (browse products and add them to a',
+  '              store), "Selected Inventory" (products already chosen,',
+  '              before a store is built), "Stores", "Orders", "Sales",',
+  '              "Wallet", "Billing", and "Settings". There is no "Products"',
+  '              section and no "Navigation" section.',
   "",
   "Fields allowed in changes:",
   "  storeName, tagline, heroHeadline, heroSub, about, seoTitle, seoDescription,",
@@ -517,13 +546,28 @@ export async function applyMerchantRequest(
       reply?: string;
       changes?: Record<string, unknown>;
       page?: { action?: string; slug?: string; title?: string; body?: string } | null;
+      productCategory?: string | null;
     };
 
     const intent =
-      parsed.intent === "question" || parsed.intent === "unsupported" || parsed.intent === "page"
+      parsed.intent === "question" ||
+      parsed.intent === "unsupported" ||
+      parsed.intent === "page" ||
+      parsed.intent === "suggest_products"
         ? parsed.intent
         : "edit";
     const modelReply = typeof parsed.reply === "string" ? parsed.reply.trim() : "";
+
+    if (intent === "suggest_products") {
+      return {
+        plan,
+        reply: modelReply || "Here's what's doing well right now:",
+        changed: [],
+        tokensUsed,
+        intent: "suggest_products",
+        productCategory: typeof parsed.productCategory === "string" ? parsed.productCategory.trim() : null,
+      };
+    }
 
     if (intent === "page") {
       const slug = typeof parsed.page?.slug === "string" ? parsed.page.slug.trim() : "";

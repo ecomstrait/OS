@@ -5,7 +5,8 @@ import { createClient } from "@ecomstrait/auth/server";
 import { createAdminClient, type StoreType, type StoreStatus } from "@ecomstrait/db";
 import { revalidatePath } from "next/cache";
 import { assertTokenBudget, recordTokenUsage, assertCanCreateStore } from "@/lib/entitlements";
-import { autoSelectProducts, getSelectedProducts, productImage } from "@/lib/catalog";
+import { autoSelectProducts, getSelectedProducts, getSelectedIds, productImage } from "@/lib/catalog";
+import { suggestProductsForStore, type ProductSuggestion } from "@/lib/product-suggestions";
 import { merchantUrl } from "@/lib/stripe";
 import { resyncShopifyTheme } from "@/lib/shopify-actions";
 import {
@@ -21,7 +22,6 @@ import {
 } from "@/lib/ecomai";
 import { normalizePlan } from "@/lib/store-plan";
 import { purgeStoreMedia } from "@/lib/draft-sweep";
-import { askBusinessAdvisor } from "@/lib/agents/business-advisor";
 import { listStorePages } from "@/lib/pages-api";
 
 export type PreviewProduct = {
@@ -46,6 +46,7 @@ export type BuildResult = {
 // type-only. That throws the moment this module loads, taking every action
 // in this file down with it — not a caught error, a load-time ReferenceError.
 export type { BuilderTurn, ConverseResult } from "@/lib/ecomai";
+export type { ProductSuggestion } from "@/lib/product-suggestions";
 
 /**
  * One turn of the builder conversation — the AI decides what to ask next
@@ -203,13 +204,28 @@ export async function refineStore(
   plan: StorePlan,
   instruction: string,
   draftId?: string | null,
-): Promise<{ plan?: StorePlan; reply?: string; changed?: string[]; error?: string }> {
+): Promise<{
+  plan?: StorePlan;
+  reply?: string;
+  changed?: string[];
+  error?: string;
+  productSuggestions?: ProductSuggestion[];
+}> {
   const budget = await assertTokenBudget(500);
   if (!budget.ok) return { error: budget.error };
 
   const existingPages = draftId ? await listStorePages(draftId) : [];
   const res = await applyMerchantRequest(plan, instruction, existingPages);
   await recordTokenUsage(res.tokensUsed);
+
+  if (res.intent === "suggest_products") {
+    const excludeIds = [...(await getSelectedIds())];
+    const suggestions = await suggestProductsForStore({
+      category: res.productCategory || plan.collections?.[0],
+      excludeIds,
+    });
+    return { plan: res.plan, reply: res.reply, productSuggestions: suggestions };
+  }
 
   if (res.pageAction) {
     if (!draftId) {
@@ -370,6 +386,7 @@ export type EditResult = {
   synced?: "live" | "shopify" | "draft";
   note?: string;
   error?: string;
+  productSuggestions?: ProductSuggestion[];
 };
 
 /**
@@ -403,6 +420,20 @@ export async function editStore(storeId: string, instruction: string): Promise<E
   const plan = ai.plan;
   await recordTokenUsage(ai.tokensUsed);
 
+  // Same reasoning as pageAction below — a whole-page/product-suggestion
+  // request never touches `content` (`ai.changed` stays empty), so this has
+  // to be checked before the "nothing changed" branch, or it gets misrouted
+  // into the question path.
+  if (ai.intent === "suggest_products") {
+    const { data: listed } = await supabase.from("store_products").select("product_id").eq("store_id", storeId);
+    const excludeIds = (listed ?? []).map((l) => l.product_id);
+    const suggestions = await suggestProductsForStore({
+      category: ai.productCategory || current.collections?.[0],
+      excludeIds,
+    });
+    return { plan: current, synced: "live", note: ai.reply, productSuggestions: suggestions };
+  }
+
   // A whole-page request never touches `content` (`ai.changed` stays empty),
   // so it has to be checked before that "nothing changed" branch below, or
   // "add a Contact Us page" would be misrouted into the advisor/question path.
@@ -421,33 +452,17 @@ export async function editStore(storeId: string, instruction: string): Promise<E
   // A question or a request we can't act on must not write to the store, nor
   // burn a version-history slot describing an edit that never happened.
   if (!ai.changed.length) {
-    // Phase 4 (Docs/AI-Native-Migration-Plan.md): a genuine question — never
-    // an edit, so still nothing written above — gets a RAG+tool-grounded
-    // answer from the orchestrator instead of the inline model reply, behind
-    // a flag. Falls back to the inline reply on any failure; a broken advisor
-    // call must never turn "I don't know" into a dead end.
-    //
-    // Gated on `ai.intent === "question"`, NOT just "nothing changed": an
-    // "edit"/"page" request that only needs one more detail (e.g. "change
-    // the hero text" with no new text given) also leaves `changed` empty,
-    // but is not a question — escalating it here sent a real bug report:
-    // the advisor has no idea this chat can edit store content, and
-    // confidently told a merchant with no Shopify store at all to go find
-    // the hero section in "Shopify Admin → Online Store → Themes →
-    // Customize". Same for "unsupported": that reply is already correct and
-    // specific (see MERCHANT_SYSTEM in ecomai.ts) — the advisor can't act on
-    // those requests either, so asking it again only risks it inventing
-    // different, wrong instructions for the same thing.
-    let reply = ai.reply;
-    if (ai.intent === "question" && process.env.AI_ADVISOR_ENABLED === "true") {
-      try {
-        const advisor = await askBusinessAdvisor({ tenantId: user.id, storeId, message: instruction });
-        reply = advisor.reply;
-      } catch (err) {
-        console.error("[ai] business advisor failed, falling back to the inline reply:", err);
-      }
-    }
-    return { plan: current, synced: "live", note: reply };
+    // The builder chat no longer escalates a genuine question to the
+    // business-advisor agent at all — that capability moved to the
+    // Co-Founder chat (see cofounder-actions.ts's store-specific routing),
+    // which can ask about any store by name from one place. The builder
+    // stays scoped to building/editing this one store, full stop: a
+    // question here just gets the inline reply, same as "unsupported".
+    // (This is also what fixed a real bug: the advisor had no idea this
+    // chat could edit store content, and confidently told a merchant with
+    // no Shopify store at all to go find the hero section in "Shopify
+    // Admin" — removing the escalation removes that whole failure mode.)
+    return { plan: current, synced: "live", note: ai.reply };
   }
 
   // Capture the pre-edit look so this change can be undone.

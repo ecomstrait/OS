@@ -3,13 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Sparkles, Loader2, Send, Store, Globe, ShoppingBag, ImagePlus, X, Check, ExternalLink, ArrowLeft, Pencil, Trash2, Smartphone, Tablet, Monitor } from "lucide-react";
+import { Sparkles, Loader2, Send, Store, Globe, ShoppingBag, ImagePlus, X, Check, ExternalLink, ArrowLeft, Pencil, Trash2, Smartphone, Tablet, Monitor, Plus, Eye } from "lucide-react";
 import { cn } from "@ecomstrait/ui";
 import { createClient } from "@ecomstrait/auth/client";
 import type { StoreType } from "@ecomstrait/db";
 import { DEFAULT_THEME_ID } from "@/content/themes";
 import { ContentEditor } from "@/components/builder/content-editor";
 import { ChatMarkdown } from "@/components/cofounder/chat-markdown";
+import { requestListing } from "@/lib/listing-actions";
 import {
   converseBuilderTurn,
   finalizeBuilderConversation,
@@ -23,16 +24,18 @@ import {
   type PreviewProduct,
   type BuilderTurn,
   type ConverseResult,
+  type ProductSuggestion,
 } from "@/lib/builder-actions";
 import { storeTokens, tokenStyle } from "@/lib/theme-tokens";
 import type { DraftStore } from "@/lib/drafts";
 import { draftExpiryLabel } from "@/lib/store-status";
 import type { StorePlan } from "@/lib/ecomai";
 import { VersionHistory } from "@/components/builder/version-history";
-import { StorefrontView, type CategoryBand } from "@/components/storefront/storefront-view";
+import type { CategoryBand } from "@/components/storefront/storefront-view";
 import type { Storefront } from "@/lib/storefront";
 import type { ApiProduct, StorefrontNavLink } from "@/lib/storefront-api";
 import { categoryLabel, UNCATEGORIZED } from "@/lib/storefront-shared";
+import { BUILDER_PREVIEW_READY, BUILDER_PREVIEW_DATA, BUILDER_PREVIEW_HEIGHT } from "@/lib/builder-preview-protocol";
 
 /**
  * An already-launched store, opened in the same workbench used to build it.
@@ -49,7 +52,7 @@ export type ExistingStore = {
   products: PreviewProduct[];
 };
 
-type Msg = { id: number; role: "ai" | "user"; content: string };
+type Msg = { id: number; role: "ai" | "user"; content: string; productSuggestions?: ProductSuggestion[] };
 
 /**
  * What the merchant already decided before arriving here — products picked in
@@ -260,8 +263,8 @@ export function StoreBuilder({
     return () => clearTimeout(t);
   }, [draftId, editing, plan, name, theme, logoUrl, products]);
 
-  function pushAi(content: string) {
-    setMessages((m) => [...m, { id: nextId(), role: "ai", content }]);
+  function pushAi(content: string, productSuggestions?: ProductSuggestion[]) {
+    setMessages((m) => [...m, { id: nextId(), role: "ai", content, productSuggestions }]);
   }
 
   // The conversation's opening question is the AI's own, not a hardcoded
@@ -387,7 +390,7 @@ export function StoreBuilder({
         return;
       }
       if (res.plan) setPlan(res.plan);
-      pushAi(res.note ?? "Updated.");
+      pushAi(res.note ?? "Updated.", res.productSuggestions);
       router.refresh();
       return;
     }
@@ -403,7 +406,45 @@ export function StoreBuilder({
     // rather than a fixed "Updated", which said nothing when it had in fact
     // answered a question or refused something it can't do.
     if (res.changed?.length && res.plan) setPlan(res.plan);
-    pushAi(res.reply ?? "Updated — check the preview.");
+    pushAi(res.reply ?? "Updated — check the preview.", res.productSuggestions);
+  }
+
+  const [addingProductId, setAddingProductId] = useState<string | null>(null);
+  const [addedProductIds, setAddedProductIds] = useState<Set<string>>(new Set());
+
+  /**
+   * A merchant clicking "Add" on a suggested product. Pre-launch, this is
+   * purely client-side state (the same `products` array `createStore`/
+   * `saveDraft` already send) — nothing is real until Launch. Editing a live
+   * store, it's a real listing request, same action Find Suppliers uses.
+   */
+  async function addSuggestedProduct(p: ProductSuggestion) {
+    setAddingProductId(p.id);
+    try {
+      if (existing) {
+        const res = await requestListing(existing.id, p.id);
+        if (res.error) {
+          setError(res.error);
+          return;
+        }
+        router.refresh();
+      } else {
+        setProducts((prev) =>
+          prev.some((x) => x.id === p.id)
+            ? prev
+            : [...prev, { id: p.id, title: p.title, price: p.retail_price, image: productImageFor(p), category: p.category }],
+        );
+      }
+      setAddedProductIds((prev) => new Set(prev).add(p.id));
+    } finally {
+      setAddingProductId(null);
+    }
+  }
+
+  function productImageFor(p: ProductSuggestion): string | null {
+    const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const path = p.images?.[0];
+    return path && base ? `${base}/storage/v1/object/public/product-images/${path}` : null;
   }
 
   async function onLogo(file: File) {
@@ -544,6 +585,69 @@ export function StoreBuilder({
     return links;
   }, [previewCategoryBands, plan?.about]);
 
+  // Preview panel lives in an <iframe> (builder-preview-frame/page.tsx) so
+  // the Mobile/Tablet/Desktop toggle actually changes its real viewport
+  // width, not just a letterboxed container — see that file for why a
+  // width-constrained <div> can't do this. Talk to it over postMessage: it
+  // has no server data of its own, so every render depends on us sending
+  // the current draft state across.
+  //
+  // The "Live Preview" button (top-right of this pane) opens the exact same
+  // page in a real tab via window.open() instead — same protocol, same
+  // payload, it just doesn't care which kind of window asked. That's what
+  // makes one button correct for both a draft that's never been published
+  // and a live store mid-edit: either way it's showing the current,
+  // possibly-unsaved state, not a stale published copy.
+  const previewFrameRef = useRef<HTMLIFrameElement>(null);
+  const previewFrameReady = useRef(false);
+  const [previewFrameHeight, setPreviewFrameHeight] = useState(600);
+  const previewWindowRef = useRef<Window | null>(null);
+  const previewWindowReady = useRef(false);
+
+  useEffect(() => {
+    function sendTo(win: Window | null, readyRef: { current: boolean }) {
+      if (!readyRef.current || !win || win.closed || !previewStore) return;
+      win.postMessage(
+        {
+          type: BUILDER_PREVIEW_DATA,
+          payload: { store: previewStore, navLinks: previewNavLinks, categoryBands: previewCategoryBands },
+        },
+        window.location.origin,
+      );
+    }
+    function onMessage(e: MessageEvent) {
+      if (e.origin !== window.location.origin) return;
+      const fromFrame = e.source === previewFrameRef.current?.contentWindow;
+      const fromWindow = e.source === previewWindowRef.current;
+      if (!fromFrame && !fromWindow) return;
+      if (e.data?.type === BUILDER_PREVIEW_READY) {
+        if (fromFrame) {
+          previewFrameReady.current = true;
+          sendTo(previewFrameRef.current?.contentWindow ?? null, previewFrameReady);
+        } else {
+          previewWindowReady.current = true;
+          sendTo(previewWindowRef.current, previewWindowReady);
+        }
+      } else if (e.data?.type === BUILDER_PREVIEW_HEIGHT && fromFrame) {
+        setPreviewFrameHeight(Math.max(200, e.data.height));
+      }
+    }
+    window.addEventListener("message", onMessage);
+    sendTo(previewFrameRef.current?.contentWindow ?? null, previewFrameReady);
+    sendTo(previewWindowRef.current, previewWindowReady);
+    return () => window.removeEventListener("message", onMessage);
+  }, [previewStore, previewNavLinks, previewCategoryBands]);
+
+  function openLivePreview() {
+    // A named target: clicking the button again while the tab is still open
+    // refocuses that same tab instead of piling up duplicates.
+    const win = window.open("/builder-preview-frame", "ecomstrait-live-preview");
+    if (!win) return; // popup blocked — nothing more we can do here
+    if (win !== previewWindowRef.current) previewWindowReady.current = false;
+    previewWindowRef.current = win;
+    win.focus();
+  }
+
   return (
     <div className="flex h-[80vh] min-h-[560px] flex-col overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-xl shadow-ink-950/5 lg:flex-row">
       {/* ---- Left: chat ---- */}
@@ -570,7 +674,7 @@ export function StoreBuilder({
 
         <div ref={scrollRef} className="flex-1 space-y-3 overflow-y-auto p-4">
           {messages.map((m) => (
-            <div key={m.id} className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}>
+            <div key={m.id} className={cn("flex flex-col", m.role === "user" ? "items-end" : "items-start")}>
               <div
                 className={cn(
                   "max-w-[85%] rounded-2xl px-3.5 py-2 text-sm",
@@ -584,6 +688,51 @@ export function StoreBuilder({
                     as literal asterisks instead of formatted text. */}
                 {m.role === "ai" ? <ChatMarkdown text={m.content} /> : m.content}
               </div>
+              {m.productSuggestions && m.productSuggestions.length > 0 && (
+                <div className="mt-2 grid w-full max-w-[95%] grid-cols-2 gap-2 sm:grid-cols-3">
+                  {m.productSuggestions.map((p) => {
+                    const added = addedProductIds.has(p.id);
+                    return (
+                      <div key={p.id} className="overflow-hidden rounded-xl border border-ink-200 bg-white">
+                        <div className="relative aspect-square w-full bg-ink-50">
+                          {productImageFor(p) ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={productImageFor(p)!} alt={p.title} className="absolute inset-0 h-full w-full object-cover" />
+                          ) : (
+                            <div className="absolute inset-0 grid place-items-center text-ink-300">
+                              <ShoppingBag className="h-6 w-6" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="p-2">
+                          <p className="line-clamp-1 text-xs font-semibold text-ink-900">{p.title}</p>
+                          <p className="line-clamp-1 text-[10px] text-ink-500">{p.reason}</p>
+                          <button
+                            onClick={() => addSuggestedProduct(p)}
+                            disabled={added || addingProductId === p.id}
+                            className={cn(
+                              "mt-1.5 inline-flex w-full items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-[11px] font-semibold transition disabled:opacity-60",
+                              added ? "border border-brand-200 bg-brand-50 text-brand-700" : "bg-brand-500 text-white hover:bg-brand-600",
+                            )}
+                          >
+                            {addingProductId === p.id ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : added ? (
+                              <>
+                                <Check className="h-3 w-3" /> Added
+                              </>
+                            ) : (
+                              <>
+                                <Plus className="h-3 w-3" /> Add
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           ))}
           {busy && (
@@ -634,6 +783,22 @@ export function StoreBuilder({
 
       {/* ---- Right: preview + action bar ---- */}
       <div className="flex h-1/2 flex-1 flex-col bg-ink-50/50 lg:h-full">
+        <div className="flex items-center justify-between gap-2 border-b border-ink-100 px-4 py-3">
+          <p className="text-sm font-bold text-ink-950">Preview</p>
+          <button
+            type="button"
+            onClick={openLivePreview}
+            disabled={!previewStore}
+            title={
+              previewStore
+                ? "Open the current version in a new tab — reflects unsaved changes too"
+                : "Available once your store has a name and products"
+            }
+            className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-ink-700 transition hover:bg-ink-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Eye className="h-3.5 w-3.5" /> Live Preview
+          </button>
+        </div>
         <div className="flex-1 overflow-y-auto">
           {editingContent && plan && mediaStoreId ? (
             <div className="p-4">
@@ -703,23 +868,26 @@ export function StoreBuilder({
                     per-category sections, spotlight, footer — fed from the
                     builder's live state, so this is what the store actually
                     looks like at launch, not a separate hand-rolled mockup.
-                    Links are inert (this is a preview, not a real page to
-                    navigate away into) and the cart/newsletter are local-only
-                    (previewMode) since there's no launched store to buy from
-                    or subscribe to yet. */}
-                <div
-                  onClickCapture={(e) => {
-                    if ((e.target as HTMLElement).closest("a")) e.preventDefault();
+                    It renders inside builder-preview-frame's own <iframe>,
+                    not directly in this document, so the Mobile/Tablet
+                    toggle above gives it a genuinely narrower viewport
+                    instead of just a letterboxed div (see that file for
+                    why). Links are inert and the cart/newsletter are
+                    local-only (previewMode) inside the frame, since there's
+                    no launched store to buy from or subscribe to yet. */}
+                <iframe
+                  ref={previewFrameRef}
+                  src="/builder-preview-frame"
+                  title="Store preview"
+                  className="block w-full border-0"
+                  style={{ height: previewFrameHeight }}
+                  onLoad={() => {
+                    // A reload (e.g. HMR) resets the frame's own ready state;
+                    // its mount effect re-announces "ready" on its own, which
+                    // re-triggers the send in the effect above.
+                    previewFrameReady.current = false;
                   }}
-                >
-                  <StorefrontView
-                    store={previewStore}
-                    navLinks={previewNavLinks}
-                    categoryBands={previewCategoryBands}
-                    basePath="/store/preview"
-                    previewMode
-                  />
-                </div>
+                />
               </div>
             </div>
           ) : null}

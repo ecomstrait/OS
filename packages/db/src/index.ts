@@ -48,6 +48,7 @@ export type {
   WalletTransaction,
   PayableLedgerEntry,
   SettlementBatch,
+  TrafficSource,
 } from "./types";
 export { createAdminClient } from "./admin";
 export {

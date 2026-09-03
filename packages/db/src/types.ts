@@ -14,6 +14,8 @@ export type ProductVariant = { name: string; options: string[] };
 export type RequestStatus = "new" | "accepted" | "declined" | "proposed" | "fulfilled";
 export type MessageSender = "supplier" | "store_owner" | "system";
 export type OrderStatus = "processing" | "shipped" | "delivered" | "cancelled";
+/** Synthetic-for-now (see `store_traffic_events.is_synthetic`) attribution of an order to a channel. */
+export type TrafficSource = "organic_search" | "paid_search" | "social" | "direct" | "referral" | "email";
 /** Docs/Credits-Settlement-Plan.md — merchant wallet (pooled per user) vs supplier wallet. */
 export type WalletAccountType = "merchant" | "supplier";
 export type WalletTransactionKind =
@@ -563,6 +565,51 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["store_pages"]["Row"]>;
         Relationships: [];
       };
+      customers: {
+        Row: {
+          id: string;
+          store_id: string;
+          email: string | null;
+          name: string | null;
+          first_order_at: string;
+          last_order_at: string;
+          order_count: number;
+          lifetime_value: number;
+          is_synthetic: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          store_id: string;
+          email?: string | null;
+          name?: string | null;
+          first_order_at?: string;
+          last_order_at?: string;
+          order_count?: number;
+          lifetime_value?: number;
+          is_synthetic?: boolean;
+        };
+        Update: Partial<Database["public"]["Tables"]["customers"]["Row"]>;
+        Relationships: [];
+      };
+      store_traffic_events: {
+        Row: {
+          id: string;
+          store_id: string;
+          order_id: string | null;
+          source: "organic_search" | "paid_search" | "social" | "direct" | "referral" | "email";
+          is_synthetic: boolean;
+          created_at: string;
+        };
+        Insert: {
+          store_id: string;
+          order_id?: string | null;
+          source: "organic_search" | "paid_search" | "social" | "direct" | "referral" | "email";
+          is_synthetic?: boolean;
+        };
+        Update: Partial<Database["public"]["Tables"]["store_traffic_events"]["Row"]>;
+        Relationships: [];
+      };
       store_assets: {
         Row: {
           id: string;
@@ -700,6 +747,23 @@ export type Database = {
           cost_usd: number;
         };
         Update: Partial<Database["public"]["Tables"]["ai_cost_ledger"]["Row"]>;
+        Relationships: [];
+      };
+      ai_snapshot_cache: {
+        Row: {
+          id: string;
+          subject_type: "merchant" | "supplier";
+          subject_id: string;
+          snapshot_json: Record<string, unknown>;
+          computed_at: string;
+        };
+        Insert: {
+          subject_type: "merchant" | "supplier";
+          subject_id: string;
+          snapshot_json: Record<string, unknown>;
+          computed_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["ai_snapshot_cache"]["Row"]>;
         Relationships: [];
       };
       merchant_wallets: {
