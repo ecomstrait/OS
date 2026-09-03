@@ -11,6 +11,7 @@ import { DEFAULT_THEME_ID } from "@/content/themes";
 import { ContentEditor } from "@/components/builder/content-editor";
 import { ChatMarkdown } from "@/components/cofounder/chat-markdown";
 import { requestListing } from "@/lib/listing-actions";
+import { addSelectedProduct } from "@/lib/catalog-actions";
 import {
   converseBuilderTurn,
   finalizeBuilderConversation,
@@ -35,7 +36,7 @@ import type { CategoryBand } from "@/components/storefront/storefront-view";
 import type { Storefront } from "@/lib/storefront";
 import type { ApiProduct, StorefrontNavLink } from "@/lib/storefront-api";
 import { categoryLabel, UNCATEGORIZED } from "@/lib/storefront-shared";
-import { BUILDER_PREVIEW_READY, BUILDER_PREVIEW_DATA, BUILDER_PREVIEW_HEIGHT } from "@/lib/builder-preview-protocol";
+import { BUILDER_PREVIEW_READY, BUILDER_PREVIEW_DATA } from "@/lib/builder-preview-protocol";
 
 /**
  * An already-launched store, opened in the same workbench used to build it.
@@ -288,7 +289,7 @@ export function StoreBuilder({
         return;
       }
       setHistory([{ role: "assistant", content: res.reply }]);
-      pushAi(res.reply);
+      pushAi(res.reply, res.productSuggestions);
     })();
     return () => {
       cancelled = true;
@@ -311,7 +312,13 @@ export function StoreBuilder({
     );
     const res = await finalizeBuilderConversation(
       { niche: answers.niche || context?.inferredNiche || "a new store", audience: answers.audience, styleKeyword: answers.styleKeyword, storeName: answers.storeName },
-      { useSelected: Boolean(context?.productCount) },
+      // Unconditional, not `Boolean(context?.productCount)` — that only
+      // reflected what was selected at page load, so a product added mid-
+      // conversation via a suggestion card (after load, before this runs)
+      // was silently ignored. `finalizeBuilderConversation` already falls
+      // back to auto-picking when `selected_products` is empty, so this is
+      // strictly more correct with no downside for the empty case.
+      { useSelected: true },
     );
     setBusy(false);
     if (res.error) {
@@ -362,14 +369,15 @@ export function StoreBuilder({
     if (stage === "asking") {
       setBusy(true);
       const nextHistory: BuilderTurn[] = [...history, { role: "user", content: text }];
-      const res: ConverseResult | { error: string } = await converseBuilderTurn(nextHistory, knownContext);
+      const res: (ConverseResult & { productSuggestions?: ProductSuggestion[] }) | { error: string } =
+        await converseBuilderTurn(nextHistory, knownContext);
       setBusy(false);
       if ("error" in res) {
         pushAi(res.error);
         return;
       }
       setHistory([...nextHistory, { role: "assistant", content: res.reply }]);
-      pushAi(res.reply);
+      pushAi(res.reply, res.productSuggestions);
       if (res.done) {
         await runBuild(res);
       }
@@ -413,10 +421,18 @@ export function StoreBuilder({
   const [addedProductIds, setAddedProductIds] = useState<Set<string>>(new Set());
 
   /**
-   * A merchant clicking "Add" on a suggested product. Pre-launch, this is
-   * purely client-side state (the same `products` array `createStore`/
-   * `saveDraft` already send) — nothing is real until Launch. Editing a live
-   * store, it's a real listing request, same action Find Suppliers uses.
+   * A merchant clicking "Add" on a suggested product. Editing a live store,
+   * it's a real listing request, same action Find Suppliers uses.
+   *
+   * Pre-launch, it's client-side state for immediate feedback (the same
+   * `products` array `createStore`/`saveDraft` send) — but during the
+   * opening conversation specifically, it ALSO has to land in the real
+   * `selected_products` table via `addSelectedProduct`, the same one Find
+   * Suppliers writes to. Without that, a product added here looked added in
+   * the chat but silently vanished the moment `runBuild()` below actually
+   * built the store — `finalizeBuilderConversation`'s `useSelected` reads
+   * that table, not this component's local state, to decide what to build
+   * around.
    */
   async function addSuggestedProduct(p: ProductSuggestion) {
     setAddingProductId(p.id);
@@ -429,6 +445,13 @@ export function StoreBuilder({
         }
         router.refresh();
       } else {
+        if (stage === "asking") {
+          const res = await addSelectedProduct(p.id);
+          if (res.error) {
+            setError(res.error);
+            return;
+          }
+        }
         setProducts((prev) =>
           prev.some((x) => x.id === p.id)
             ? prev
@@ -500,10 +523,14 @@ export function StoreBuilder({
       setError(res.error);
       return;
     }
-    // Straight back to a blank builder rather than leaving a preview of a store
-    // that no longer exists on screen.
-    router.replace("/builder");
-    router.refresh();
+    // A real full reload, not router.replace/refresh — this is the SAME
+    // route the component is already mounted on, so a client-side
+    // navigation re-renders it with new server props but never remounts it,
+    // leaving every piece of state (plan, products, messages, draftId) from
+    // the discarded draft sitting on screen even though the row is gone.
+    // "Discard" means start over, so a hard navigation is the correct tool
+    // here, not a shortcut around a bug.
+    window.location.href = "/builder";
   }
 
   async function create() {
@@ -600,7 +627,6 @@ export function StoreBuilder({
   // possibly-unsaved state, not a stale published copy.
   const previewFrameRef = useRef<HTMLIFrameElement>(null);
   const previewFrameReady = useRef(false);
-  const [previewFrameHeight, setPreviewFrameHeight] = useState(600);
   const previewWindowRef = useRef<Window | null>(null);
   const previewWindowReady = useRef(false);
 
@@ -617,19 +643,15 @@ export function StoreBuilder({
     }
     function onMessage(e: MessageEvent) {
       if (e.origin !== window.location.origin) return;
+      if (e.data?.type !== BUILDER_PREVIEW_READY) return;
       const fromFrame = e.source === previewFrameRef.current?.contentWindow;
       const fromWindow = e.source === previewWindowRef.current;
-      if (!fromFrame && !fromWindow) return;
-      if (e.data?.type === BUILDER_PREVIEW_READY) {
-        if (fromFrame) {
-          previewFrameReady.current = true;
-          sendTo(previewFrameRef.current?.contentWindow ?? null, previewFrameReady);
-        } else {
-          previewWindowReady.current = true;
-          sendTo(previewWindowRef.current, previewWindowReady);
-        }
-      } else if (e.data?.type === BUILDER_PREVIEW_HEIGHT && fromFrame) {
-        setPreviewFrameHeight(Math.max(200, e.data.height));
+      if (fromFrame) {
+        previewFrameReady.current = true;
+        sendTo(previewFrameRef.current?.contentWindow ?? null, previewFrameReady);
+      } else if (fromWindow) {
+        previewWindowReady.current = true;
+        sendTo(previewWindowRef.current, previewWindowReady);
       }
     }
     window.addEventListener("message", onMessage);
@@ -799,9 +821,9 @@ export function StoreBuilder({
             <Eye className="h-3.5 w-3.5" /> Live Preview
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-hidden">
           {editingContent && plan && mediaStoreId ? (
-            <div className="p-4">
+            <div className="h-full overflow-y-auto p-4">
               <div className="rounded-xl border border-ink-100 bg-white p-4 shadow-sm">
                 <ContentEditor
                   storeId={mediaStoreId}
@@ -823,12 +845,20 @@ export function StoreBuilder({
               </div>
             </div>
           ) : previewStore ? (
-            <div className="p-4">
+            // A fixed-height panel, not a growing one: the box below stays
+            // exactly this tall no matter which device is selected, and the
+            // <iframe> inside scrolls its own content. The previous version
+            // tried to resize the box to match the iframe's content height
+            // on every device switch (via postMessage), which raced the
+            // width transition — the box kept resizing mid-animation, which
+            // is the "buttons moving" jank. Fixed height, one scrollbar,
+            // done.
+            <div className="flex h-full flex-col p-4">
               {/* Lets a merchant actually see the responsive layout — the
                   preview otherwise only ever renders at this pane's own
                   (desktop-ish) width, so a mobile layout bug would never be
                   visible here even once fixed. */}
-              <div className="mb-3 flex justify-center">
+              <div className="mb-3 flex shrink-0 justify-center">
                 <div className="flex items-center gap-1 rounded-lg border border-ink-200 p-0.5">
                   {DEVICES.map((d) => (
                     <button
@@ -849,15 +879,18 @@ export function StoreBuilder({
 
               {/* The theme's tokens, so the shared storefront components resolve
                   var(--radius)/var(--brand) to the same values they will on the
-                  live store rather than to nothing. */}
+                  live store rather than to nothing. min-h-0 is load-bearing —
+                  without it a flex child won't shrink below its content size,
+                  and the iframe's flex-1 below would never actually take
+                  effect. */}
               <div
-                className="mx-auto overflow-hidden rounded-xl border border-ink-100 bg-white shadow-sm transition-all"
+                className="mx-auto flex w-full min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-ink-100 bg-white shadow-sm transition-[max-width] duration-200"
                 style={{
                   ...tokenStyle(storeTokens(theme, plan.brandColors)),
                   maxWidth: DEVICES.find((d) => d.type === device)?.maxWidth ?? undefined,
                 }}
               >
-                <div className="flex items-center gap-1.5 border-b border-ink-100 bg-ink-50 px-3 py-2">
+                <div className="flex shrink-0 items-center gap-1.5 border-b border-ink-100 bg-ink-50 px-3 py-2">
                   <span className="h-2.5 w-2.5 rounded-full bg-ink-200" />
                   <span className="h-2.5 w-2.5 rounded-full bg-ink-200" />
                   <span className="h-2.5 w-2.5 rounded-full bg-ink-200" />
@@ -879,8 +912,7 @@ export function StoreBuilder({
                   ref={previewFrameRef}
                   src="/builder-preview-frame"
                   title="Store preview"
-                  className="block w-full border-0"
-                  style={{ height: previewFrameHeight }}
+                  className="block w-full flex-1 border-0"
                   onLoad={() => {
                     // A reload (e.g. HMR) resets the frame's own ready state;
                     // its mount effect re-announces "ready" on its own, which

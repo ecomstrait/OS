@@ -8,4 +8,3 @@
  */
 export const BUILDER_PREVIEW_READY = "ecomstrait:builder-preview:ready";
 export const BUILDER_PREVIEW_DATA = "ecomstrait:builder-preview:data";
-export const BUILDER_PREVIEW_HEIGHT = "ecomstrait:builder-preview:height";

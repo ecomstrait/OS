@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { StorefrontView, type CategoryBand } from "@/components/storefront/storefront-view";
 import type { Storefront } from "@/lib/storefront";
 import type { StorefrontNavLink } from "@/lib/storefront-api";
-import { BUILDER_PREVIEW_READY, BUILDER_PREVIEW_DATA, BUILDER_PREVIEW_HEIGHT } from "@/lib/builder-preview-protocol";
+import { BUILDER_PREVIEW_READY, BUILDER_PREVIEW_DATA } from "@/lib/builder-preview-protocol";
 
 /**
  * Bare preview target for the Store Builder (components/builder/store-builder.tsx),
@@ -39,7 +39,6 @@ type Payload = {
 
 const READY = BUILDER_PREVIEW_READY;
 const DATA = BUILDER_PREVIEW_DATA;
-const HEIGHT = BUILDER_PREVIEW_HEIGHT;
 
 /** The window that can plausibly have opened us: `window.open()` sets
  *  `opener`; being embedded as an <iframe> sets `parent` (≠ self). Neither
@@ -53,7 +52,6 @@ function host(): Window | null {
 
 export default function BuilderPreviewFramePage() {
   const [payload, setPayload] = useState<Payload | null>(null);
-  const rootRef = useRef<HTMLDivElement>(null);
   // A real new tab (not an <iframe>) — worth a banner so a merchant can't
   // mistake unsaved edits for the actual published site.
   const standalone = typeof window !== "undefined" && window.self === window.top;
@@ -75,20 +73,6 @@ export default function BuilderPreviewFramePage() {
     return () => window.removeEventListener("message", onMessage);
   }, []);
 
-  // Only meaningful for the embedded <iframe> case — the host sizes the
-  // frame element to fit. A standalone tab has its own real scrollbar.
-  useEffect(() => {
-    if (standalone) return;
-    const el = rootRef.current;
-    const h = host();
-    if (!el || !h) return;
-    const report = () => h.postMessage({ type: HEIGHT, height: el.scrollHeight }, window.location.origin);
-    report();
-    const observer = new ResizeObserver(report);
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [payload, standalone]);
-
   useEffect(() => {
     if (payload?.store.name) document.title = `${payload.store.name} — Live preview`;
   }, [payload?.store.name]);
@@ -96,7 +80,7 @@ export default function BuilderPreviewFramePage() {
   if (!payload) return null;
 
   return (
-    <div ref={rootRef}>
+    <div>
       {standalone && (
         <div className="sticky top-0 z-50 bg-ink-950 px-4 py-2 text-center text-xs font-semibold text-white">
           Live preview — shows your latest unsaved changes, not necessarily what&apos;s published.

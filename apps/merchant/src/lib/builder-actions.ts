@@ -49,16 +49,48 @@ export type { BuilderTurn, ConverseResult } from "@/lib/ecomai";
 export type { ProductSuggestion } from "@/lib/product-suggestions";
 
 /**
+ * A merchant delegating the very first "what are you planning to sell?"
+ * question ("you tell", "surprise me", "I don't know") must not turn into
+ * the model silently inventing a niche and racing straight to building a
+ * store around it — a real bug report: it just built the store, and the
+ * merchant never got to see or choose anything. Deterministic, not left to
+ * the model to self-report: relying on it to decide when to show
+ * suggestions risks it just not doing so (the prompt already asks it not to
+ * guess here too, as a second layer — see BUILDER_SYSTEM in ecomai.ts).
+ */
+const DELEGATE_PATTERN =
+  /^(you\s*(tell|decide|pick|choose)|whatever you (think|want|suggest)|your call|surprise( me)?|i\s*don'?t\s*know|idk)\b/i;
+
+/**
  * One turn of the builder conversation — the AI decides what to ask next
  * (or that it's ready to build), rather than a fixed question script.
  */
 export async function converseBuilderTurn(
   history: BuilderTurn[],
   context: BuilderKnownContext,
-): Promise<ConverseResult | { error: string }> {
+): Promise<(ConverseResult & { productSuggestions?: ProductSuggestion[] }) | { error: string }> {
   try {
     const budget = await assertTokenBudget(500);
     if (!budget.ok) return { error: budget.error };
+
+    const lastUser = [...history].reverse().find((h) => h.role === "user")?.content.trim() ?? "";
+    const nicheStillUnknown = !context.inferredNiche && history.filter((h) => h.role === "user").length <= 1;
+    if (nicheStillUnknown && DELEGATE_PATTERN.test(lastUser)) {
+      const suggestions = await suggestProductsForStore({ limit: 6 });
+      if (suggestions.length) {
+        return {
+          done: false,
+          reply: "Here's what's doing well right now — add a few that fit, or just tell me the kind of thing you want to sell.",
+          niche: suggestions[0].category ?? null,
+          audience: null,
+          styleKeyword: null,
+          storeName: null,
+          tokensUsed: 0,
+          productSuggestions: suggestions,
+        };
+      }
+    }
+
     const result = await converseBuilder(history, context);
     await recordTokenUsage(result.tokensUsed);
     return result;
