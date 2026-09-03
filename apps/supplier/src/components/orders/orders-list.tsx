@@ -3,10 +3,10 @@
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Loader2, X } from "lucide-react";
+import { ArrowRight, Loader2, Package, X } from "lucide-react";
 import type { OrderStatus } from "@ecomstrait/db/types";
 import { setOrderStatus } from "@/lib/order-actions";
-import { ORDER_STATUS_TRANSITIONS, type StatusTransition } from "@/lib/order-status";
+import { ORDER_STATUS_STYLE, ORDER_STATUS_TRANSITIONS, type StatusTransition } from "@/lib/order-status";
 import { OrderQuickStatus } from "./order-quick-status";
 
 export type OrderRow = {
@@ -134,8 +134,8 @@ export function OrdersList({ orders }: { orders: OrderRow[] }) {
         </div>
       )}
 
-      <div className="overflow-hidden rounded-2xl border border-ink-100 bg-white">
-        <div className="flex items-center gap-4 border-b border-ink-100 bg-ink-50/60 px-4 py-2.5 text-xs font-semibold uppercase tracking-wide text-ink-400">
+      <div className="overflow-hidden rounded-2xl border border-ink-100 bg-white shadow-sm shadow-ink-950/[0.02]">
+        <div className="flex items-center gap-4 border-b border-ink-100 bg-ink-50/60 px-5 py-3 text-[11px] font-semibold uppercase tracking-wide text-ink-400">
           <input
             type="checkbox"
             checked={allSelected}
@@ -143,6 +143,7 @@ export function OrdersList({ orders }: { orders: OrderRow[] }) {
             aria-label="Select all orders on this page"
             className="h-4 w-4 shrink-0 rounded border-ink-300 text-ai-600 focus:ring-ai-400"
           />
+          <span className="w-8 shrink-0" />
           <span className="min-w-0 flex-1">Order</span>
           <span className="w-40 shrink-0">Status</span>
           <span className="w-4 shrink-0" />
@@ -150,21 +151,25 @@ export function OrdersList({ orders }: { orders: OrderRow[] }) {
 
         {orders.map((o) => {
           const items = o.order_items ?? [];
+          const selectedRow = selected.has(o.id);
           return (
             <div
               key={o.id}
-              className="flex items-center gap-4 border-b border-ink-50 px-4 py-3 transition last:border-0 hover:bg-ink-50/50"
+              className={`flex items-center gap-4 border-b border-ink-50 px-5 py-3.5 transition last:border-0 hover:bg-ink-50/50 ${selectedRow ? "bg-ai-50/40" : ""}`}
             >
               <input
                 type="checkbox"
-                checked={selected.has(o.id)}
+                checked={selectedRow}
                 onChange={() => toggleOne(o.id)}
                 aria-label={`Select order #${o.number}`}
                 className="h-4 w-4 shrink-0 rounded border-ink-300 text-ai-600 focus:ring-ai-400"
               />
+              <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${ORDER_STATUS_STYLE[o.status]}`}>
+                <Package className="h-3.5 w-3.5" />
+              </div>
               <Link href={`/orders/${o.id}`} className="min-w-0 flex-1">
-                <p className="font-medium text-ink-900">
-                  #{o.number} · {o.store_name || o.customer_name || "Customer"}
+                <p className="font-semibold text-ink-900">
+                  #{o.number} <span className="font-normal text-ink-400">·</span> {o.store_name || o.customer_name || "Customer"}
                 </p>
                 <p className="truncate text-sm text-ink-500">
                   {itemsSummary(items)} <span className="text-ink-300">· {dateFormatter.format(new Date(o.created_at))}</span>
