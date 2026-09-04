@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createClient } from "@ecomstrait/auth/server";
 import { createAdminClient } from "@ecomstrait/db";
 import { creditWallet, releaseHeldOrders } from "@ecomstrait/db/wallet";
@@ -92,4 +93,71 @@ export async function reconcileWalletTopup(sessionId: string): Promise<void> {
     externalRef: session.id,
   });
   await releaseHeldOrders(admin, "merchant", user.id);
+}
+
+/**
+ * Withdraw request: the merchant picks an amount (up to their current
+ * pending payable balance) and gives a bank account. An admin processes it
+ * manually by bank transfer — outside this app — and uploads a receipt once
+ * done (see settlement-actions.ts's markPayoutRequestPaid). Doesn't move
+ * money itself. Refuses a second open request while one is already pending,
+ * and refuses an amount over what's actually owed.
+ */
+export async function requestPayout(input: {
+  amount: number;
+  bankAccountName: string;
+  bankName: string;
+  bankAccountNumber: string;
+  bankRoutingCode?: string;
+  note?: string;
+}): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "Not authenticated." };
+
+  const amount = Number(input.amount);
+  if (!Number.isFinite(amount) || amount <= 0) return { error: "Enter a withdrawal amount." };
+
+  const bankAccountName = input.bankAccountName.trim();
+  const bankName = input.bankName.trim();
+  const bankAccountNumber = input.bankAccountNumber.trim();
+  if (!bankAccountName || !bankName || !bankAccountNumber) {
+    return { error: "Account holder name, bank name, and account number are all required." };
+  }
+
+  const { data: existing } = await supabase
+    .from("payout_requests")
+    .select("id")
+    .eq("account_type", "merchant")
+    .eq("account_id", user.id)
+    .eq("status", "pending")
+    .maybeSingle();
+  if (existing) return { error: "You already have a withdrawal request pending review." };
+
+  const { data: pendingRows } = await supabase
+    .from("payable_ledger")
+    .select("amount")
+    .eq("account_type", "merchant")
+    .eq("account_id", user.id)
+    .eq("status", "pending");
+  const pendingTotal = (pendingRows ?? []).reduce((s, p) => s + p.amount, 0);
+  if (pendingTotal <= 0) return { error: "Nothing pending to withdraw yet." };
+  if (amount > pendingTotal) return { error: `You can withdraw up to $${pendingTotal.toFixed(2)}.` };
+
+  const { error } = await supabase.from("payout_requests").insert({
+    account_type: "merchant",
+    account_id: user.id,
+    amount,
+    bank_account_name: bankAccountName,
+    bank_name: bankName,
+    bank_account_number: bankAccountNumber,
+    bank_routing_code: input.bankRoutingCode?.trim() || null,
+    note: input.note?.trim() || null,
+  });
+  if (error) return { error: error.message };
+
+  revalidatePath("/wallet");
+  return {};
 }

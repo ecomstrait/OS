@@ -23,10 +23,22 @@ export default async function OrderDetailPage({
   const { data: items } = await supabase.from("order_items").select("*").eq("order_id", id);
   const lines = (items ?? []) as OrderItem[];
 
-  const total = lines.reduce(
-    (s, l) => s + (l.unit_price != null ? l.unit_price * l.quantity : 0),
-    0,
-  );
+  // `order_items.unit_price` is the retail/selling price the customer paid
+  // (see storefront-orders.ts / the Shopify webhook on the merchant side) —
+  // not what this supplier should see. Show their own cost instead: the
+  // wholesale price they set on each product, joined in here since
+  // `order_items` has no cost column of its own.
+  const productIds = [...new Set(lines.map((l) => l.product_id).filter((v): v is string => Boolean(v)))];
+  const { data: products } = productIds.length
+    ? await supabase.from("products").select("id, wholesale_price").in("id", productIds)
+    : { data: [] };
+  const wholesaleById = new Map((products ?? []).map((p) => [p.id, p.wholesale_price]));
+
+  // `orders.cost_amount` (computed once, at order time, in order-sink.ts) is
+  // the source of truth for the total — it stays correct even if a
+  // product's wholesale price changes afterward. The per-line figures below
+  // are a best-effort breakdown of that same total for display.
+  const total = order.cost_amount ?? 0;
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -88,20 +100,24 @@ export default async function OrderDetailPage({
         <h2 className="text-sm font-semibold text-ink-950">Items</h2>
         <ul className="mt-3 divide-y divide-ink-50">
           {lines.length === 0 && <li className="py-2 text-sm text-ink-400">No line items.</li>}
-          {lines.map((it) => (
-            <li key={it.id} className="flex items-center justify-between py-2.5 text-sm">
-              <span className="text-ink-800">
-                {it.product_name} <span className="text-ink-400">× {it.quantity}</span>
-              </span>
-              <span className="font-medium text-ink-600">
-                {it.unit_price != null ? `$${(it.unit_price * it.quantity).toFixed(2)}` : "—"}
-              </span>
-            </li>
-          ))}
+          {lines.map((it) => {
+            const wholesale = it.product_id ? wholesaleById.get(it.product_id) : undefined;
+            const lineCost = wholesale != null ? wholesale * it.quantity : null;
+            return (
+              <li key={it.id} className="flex items-center justify-between py-2.5 text-sm">
+                <span className="text-ink-800">
+                  {it.product_name} <span className="text-ink-400">× {it.quantity}</span>
+                </span>
+                <span className="font-medium text-ink-600">
+                  {lineCost != null ? `$${lineCost.toFixed(2)}` : "—"}
+                </span>
+              </li>
+            );
+          })}
         </ul>
         {total > 0 && (
           <div className="mt-3 flex justify-between border-t border-ink-50 pt-3 text-sm">
-            <span className="font-semibold text-ink-950">Estimated total</span>
+            <span className="font-semibold text-ink-950">Your cost</span>
             <span className="font-semibold text-ink-950">${total.toFixed(2)}</span>
           </div>
         )}

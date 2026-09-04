@@ -43,11 +43,13 @@ export type {
   OrderCreditStatus,
   PayableStatus,
   SettlementBatchStatus,
+  PayoutRequestStatus,
   MerchantWallet,
   SupplierWallet,
   WalletTransaction,
   PayableLedgerEntry,
   SettlementBatch,
+  PayoutRequest,
   TrafficSource,
 } from "./types";
 export { createAdminClient } from "./admin";

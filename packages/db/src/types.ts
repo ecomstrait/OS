@@ -34,6 +34,7 @@ export type OrderCreditStatus =
   | "reversed";
 export type PayableStatus = "pending" | "settled";
 export type SettlementBatchStatus = "draft" | "paid";
+export type PayoutRequestStatus = "pending" | "paid" | "declined";
 export type PlanTier = "free" | "basic" | "premium" | "full";
 export type SubscriptionStatus =
   | "trialing"
@@ -850,6 +851,8 @@ export type Database = {
           amount: number;
           status: PayableStatus;
           settlement_batch_id: string | null;
+          /** Admin-set: excluded from `runWeeklySettlement` while true, independent of any payout_requests row. */
+          held: boolean;
           created_at: string;
         };
         Insert: {
@@ -859,8 +862,47 @@ export type Database = {
           amount: number;
           status?: PayableStatus;
           settlement_batch_id?: string | null;
+          held?: boolean;
         };
         Update: Partial<Database["public"]["Tables"]["payable_ledger"]["Row"]>;
+        Relationships: [];
+      };
+      payout_requests: {
+        Row: {
+          id: string;
+          account_type: WalletAccountType;
+          account_id: string;
+          amount: number;
+          bank_account_name: string;
+          bank_name: string;
+          bank_account_number: string;
+          bank_routing_code: string | null;
+          note: string | null;
+          status: PayoutRequestStatus;
+          /** Path within the `payout-receipts` bucket, not a full URL — read via a signed URL generated on demand. */
+          receipt_path: string | null;
+          admin_note: string | null;
+          requested_at: string;
+          reviewed_at: string | null;
+          reviewed_by: string | null;
+        };
+        Insert: {
+          account_type: WalletAccountType;
+          account_id: string;
+          amount: number;
+          bank_account_name: string;
+          bank_name: string;
+          bank_account_number: string;
+          bank_routing_code?: string | null;
+          note?: string | null;
+          status?: PayoutRequestStatus;
+          receipt_path?: string | null;
+          admin_note?: string | null;
+          requested_at?: string;
+          reviewed_at?: string | null;
+          reviewed_by?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["payout_requests"]["Row"]>;
         Relationships: [];
       };
       settlement_batches: {
@@ -945,3 +987,4 @@ export type SupplierWallet = Database["public"]["Tables"]["supplier_wallets"]["R
 export type WalletTransaction = Database["public"]["Tables"]["wallet_transactions"]["Row"];
 export type PayableLedgerEntry = Database["public"]["Tables"]["payable_ledger"]["Row"];
 export type SettlementBatch = Database["public"]["Tables"]["settlement_batches"]["Row"];
+export type PayoutRequest = Database["public"]["Tables"]["payout_requests"]["Row"];

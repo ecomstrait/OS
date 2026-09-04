@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
-import { Wallet as WalletIcon, Clock, HandCoins, ArrowUpRight, ArrowDownLeft } from "lucide-react";
+import { Wallet as WalletIcon, Clock, HandCoins, ArrowUpRight, ArrowDownLeft, Receipt } from "lucide-react";
 import { cn } from "@ecomstrait/ui";
 import { createClient } from "@ecomstrait/auth/server";
 import { createAdminClient } from "@ecomstrait/db";
 import { getWalletBalance } from "@ecomstrait/db/wallet";
-import type { WalletTransactionKind } from "@ecomstrait/db";
+import type { WalletTransactionKind, PayoutRequestStatus } from "@ecomstrait/db";
 import { WalletTopupForm } from "@/components/wallet/topup-form";
+import { WithdrawalForm } from "@/components/wallet/withdrawal-form";
 import { reconcileWalletTopup } from "@/lib/wallet-actions";
 
 export const metadata: Metadata = { title: "Wallet" };
@@ -31,6 +32,17 @@ const KIND_STYLE: Record<WalletTransactionKind, string> = {
   order_credit: "bg-brand-50 text-brand-700",
   reversal: "bg-amber-50 text-amber-700",
   settlement_payout: "bg-brand-50 text-brand-700",
+};
+
+const WITHDRAWAL_STATUS_LABEL: Record<PayoutRequestStatus, string> = {
+  pending: "Pending review",
+  paid: "Paid",
+  declined: "Declined",
+};
+const WITHDRAWAL_STATUS_STYLE: Record<PayoutRequestStatus, string> = {
+  pending: "bg-amber-50 text-amber-700",
+  paid: "bg-brand-50 text-brand-700",
+  declined: "bg-red-50 text-red-700",
 };
 
 export default async function WalletPage({
@@ -69,6 +81,31 @@ export default async function WalletPage({
         .eq("status", "pending")
     : { data: [] };
   const pendingPayout = (pendingRows ?? []).reduce((s, p) => s + p.amount, 0);
+
+  // Withdrawal requests — this merchant's own history, newest first.
+  // `payout_requests` is RLS-scoped to its owner, no admin needed to read.
+  const { data: withdrawalRows } = user
+    ? await supabase
+        .from("payout_requests")
+        .select("id, amount, status, note, admin_note, receipt_path, requested_at, reviewed_at")
+        .eq("account_type", "merchant")
+        .eq("account_id", user.id)
+        .order("requested_at", { ascending: false })
+    : { data: [] };
+  const withdrawals = withdrawalRows ?? [];
+  const openRequest = withdrawals.find((w) => w.status === "pending") ?? null;
+
+  // A receipt is only ever a storage path (the bucket is private) — resolve
+  // each one to a short-lived signed URL to actually render a link.
+  const receiptUrlById = new Map<string, string>();
+  await Promise.all(
+    withdrawals
+      .filter((w) => w.receipt_path)
+      .map(async (w) => {
+        const { data } = await supabase.storage.from("payout-receipts").createSignedUrl(w.receipt_path!, 3600);
+        if (data?.signedUrl) receiptUrlById.set(w.id, data.signedUrl);
+      }),
+  );
 
   // Transaction ledger — the append-only record of everything that's moved
   // this wallet's balance (top-ups, order deductions, refunds). Also RLS-
@@ -121,15 +158,22 @@ export default async function WalletPage({
             <p className="text-2xl font-bold text-ink-950">{money(balance)}</p>
           </div>
         </div>
-        <div className="flex items-center gap-4 rounded-2xl border border-ink-100 bg-white p-6">
-          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-amber-50 text-amber-600">
-            <HandCoins className="h-6 w-6" />
-          </span>
-          <div>
-            <p className="text-xs text-ink-500">Pending payout</p>
-            <p className="text-2xl font-bold text-ink-950">{money(pendingPayout)}</p>
-            <p className="text-[11px] text-ink-400">Owed by EcomStrait — next settlement</p>
+        <div className="flex items-center justify-between gap-4 rounded-2xl border border-ink-100 bg-white p-6">
+          <div className="flex items-center gap-4">
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-amber-50 text-amber-600">
+              <HandCoins className="h-6 w-6" />
+            </span>
+            <div>
+              <p className="text-xs text-ink-500">Pending payout</p>
+              <p className="text-2xl font-bold text-ink-950">{money(pendingPayout)}</p>
+              <p className="text-[11px] text-ink-400">Owed by EcomStrait — next settlement</p>
+            </div>
           </div>
+          {openRequest ? (
+            <p className="text-xs font-medium text-brand-700">Requested — an admin will review it.</p>
+          ) : (
+            <WithdrawalForm pendingPayout={pendingPayout} />
+          )}
         </div>
       </div>
 
@@ -139,6 +183,39 @@ export default async function WalletPage({
           <WalletTopupForm />
         </div>
       </div>
+
+      {withdrawals.length > 0 && (
+        <div className="mt-6 rounded-2xl border border-ink-100 bg-white p-6">
+          <h2 className="text-sm font-semibold text-ink-800">Withdrawal requests</h2>
+          <ul className="mt-3 divide-y divide-ink-50">
+            {withdrawals.map((w) => (
+              <li key={w.id} className="py-3 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-medium text-ink-900">{money(w.amount)}</span>
+                  <span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", WITHDRAWAL_STATUS_STYLE[w.status])}>
+                    {WITHDRAWAL_STATUS_LABEL[w.status]}
+                  </span>
+                </div>
+                <p className="mt-0.5 text-xs text-ink-400">
+                  Requested {when(w.requested_at)}
+                  {w.reviewed_at && ` · Reviewed ${when(w.reviewed_at)}`}
+                </p>
+                {w.admin_note && <p className="mt-1 text-xs text-ink-600">{w.admin_note}</p>}
+                {w.status === "paid" && receiptUrlById.has(w.id) && (
+                  <a
+                    href={receiptUrlById.get(w.id)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-1.5 inline-flex items-center gap-1 text-xs font-semibold text-brand-700 hover:underline"
+                  >
+                    <Receipt className="h-3.5 w-3.5" /> View receipt
+                  </a>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {held.length > 0 && (
         <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50/60 p-6">

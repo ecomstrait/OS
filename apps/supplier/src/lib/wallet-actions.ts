@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@ecomstrait/db";
 import { creditWallet, releaseHeldOrders } from "@ecomstrait/db/wallet";
 import { getStripe, supplierUrl } from "@/lib/stripe";
@@ -85,4 +86,68 @@ export async function reconcileWalletTopup(sessionId: string): Promise<void> {
     externalRef: session.id,
   });
   await releaseHeldOrders(admin, "supplier", ctx.supplierId);
+}
+
+/**
+ * Withdraw request: the supplier picks an amount (up to their current
+ * pending payable balance) and gives a bank account. An admin processes it
+ * manually by bank transfer — outside this app — and uploads a receipt once
+ * done (see the merchant app's settlement-actions.ts markPayoutRequestPaid).
+ * Doesn't move money itself. Refuses a second open request while one is
+ * already pending, and refuses an amount over what's actually owed.
+ */
+export async function requestPayout(input: {
+  amount: number;
+  bankAccountName: string;
+  bankName: string;
+  bankAccountNumber: string;
+  bankRoutingCode?: string;
+  note?: string;
+}): Promise<{ error?: string }> {
+  const ctx = await getSupplierContext();
+  if ("error" in ctx) return ctx;
+
+  const amount = Number(input.amount);
+  if (!Number.isFinite(amount) || amount <= 0) return { error: "Enter a withdrawal amount." };
+
+  const bankAccountName = input.bankAccountName.trim();
+  const bankName = input.bankName.trim();
+  const bankAccountNumber = input.bankAccountNumber.trim();
+  if (!bankAccountName || !bankName || !bankAccountNumber) {
+    return { error: "Account holder name, bank name, and account number are all required." };
+  }
+
+  const { data: existing } = await ctx.supabase
+    .from("payout_requests")
+    .select("id")
+    .eq("account_type", "supplier")
+    .eq("account_id", ctx.supplierId)
+    .eq("status", "pending")
+    .maybeSingle();
+  if (existing) return { error: "You already have a withdrawal request pending review." };
+
+  const { data: pendingRows } = await ctx.supabase
+    .from("payable_ledger")
+    .select("amount")
+    .eq("account_type", "supplier")
+    .eq("account_id", ctx.supplierId)
+    .eq("status", "pending");
+  const pendingTotal = (pendingRows ?? []).reduce((s, p) => s + p.amount, 0);
+  if (pendingTotal <= 0) return { error: "Nothing pending to withdraw yet." };
+  if (amount > pendingTotal) return { error: `You can withdraw up to $${pendingTotal.toFixed(2)}.` };
+
+  const { error } = await ctx.supabase.from("payout_requests").insert({
+    account_type: "supplier",
+    account_id: ctx.supplierId,
+    amount,
+    bank_account_name: bankAccountName,
+    bank_name: bankName,
+    bank_account_number: bankAccountNumber,
+    bank_routing_code: input.bankRoutingCode?.trim() || null,
+    note: input.note?.trim() || null,
+  });
+  if (error) return { error: error.message };
+
+  revalidatePath("/wallet");
+  return {};
 }

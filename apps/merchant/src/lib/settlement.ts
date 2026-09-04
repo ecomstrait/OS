@@ -14,12 +14,18 @@ type Admin = NonNullable<ReturnType<typeof createAdminClient>>;
  * separate from a wallet's pre-funded balance. The actual payout is manual
  * for now: this just produces the batch total for an admin to review and pay
  * by bank transfer, then mark paid via `markSettlementBatchPaid`.
+ *
+ * Excludes any row an admin has put on hold (`held = true`, set via
+ * `holdAccountPayables` in settlement-actions.ts) — that account's pending
+ * balance stays untouched, in this batch and every later one, until an admin
+ * releases it.
  */
 export async function runWeeklySettlement(admin: Admin): Promise<{ batchId: string | null; count: number }> {
   const { data: pending } = await admin
     .from("payable_ledger")
     .select("id, account_type, amount")
-    .eq("status", "pending");
+    .eq("status", "pending")
+    .eq("held", false);
 
   if (!pending || pending.length === 0) return { batchId: null, count: 0 };
 
