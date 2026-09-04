@@ -1,10 +1,18 @@
 import type { NextConfig } from "next";
 
-// Every storefront image (product photos, store logos, hero/about/gallery
-// media) is uploaded to one of this Supabase project's public storage
-// buckets (product-images, store-logos, store-assets, ...) and served from
-// `${NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/<bucket>/...` — one
-// host, so one remotePattern covers all of it for `next/image`.
+// Storefront images come from two places:
+//  - Product photos and store logos: this Supabase project's public storage
+//    buckets, served from
+//    `${NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/<bucket>/...`.
+//  - Store media library uploads (blog cover images, and any hero/about/
+//    gallery media picked from it) go through `/api/media`
+//    (lib/media.ts), which uploads to Cloudflare R2 whenever it's
+//    configured — a different host entirely (`R2_PUBLIC_URL`), falling back
+//    to the same Supabase bucket only when R2 isn't set up. Both hosts need
+//    a remotePattern, or `next/image` silently fails to render whichever one
+//    is missing (this is what broke blog post cover images: R2 is
+//    configured in production, but only the Supabase host was allow-listed
+//    here).
 const supabaseHost = (() => {
   try {
     return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").hostname;
@@ -13,12 +21,23 @@ const supabaseHost = (() => {
   }
 })();
 
+const r2Host = (() => {
+  try {
+    return new URL(process.env.R2_PUBLIC_URL ?? "").hostname;
+  } catch {
+    return undefined;
+  }
+})();
+
 const nextConfig: NextConfig = {
   transpilePackages: ["@ecomstrait/ui", "@ecomstrait/auth", "@ecomstrait/db"],
   images: {
-    remotePatterns: supabaseHost
-      ? [{ protocol: "https", hostname: supabaseHost, pathname: "/storage/v1/object/public/**" }]
-      : [],
+    remotePatterns: [
+      ...(supabaseHost
+        ? [{ protocol: "https" as const, hostname: supabaseHost, pathname: "/storage/v1/object/public/**" }]
+        : []),
+      ...(r2Host ? [{ protocol: "https" as const, hostname: r2Host, pathname: "/**" }] : []),
+    ],
   },
 };
 
