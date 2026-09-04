@@ -73,9 +73,20 @@ const DELEGATE_PATTERN =
  * (the phrasing space is too open-ended for a fixed pattern to be the ONLY
  * mechanism), not good enough to be the only one. This only needs to catch
  * the unambiguous cases; anything subtler still relies on the model.
+ *
+ * `suggest`/`recommend` alone used to be bare words in this pattern — a real
+ * bug this fixed: "suggest me a few [store] names and I'll pick one" matched
+ * `\bsuggest\b` regardless of what was actually being asked for, so the
+ * backstop fired and showed product cards instead of names, even after the
+ * merchant explicitly clarified "I was asking about the store name." Now
+ * `suggest`/`recommend` only count alongside an actual product/selling word
+ * nearby — bare "show me"/"best sellers"/etc. still fire on their own, since
+ * those aren't ambiguous the way a bare "suggest" is.
  */
 const SHOW_PRODUCTS_PATTERN =
-  /\bshow me\b|\bsuggest\b|\brecommend\b|what'?s selling|what sells|best[\s-]?sellers?|top[\s-]?sellers?|top products|high[\s-]?(profit[\s-]?)?margins?/i;
+  /\bshow me\b|what'?s selling|what sells|best[\s-]?sellers?|top[\s-]?sellers?|top products|high[\s-]?(profit[\s-]?)?margins?/i;
+const SUGGEST_OR_RECOMMEND_PATTERN = /\b(suggest|recommend)\b/i;
+const PRODUCT_CONTEXT_PATTERN = /\b(product|item|sku|stock|inventory|thing|things|sell|selling)\b/i;
 
 /**
  * One turn of the builder conversation — the AI decides what to ask next
@@ -122,7 +133,10 @@ export async function converseBuilderTurn(
     // open-ended for a fixed pattern to be the only mechanism — backed up
     // by SHOW_PRODUCTS_PATTERN for the clearest phrasings, since the model
     // alone caught this only ~2 of 3 times in testing.
-    const backstopFired = !result.showProducts && SHOW_PRODUCTS_PATTERN.test(lastUser);
+    const backstopFired =
+      !result.showProducts &&
+      (SHOW_PRODUCTS_PATTERN.test(lastUser) ||
+        (SUGGEST_OR_RECOMMEND_PATTERN.test(lastUser) && PRODUCT_CONTEXT_PATTERN.test(lastUser)));
     if (result.showProducts || backstopFired) {
       const suggestions = await suggestProductsForStore({ category: result.niche ?? context.inferredNiche, limit: 6 });
       if (suggestions.length) {

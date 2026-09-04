@@ -23,6 +23,18 @@ export function SearchBar({ placeholder, summary }: Props) {
 
   const [value, setValue] = useState(current);
   const mounted = useRef(false);
+  // Kept current every render instead of being a dependency below — reading
+  // the latest params still works, but a navigation that has nothing to do
+  // with search (e.g. clicking "Next" on pagination) no longer re-triggers
+  // the write-back effect. `useSearchParams()` returns a new object on every
+  // navigation, so `params` in that effect's own dependency array meant
+  // paging to `?page=2` re-ran it — which, 300ms later, unconditionally
+  // stripped `page` and replaced the URL, so Next visibly landed on page 2
+  // and then bounced straight back to page 1.
+  const paramsRef = useRef(params);
+  useEffect(() => {
+    paramsRef.current = params;
+  });
 
   useEffect(() => {
     // Skip the first run so simply rendering the page doesn't navigate.
@@ -30,8 +42,12 @@ export function SearchBar({ placeholder, summary }: Props) {
       mounted.current = true;
       return;
     }
+    // Nothing the user actually typed changed — this render was caused by
+    // something else entirely (paging, a filter, browser back/forward).
+    // Nothing to write back.
+    if (value === current) return;
     const id = setTimeout(() => {
-      const next = new URLSearchParams(params.toString());
+      const next = new URLSearchParams(paramsRef.current.toString());
       const term = value.trim();
       if (term) next.set("q", term);
       else next.delete("q");
@@ -40,7 +56,10 @@ export function SearchBar({ placeholder, summary }: Props) {
       router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     }, 300);
     return () => clearTimeout(id);
-  }, [value, params, pathname, router]);
+    // Deliberately not exhaustive — see the comment above. Reacting to
+    // `value` alone (what the user actually typed) is the fix.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">

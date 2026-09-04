@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { createClient } from "@ecomstrait/auth/server";
+import { PW_RESET_PENDING_COOKIE } from "@ecomstrait/auth/middleware";
 
 /**
  * Verifies a `token_hash` emailed by Supabase (password recovery, magic
@@ -29,7 +30,22 @@ export async function GET(request: Request) {
   if (token_hash && type) {
     const supabase = await createClient();
     const { error } = await supabase.auth.verifyOtp({ type, token_hash });
-    if (!error) return NextResponse.redirect(`${origin}${next}`);
+    if (!error) {
+      const res = NextResponse.redirect(`${origin}${next}`);
+      // Only `recovery` locks the account to /reset-password (see
+      // middleware.ts) — a magic-link/invite session shouldn't be gated on
+      // a password change nothing about it asked for.
+      if (type === "recovery") {
+        res.cookies.set(PW_RESET_PENDING_COOKIE, "1", {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "lax",
+          path: "/",
+          maxAge: 3600,
+        });
+      }
+      return res;
+    }
   }
 
   return NextResponse.redirect(`${origin}/login?error=auth`);
