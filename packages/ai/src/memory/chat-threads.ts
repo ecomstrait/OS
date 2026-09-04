@@ -120,7 +120,12 @@ export async function appendChatTurns(params: {
     let summary = data?.summary ?? null;
     const needsFirstSummary = !summary && kept.length >= MIN_MESSAGES_FOR_FIRST_SUMMARY;
     if (dropped.length > 0 || needsFirstSummary) {
-      summary = await refreshSummary(summary, dropped.length > 0 ? dropped : kept);
+      // On a trim (not the first-ever summary), fold in what's being dropped
+      // but also hand over a tail of what's still visible — re-grounding
+      // every refresh against real current messages instead of only ever
+      // building on the previous summary's own paraphrase. See `refreshSummary`.
+      const recentTail = dropped.length > 0 ? kept.slice(-6) : [];
+      summary = await refreshSummary(summary, dropped.length > 0 ? dropped : kept, recentTail);
     }
 
     const { error } = await admin.from("ai_chat_threads").upsert(
@@ -146,6 +151,13 @@ const SUMMARY_SYSTEM = [
   "whole transcript.",
   "Fold the previous summary (if any) together with the messages below into ONE updated summary,",
   "3-5 sentences, plain prose, no headings or bullet points.",
+  "Only state what was actually said — never resolve a hedge, a maybe, or an open question into a",
+  'firm fact or decision ("I might sell shoes" stays a maybe, not "sells shoes"; "thinking about',
+  'calling it Coastal Co" stays undecided, not "the store is named Coastal Co"). If something is',
+  "genuinely still undecided, unclear, or was said with a caveat, say so as unresolved rather than",
+  "picking the more definite-sounding reading — this summary gets re-injected into every future",
+  "turn as if it were settled fact, so a compressed hedge that hardens into a stated fact here is",
+  "a real, durable mistake, not a harmless simplification.",
   "Focus on what would actually help resuming this conversation: the business/store being",
   "discussed, concrete facts stated, decisions made, and anything left open or unresolved — never",
   "a blow-by-blow transcript recap, never small talk.",
@@ -153,22 +165,56 @@ const SUMMARY_SYSTEM = [
   "add or revise what's actually new.",
 ].join("\n");
 
-async function refreshSummary(previous: string | null, messages: ChatThreadMessage[]): Promise<string | null> {
+/** The only guard between a garbled/off-task model response and it being
+ *  persisted as durable "ground truth" that gets re-injected into every
+ *  future turn — catches the two cheapest failure shapes (empty, or an
+ *  obvious refusal/apology instead of an actual summary) without trying to
+ *  fully validate prose quality. A false negative here just means keeping
+ *  the previous summary one cycle longer, never worse than that. */
+function isPlausibleSummary(text: string): boolean {
+  if (text.length < 15) return false;
+  const refusalPattern = /^(i'?m (not able|sorry|unable)|i can'?t|i cannot|as an ai|i do not have)/i;
+  return !refusalPattern.test(text);
+}
+
+async function refreshSummary(
+  previous: string | null,
+  toFold: ChatThreadMessage[],
+  /** The still-visible tail of the raw window, included purely so the model
+   *  can cross-check against actual recent messages while re-deriving the
+   *  summary, rather than chaining purely off the previous summary's own
+   *  paraphrase every cycle — left empty, a long-lived thread's summary is
+   *  a paraphrase-of-a-paraphrase with nothing to re-ground it against, and
+   *  small distortions compound turn over turn with no way to catch them. */
+  recentTail: ChatThreadMessage[] = [],
+): Promise<string | null> {
   if (!isGatewayConfigured()) return previous;
   try {
-    const transcript = messages.map((m) => `${m.role}: ${m.content}`).join("\n");
+    const transcript = toFold.map((m) => `${m.role}: ${m.content}`).join("\n");
+    const tailBlock = recentTail.length
+      ? `\n\nStill-visible recent messages, for cross-checking only — don't summarize these, and don't ` +
+        `let the summary contradict them:\n${recentTail.map((m) => `${m.role}: ${m.content}`).join("\n")}`
+      : "";
     const { content } = await chat(
       "fast-cheap",
       [
         { role: "system", content: SUMMARY_SYSTEM },
         {
           role: "user",
-          content: `Previous summary: ${previous ?? "(none yet)"}\n\nMessages:\n${transcript}`,
+          content: `Previous summary: ${previous ?? "(none yet)"}\n\nMessages:\n${transcript}${tailBlock}`,
         },
       ],
       { temperature: 0.2, maxTokens: 300, timeoutMs: 10000, reasoningEffort: "none" },
     );
-    return content.trim() || previous;
+    const text = content.trim();
+    if (!isPlausibleSummary(text)) {
+      console.error(
+        "[ai] chat summary refresh returned implausible content, keeping previous:",
+        JSON.stringify(text).slice(0, 200),
+      );
+      return previous;
+    }
+    return text;
   } catch (err) {
     console.error("[ai] chat summary refresh failed (non-fatal, keeping previous):", err);
     return previous;

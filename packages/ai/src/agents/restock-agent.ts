@@ -34,12 +34,20 @@ export async function decideRestock(input: RestockInput): Promise<RestockDecisio
     "You are EcomAI's inventory planner. Given a product's stock level and a",
     "sale that just happened, decide whether to recommend a restock and how much.",
     "Be conservative: only recommend a restock when stock is at or below the",
-    "low-stock threshold, or the sale itself pushed it there. Respond with ONLY",
-    "a JSON object using these exact keys:",
+    "low-stock threshold, or the sale itself pushed it there.",
+    "You are only given a single snapshot — current stock, the low-stock threshold, and the units sold",
+    "in the one order that triggered this check. You have NO sales-velocity history (units/day or",
+    "units/week over time) and NO supplier lead-time data. Any quantity you pick is therefore a rough",
+    "heuristic gap-filler (e.g. topping back up to somewhere above the threshold), not a demand forecast —",
+    'your "reasoning" text MUST say so in plain terms (e.g. "rough estimate based on current stock and',
+    'this one sale, not a demand forecast — no sales history or lead time was available") so the human',
+    "approver reading it doesn't mistake it for something more rigorous than it is. Never state the",
+    "quantity with more confidence than that.",
+    "Respond with ONLY a JSON object using these exact keys:",
     "{",
     '  "shouldRestock": boolean,',
     '  "quantity": number,   // 0 if shouldRestock is false',
-    '  "reasoning": string   // one sentence',
+    '  "reasoning": string   // one sentence, must flag this as a limited-signal heuristic estimate',
     "}",
   ].join("\n");
 
@@ -57,7 +65,9 @@ export async function decideRestock(input: RestockInput): Promise<RestockDecisio
         { role: "system", content: system },
         { role: "user", content: user },
       ],
-      { temperature: 0, maxTokens: 200, responseFormatJson: true, timeoutMs: 8000 },
+      // maxTokens bumped slightly from 200: the reasoning sentence now must
+      // explicitly name this as a limited-signal heuristic, not a forecast.
+      { temperature: 0, maxTokens: 300, responseFormatJson: true, timeoutMs: 8000 },
     );
     const parsed = JSON.parse(content) as Partial<RestockDecision>;
     return {

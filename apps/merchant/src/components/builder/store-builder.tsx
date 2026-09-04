@@ -179,6 +179,23 @@ export function StoreBuilder({
     [context],
   );
 
+  // `knownContext.inferredNiche` only ever reflects a pre-selection made
+  // before this chat started (e.g. from Find Suppliers) — it never updates
+  // as the conversation itself establishes a niche turn by turn. Without
+  // this, `converseBuilderTurn`'s deterministic "are they delegating what to
+  // sell?" backstop had to stay restricted to only the conversation's first
+  // message, since past that point it had no reliable way to tell whether
+  // niche had already been answered — a real gap: a merchant answering a
+  // LATER question (audience/style) with a phrase like "you decide" risked
+  // being caught by the same backstop as if they were still delegating what
+  // to sell. Tracking what the AI itself has already learned mid-chat closes
+  // that gap properly instead of just loosening the turn restriction.
+  const [chatNiche, setChatNiche] = useState<string | null>(null);
+  const turnContext = useMemo(
+    () => ({ ...knownContext, inferredNiche: knownContext.inferredNiche ?? chatNiche ?? undefined }),
+    [knownContext, chatNiche],
+  );
+
   const [messages, setMessages] = useState<Msg[]>(
     initialChatMessages?.length
       ? initialChatMessages.map((m, i) => ({ id: i, role: m.role === "assistant" ? "ai" : "user", content: m.content }))
@@ -362,7 +379,7 @@ export function StoreBuilder({
       await Promise.resolve();
       if (cancelled) return;
       setBusy(true);
-      const res = await converseBuilderTurn([], knownContext);
+      const res = await converseBuilderTurn([], turnContext);
       if (cancelled || cancelledRef.current) return;
       setBusy(false);
       if ("error" in res) {
@@ -370,6 +387,7 @@ export function StoreBuilder({
         else pushAi(res.error);
         return;
       }
+      if (res.niche) setChatNiche(res.niche);
       setHistory([{ role: "assistant", content: res.reply }]);
       pushAi(res.reply, res.productSuggestions);
     })();
@@ -471,7 +489,7 @@ export function StoreBuilder({
       setBusy(true);
       const nextHistory: BuilderTurn[] = [...history, { role: "user", content: text }];
       const res: (ConverseResult & { productSuggestions?: ProductSuggestion[] }) | { error: string; upgrade?: boolean } =
-        await converseBuilderTurn(nextHistory, knownContext);
+        await converseBuilderTurn(nextHistory, turnContext);
       if (cancelledRef.current) return;
       setBusy(false);
       if ("error" in res) {
@@ -479,6 +497,7 @@ export function StoreBuilder({
         else pushAi(res.error);
         return;
       }
+      if (res.niche) setChatNiche(res.niche);
       const finalHistory: BuilderTurn[] = [...nextHistory, { role: "assistant", content: res.reply }];
       setHistory(finalHistory);
       pushAi(res.reply, res.productSuggestions);

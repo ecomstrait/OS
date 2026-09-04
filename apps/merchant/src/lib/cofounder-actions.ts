@@ -59,7 +59,13 @@ export async function askCoFounderAction(
   ]);
   const planLine = `Plan: ${PLAN_ENTITLEMENTS[entitlements.plan].label} (${entitlements.storesUsed}/${entitlements.storeLimit} stores used, ${entitlements.tokensRemaining.toLocaleString()} AI tokens left today).`;
   const digestLines = [summarizeMerchantForAdvisor(snapshot), planLine];
-  if (thread.summary) digestLines.push(`Earlier in this conversation: ${thread.summary}`);
+  if (thread.summary) {
+    digestLines.push(
+      `Your own recollection of earlier in this conversation (a summary you wrote — may be ` +
+        `imprecise, unlike the real numbers above; if it ever conflicts with the actual recent ` +
+        `messages below, the messages win): ${thread.summary}`,
+    );
+  }
   const digest = digestLines.join("\n");
 
   const result = await runCofounderOrchestrator({

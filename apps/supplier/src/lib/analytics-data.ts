@@ -8,6 +8,11 @@ export type SupplierAnalytics = {
   statusCounts: { status: RequestStatus; count: number }[];
   categoryCounts: { category: string; count: number }[];
   inventory: { inStock: number; low: number; out: number };
+  /** Titles of the low-stock published products (not out-of-stock — those are
+   *  a separate bucket above), most-depleted-looking first isn't tracked, so
+   *  just insertion order. Used to let the Co-Founder chat name 1-2 real
+   *  products instead of only ever saying "some products are low on stock". */
+  lowStockProductNames: string[];
   metrics: {
     totalRequests: number;
     openRequests: number;
@@ -31,7 +36,9 @@ export async function getSupplierAnalytics(
   const [{ data: products }, { data: verification }, { data: requests }] = await Promise.all([
     supabase
       .from("products")
-      .select("status, stock, reserved, low_stock_threshold, category")
+      // `title` added so the Co-Founder chat digest can name real low-stock
+      // products instead of only ever reporting an aggregate count.
+      .select("title, status, stock, reserved, low_stock_threshold, category")
       .eq("supplier_id", supplier.id),
     supabase
       .from("supplier_verification")
@@ -55,12 +62,15 @@ export async function getSupplierAnalytics(
   let inStock = 0,
     low = 0,
     out = 0;
+  const lowStockProductNames: string[] = [];
   for (const p of prods) {
     if (p.status !== "published") continue;
     const available = p.stock - p.reserved;
     if (available <= 0) out += 1;
-    else if (available <= p.low_stock_threshold) low += 1;
-    else inStock += 1;
+    else if (available <= p.low_stock_threshold) {
+      low += 1;
+      if (p.title) lowStockProductNames.push(p.title);
+    } else inStock += 1;
   }
 
   // ---- Categories (published products) ----
@@ -154,6 +164,7 @@ export async function getSupplierAnalytics(
     statusCounts,
     categoryCounts,
     inventory: { inStock, low, out },
+    lowStockProductNames,
     metrics: {
       totalRequests: reqs.length,
       openRequests,
@@ -171,9 +182,20 @@ export async function getSupplierAnalytics(
  *  can actually answer "how many products do I have" / "what's low on
  *  stock" / "how's my catalog doing" instead of only ever seeing revenue. */
 export function summarizeCatalogForAdvisor(a: SupplierAnalytics): string {
+  // Name 1-2 real low-stock products (not just the count) so the Co-Founder
+  // chat can lead with something specific ("Blue Canvas Tote and 2 others
+  // are low on stock") instead of only an aggregate number.
+  const lowStockNote =
+    a.lowStockProductNames.length > 0
+      ? (() => {
+          const [first, second, ...rest] = a.lowStockProductNames;
+          const named = second ? `${first} and ${second}` : first;
+          return rest.length > 0 ? ` Low on stock: ${named} and ${rest.length} other(s).` : ` Low on stock: ${named}.`;
+        })()
+      : "";
   const lines = [
     `Catalog: ${a.metrics.totalProducts} total product(s), ${a.metrics.publishedProducts} published/live.`,
-    `Stock (published products only): ${a.inventory.inStock} in stock, ${a.inventory.low} low stock, ${a.inventory.out} out of stock.`,
+    `Stock (published products only): ${a.inventory.inStock} in stock, ${a.inventory.low} low stock, ${a.inventory.out} out of stock.${lowStockNote}`,
     a.categoryCounts.length
       ? `Top categories: ${a.categoryCounts.map((c) => `${c.category} (${c.count})`).join(", ")}.`
       : `No published categories yet.`,

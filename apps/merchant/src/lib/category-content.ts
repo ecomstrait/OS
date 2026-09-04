@@ -23,6 +23,11 @@ const SYSTEM = [
   "Write one short, natural paragraph (2-3 sentences) introducing a product",
   "category page for an online store. Warm, confident, no hype, no emojis,",
   'no headings, no markdown. Mention the category naturally — never say "category page."',
+  "Never state a specific fact about the products or the store that isn't implied by the category",
+  "name or the product titles given — no material, certification, warranty, guarantee, sourcing",
+  "claim, or count you weren't actually told. This is cached and shown to real customers",
+  "indefinitely, with no review before the first time it's shown — write generally enough to stay",
+  "true rather than specifically enough to risk being wrong.",
 ].join(" ");
 
 function presetDescription(storeName: string, label: string): string {

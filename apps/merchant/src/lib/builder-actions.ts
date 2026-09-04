@@ -104,7 +104,19 @@ export async function converseBuilderTurn(
     if (!budget.ok) return { error: budget.error, upgrade: true };
 
     const lastUser = [...history].reverse().find((h) => h.role === "user")?.content.trim() ?? "";
-    const nicheStillUnknown = !context.inferredNiche && history.filter((h) => h.role === "user").length <= 1;
+    // Used to also require this being (at most) the conversation's very
+    // first user message — a real gap: BUILDER_SYSTEM's own delegation rule
+    // says this can happen "at ANY point in the conversation," but this
+    // deterministic backstop only covered the opening turn, leaving every
+    // later one resting purely on the model's own ~2/3-reliable judgment
+    // (see the comment on `SHOW_PRODUCTS_PATTERN` below). `context.inferredNiche`
+    // is no longer just the pre-selection from before this chat started —
+    // the caller (store-builder.tsx) now folds in whatever niche the AI
+    // itself has already established mid-conversation, so this check stays
+    // correctly scoped to "niche genuinely still isn't known" at any turn,
+    // without misfiring on a delegate-pattern reply to some OTHER pending
+    // question (audience/style) once niche is already settled.
+    const nicheStillUnknown = !context.inferredNiche;
     if (nicheStillUnknown && DELEGATE_PATTERN.test(lastUser)) {
       const suggested = await suggestProductsForStore({ limit: 6 });
       if (suggested.products.length) {

@@ -31,8 +31,17 @@ export async function POST(req: Request) {
 
   const plan = await generateBusinessPlan({ idea, country, budget });
 
-  if (cache.size >= MAX_ENTRIES) cache.clear();
-  cache.set(key, { plan, at: Date.now() });
+  // Only cache plans we're confident in: deterministic presets are always
+  // safe, and AI plans are safe once every numeric field has passed
+  // reference-range validation (see `validatedRangeField` in ecomai.ts). If
+  // any field needed a fallback, that's a signal the model's output was off
+  // in some way — still serve it to this one visitor, but don't propagate an
+  // unvalidated result to every other visitor via the shared cache.
+  const safeToCache = plan.source === "preset" || !plan.needsFallback;
+  if (safeToCache) {
+    if (cache.size >= MAX_ENTRIES) cache.clear();
+    cache.set(key, { plan, at: Date.now() });
+  }
 
   return NextResponse.json(plan);
 }

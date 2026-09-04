@@ -93,10 +93,24 @@ export async function runOrchestrator(input: OrchestratorInput): Promise<Orchest
       const decision = await router.invoke([
         {
           role: "system",
-          content:
-            'Classify the merchant\'s message as "analytics" (asking about sales, orders, revenue, ' +
-            'numbers, or performance) or "advisor" (general business advice, product, marketing, or ' +
-            "strategy questions). Reply with exactly one word: analytics or advisor.",
+          content: [
+            'Classify the merchant\'s message as "analytics" (asking about sales, orders, revenue, ',
+            'numbers, or performance) or "advisor" (general business advice, product, marketing, or ',
+            'strategy questions — this includes any question that also needs a recommendation or ',
+            "judgment call, even one that starts from a number, since the advisor has the same SQL query ",
+            "tool available and can look the number up itself before advising).\n",
+            "Examples:\n",
+            '"What was my total revenue last month?" -> analytics (a pure numbers question, nothing to ',
+            "recommend)\n",
+            '"How many orders came in this week?" -> analytics (a pure numbers question)\n',
+            '"How can I get more repeat customers?" -> advisor (strategy/advice, no specific number ',
+            "needed)\n",
+            '"Why did my revenue drop last month, and what should I do about it?" -> advisor (mixed/',
+            "ambiguous case: it needs a real number to open with, but also a recommendation — route the ",
+            "whole thing to advisor rather than splitting one question across two specialists, since ",
+            "advisor can query the same data itself)\n",
+            "Reply with exactly one word: analytics or advisor.",
+          ].join(""),
         },
         { role: "user", content: question },
       ]);
@@ -134,8 +148,32 @@ export async function runOrchestrator(input: OrchestratorInput): Promise<Orchest
   // but a blank reply reaching the merchant is worse than an honest one
   // saying the answer didn't come through, especially after real work
   // happened (visible in the persisted tool_calls trace either way).
-  const lastMessage = final.messages[final.messages.length - 1];
-  const rawReply = lastMessage ? contentToText(lastMessage.content) : "";
+  let finalMessages = final.messages;
+  let lastMessage = finalMessages[finalMessages.length - 1];
+  let rawReply = lastMessage ? contentToText(lastMessage.content) : "";
+
+  if (!rawReply.trim()) {
+    // One retry before giving up: drop the empty AIMessage and hand the rest
+    // of the transcript (including any tool calls/results already made) back
+    // to the same specialist for another synthesis attempt. This re-runs the
+    // agent's loop rather than poking the raw model, but since the messages
+    // already end in a ToolMessage/HumanMessage (never a dangling tool call),
+    // it costs one more completion, not a repeat of the whole tool chain.
+    try {
+      const retryMessages = finalMessages.slice(0, -1);
+      const retryAgent =
+        final.route === "analytics"
+          ? createAnalyticsAgent()
+          : createBusinessAdvisorAgent({ tenantId: input.tenantId, extraTools: input.extraTools });
+      const retryResult = await retryAgent.invoke({ messages: retryMessages });
+      finalMessages = retryResult.messages;
+      lastMessage = finalMessages[finalMessages.length - 1];
+      rawReply = lastMessage ? contentToText(lastMessage.content) : "";
+    } catch (err) {
+      console.error("[ai] orchestrator retry of final synthesis failed:", err);
+    }
+  }
+
   const reply =
     rawReply.trim() ||
     "I looked into that but couldn't put together a clear answer — could you try rephrasing the question?";
@@ -146,15 +184,16 @@ export async function runOrchestrator(input: OrchestratorInput): Promise<Orchest
     agent: final.route === "analytics" ? "analytics-agent" : "business-advisor",
     input: { message: input.message, context: input.context },
     output: { reply },
-    toolCalls: extractToolCalls(final.messages),
+    toolCalls: extractToolCalls(finalMessages),
   });
 
   // One ledger entry per run, not per model call: this folds the router's
   // (fast-cheap) usage in with the chosen agent's (reasoning/workhorse) —
   // an approximation, not a per-call breakdown, but real token volume per
-  // role is still the signal a future model-swap decision needs.
+  // role is still the signal a future model-swap decision needs. Includes
+  // the retry's usage too, when one happened.
   const agentRole = final.route === "analytics" ? "workhorse" : "reasoning";
-  const usage = sumUsage(final.messages);
+  const usage = sumUsage(finalMessages);
   await recordUsage({
     tenantId: input.tenantId,
     role: agentRole,

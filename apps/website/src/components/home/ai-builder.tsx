@@ -26,7 +26,7 @@ type Phase = "idle" | "thinking" | "building" | "ready" | "beta";
 
 type BuildEvent =
   | { key: string; doing: string; done: string; kind: "text" }
-  | { key: string; doing: string; done: string; kind: "suppliers"; suppliers: number; rating: string }
+  | { key: string; doing: string; done: string; kind: "suppliers"; suppliers: number }
   | { key: string; doing: string; done: string; kind: "products"; products: { name: string; margin: number }[] }
   | { key: string; doing: string; done: string; kind: "keywords"; keywords: string[] }
   | { key: string; doing: string; done: string; kind: "checklist"; items: string[] }
@@ -37,7 +37,6 @@ function buildEvents(plan: BusinessPlan): BuildEvent[] {
   const [smin, smax] = plan.estimate.suppliers;
   const suppliers = Math.round((smin + smax) / 2);
   const [mmin, mmax] = plan.estimate.margin;
-  const rating = (4.6 + ((suppliers % 4) * 0.1)).toFixed(1);
 
   const products = plan.productIdeas.slice(0, 4).map((name, i) => ({
     name,
@@ -54,7 +53,7 @@ function buildEvents(plan: BusinessPlan): BuildEvent[] {
 
   return [
     { key: "idea", doing: `Analyzing “${plan.idea}”`, done: `Got it — a ${niche} store. Strong pick.`, kind: "text" },
-    { key: "suppliers", doing: "Finding verified suppliers", done: `Matched ${suppliers} verified suppliers ready to fulfil.`, kind: "suppliers", suppliers, rating },
+    { key: "suppliers", doing: "Finding verified suppliers", done: `Matched ${suppliers} verified suppliers ready to fulfil.`, kind: "suppliers", suppliers },
     { key: "products", doing: "Curating best-selling products", done: `Picked ${products.length} winners with healthy margins:`, kind: "products", products },
     { key: "seo", doing: "Writing SEO & product copy", done: "Optimized copy — top keywords locked in:", kind: "keywords", keywords },
     { key: "design", doing: "Designing your storefront", done: "Brand, pages & mobile assembled.", kind: "checklist", items: ["Brand & logo", "Homepage", "Collections", "Mobile layout", "Payments & shipping"] },
@@ -523,34 +522,37 @@ function EventRow({ children, avatar }: { children: React.ReactNode; avatar?: bo
 function EventResult({ ev, reduce }: { ev: BuildEvent; reduce: boolean }) {
   if (ev.kind === "suppliers") {
     return (
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700">
-          <ShieldCheck className="h-3.5 w-3.5" /> {ev.suppliers} verified
-        </span>
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700">
-          ★ {ev.rating} avg rating
-        </span>
+      <div className="mt-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-semibold text-brand-700">
+            <ShieldCheck className="h-3.5 w-3.5" /> {ev.suppliers} verified
+          </span>
+        </div>
+        <p className="mt-1.5 text-[10px] text-ink-400">Example figure — illustrative, not a live directory.</p>
       </div>
     );
   }
   if (ev.kind === "products") {
     return (
-      <ul className="mt-2 space-y-1.5">
-        {ev.products.map((p, i) => (
-          <motion.li
-            key={p.name}
-            initial={reduce ? false : { opacity: 0, x: -6 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: reduce ? 0 : i * 0.08 }}
-            className="flex items-center justify-between gap-3 rounded-lg bg-white px-2.5 py-1.5 text-xs"
-          >
-            <span className="truncate text-ink-800">{p.name}</span>
-            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 font-bold text-brand-700">
-              <TrendingUp className="h-3 w-3" /> {p.margin}% margin
-            </span>
-          </motion.li>
-        ))}
-      </ul>
+      <div className="mt-2">
+        <ul className="space-y-1.5">
+          {ev.products.map((p, i) => (
+            <motion.li
+              key={p.name}
+              initial={reduce ? false : { opacity: 0, x: -6 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: reduce ? 0 : i * 0.08 }}
+              className="flex items-center justify-between gap-3 rounded-lg bg-white px-2.5 py-1.5 text-xs"
+            >
+              <span className="truncate text-ink-800">{p.name}</span>
+              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-brand-50 px-2 py-0.5 font-bold text-brand-700">
+                <TrendingUp className="h-3 w-3" /> {p.margin}% margin
+              </span>
+            </motion.li>
+          ))}
+        </ul>
+        <p className="mt-1.5 text-[10px] text-ink-400">Example margins — simulated, not live data.</p>
+      </div>
     );
   }
   if (ev.kind === "keywords") {

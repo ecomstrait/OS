@@ -211,9 +211,14 @@ export function summarizeMerchantForAdvisor(s: MerchantSnapshot): string {
     s.storeDesign.length
       ? `Store design: ${s.storeDesign.map((d) => `${d.name} — ${d.theme ?? "no theme set"}, colors ${d.brandColors.join("/") || "default"}`).join("; ")}.`
       : "",
+    // "Basic checks" and not "SEO gaps" deliberately — this is only a length
+    // check on 3 text fields, not a real audit (no keywords, backlinks, page
+    // speed, or anything else an actual SEO review would cover). Said that
+    // plainly so a confident answer built on this doesn't overstate a crude
+    // proxy as the definitive finding.
     s.seoIssues.length
-      ? `SEO gaps: ${s.seoIssues.map((i) => `${i.storeName}: ${i.issues.join("; ")}`).join(" | ")}.`
-      : `No obvious SEO gaps found in the store plan fields.`,
+      ? `Basic SEO checks (title/description/about-text length only, not a full audit): ${s.seoIssues.map((i) => `${i.storeName}: ${i.issues.join("; ")}`).join(" | ")}.`
+      : `Basic SEO checks (title/description/about-text length only) found nothing thin.`,
     s.platformTopSellers.length
       ? `What's selling well across the platform right now (market context, not this merchant's own sales): ${s.platformTopSellers
           .map((p) => `${p.name}${p.category ? ` (${p.category})` : ""} — ${p.unitsSold} units${p.marginPct != null ? `, ~${p.marginPct}% margin` : ""}`)

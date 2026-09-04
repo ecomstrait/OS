@@ -201,8 +201,12 @@ const BUILDER_SYSTEM = [
   '{ "type": "answer" | "show_products" | "other", "done": boolean, "reply": string, "niche": string | null, "audience": string | null, "styleKeyword": string | null, "storeName": string | null }',
   "",
   '"niche" is a short phrase for what they sell (e.g. "handmade leather bags") — fill in your best guess as you learn more, null until you know anything.',
-  '"audience" is a short phrase for who buys it / where, or null.',
-  '"styleKeyword" is a short word/phrase for the visual vibe (e.g. "luxury", "playful"), or null.',
+  '"audience" is a short phrase for who buys it / where, or null if still open or they delegated it',
+  "  (never store the delegation phrase itself, e.g. \"you decide\" is not a real audience — pick a",
+  "  sensible default yourself when you build, same as an unanswered question, rather than writing",
+  "  their words into the field).",
+  '"styleKeyword" is a short word/phrase for the visual vibe (e.g. "luxury", "playful"), or null on',
+  "  the same terms as audience above — delegated or unknown both mean null, never the literal phrase.",
   '"storeName" is what they want it called, once said — null if still open or they delegated it.',
   '"reply" is your next question for type "answer", your lead-in for "show_products", or your',
   '  response to whatever they said for "other".',
@@ -220,8 +224,15 @@ const PRESET_QUESTIONS = [
   { key: "storeName", q: "What should we name the store? Say “you pick” and I'll choose." },
 ] as const;
 
+// Broadened per the 2026-09-04 hallucination audit: the old pattern missed
+// common "no opinion" phrasings ("not sure", "I don't know", "whatever",
+// "doesn't matter") — in this fallback (no-gateway) path there's no LLM to
+// catch those semantically, so a merchant using any of them got that exact
+// literal text saved as a real field, including as the store's actual name.
 function isSkippedAnswer(text: string): boolean {
-  return /^(skip|none|no|na|-|you pick|surprise( me)?|any)$/i.test(text.trim());
+  return /^(skip|none|no|na|-|you pick|you decide|whatever|not sure|no idea|i ?dk|i don'?t know|doesn'?t matter|any|surprise( me)?)$/i.test(
+    text.trim(),
+  );
 }
 
 function presetConverse(history: BuilderTurn[], context: BuilderKnownContext): ConverseResult {
@@ -355,7 +366,11 @@ async function converseBuilderOnce(
   // "other" (a real question, confusion, off-topic) isn't "done" either —
   // only "answer" can complete the build.
   const showProducts = parsed.type === "show_products";
-  const isAnswer = parsed.type !== "show_products" && parsed.type !== "other";
+  // Allowlist, not exclusion — a case/spelling drift in the model's own
+  // output (e.g. "Answer", "completed") must never be silently treated as a
+  // valid completed answer just because it doesn't match the other two
+  // known values; it now safely falls through to "ask again" instead.
+  const isAnswer = parsed.type === "answer";
 
   // "done" with no niche isn't usable — generateStorePlan needs something to
   // build around, so treat it as one more turn rather than handing it "".
@@ -669,9 +684,13 @@ export async function applyMerchantRequest(
         { role: "system", content: MERCHANT_SYSTEM },
         {
           role: "user",
-          content: `Current store:\n${JSON.stringify(visible)}\n\nExisting pages: ${
+          content: `Current store (real, verified):\n${JSON.stringify(visible)}\n\nExisting pages: ${
             existingPages.length ? JSON.stringify(existingPages) : "(none yet)"
-          }${conversationSummary ? `\n\nConversation so far: ${conversationSummary}` : ""}\n\nMerchant says: ${text}`,
+          }${
+            conversationSummary
+              ? `\n\nYour own recollection of earlier in this conversation (a summary you wrote — may be imprecise, unlike the store data above; if it conflicts with what they're saying now, what they're saying now wins): ${conversationSummary}`
+              : ""
+          }\n\nMerchant says: ${text}`,
         },
       ],
       // reasoningEffort: "none" — see the note on the converseBuilder call
@@ -691,14 +710,26 @@ export async function applyMerchantRequest(
       productCategory?: string | null;
     };
 
-    const intent =
-      parsed.intent === "question" ||
-      parsed.intent === "unsupported" ||
-      parsed.intent === "page" ||
-      parsed.intent === "suggest_products"
-        ? parsed.intent
-        : "edit";
     const modelReply = typeof parsed.reply === "string" ? parsed.reply.trim() : "";
+
+    // Allowlist, not "anything unrecognized becomes edit" — that coercion
+    // used to be able to turn a genuine question into a confusing "couldn't
+    // tell what to change" non-answer if the model's own output ever drifted
+    // outside the five literal values (a real gap found in the 2026-09-04
+    // hallucination audit). An unrecognized value is now its own explicit,
+    // visible failure instead of a silently wrong guess.
+    const VALID_INTENTS = ["edit", "page", "suggest_products", "question", "unsupported"] as const;
+    if (!VALID_INTENTS.includes(parsed.intent as (typeof VALID_INTENTS)[number])) {
+      console.error("[ai] applyMerchantRequest: unrecognized intent from model:", JSON.stringify(parsed.intent));
+      return {
+        plan,
+        reply: modelReply || "I didn't quite catch what you'd like me to do — could you rephrase that?",
+        changed: [],
+        tokensUsed,
+        intent: "unsupported",
+      };
+    }
+    const intent = parsed.intent as (typeof VALID_INTENTS)[number];
 
     if (intent === "suggest_products") {
       return {
@@ -713,8 +744,27 @@ export async function applyMerchantRequest(
 
     if (intent === "page") {
       const slug = typeof parsed.page?.slug === "string" ? parsed.page.slug.trim() : "";
-      const action =
-        parsed.page?.action === "delete" ? "delete" : parsed.page?.action === "update" ? "update" : "create";
+      const rawAction = parsed.page?.action;
+      // A real bug this fixed: any unrecognized action string (a plausible
+      // model drift like "remove" instead of "delete") used to silently fall
+      // through to "create" — which, for an existing slug, actually means
+      // *update* (see the doc comment above: "create (or reuse for an
+      // existing slug — same as update)"), and the model believing it was
+      // deleting would omit title/body, so the real page got its content
+      // silently wiped instead of removed, while still reporting success.
+      // Missing entirely (undefined) still means "create", same as before —
+      // only a present-but-wrong value is now its own explicit failure.
+      if (rawAction !== undefined && rawAction !== "create" && rawAction !== "update" && rawAction !== "delete") {
+        console.error("[ai] applyMerchantRequest: unrecognized page action from model:", JSON.stringify(rawAction));
+        return {
+          plan,
+          reply: "I couldn't tell if you meant to add, edit, or remove that page — which did you mean?",
+          changed: [],
+          tokensUsed,
+          intent: "page",
+        };
+      }
+      const action = rawAction === "delete" ? "delete" : rawAction === "update" ? "update" : "create";
       // No slug means the model couldn't actually carry this out — treat it
       // like it had nothing to change, rather than reporting success.
       if (!slug) {
@@ -911,6 +961,14 @@ const BLOG_SYSTEM = [
   "Write genuinely useful, specific content for the topic given — not generic filler.",
   "3-5 short paragraphs, plain text, a blank line between paragraphs. No markdown headings, no bullet lists, no emojis.",
   "Warm, confident, concrete — mention real specifics implied by the topic and the store rather than vague generalities.",
+  "\"Concrete\" means write with authority in how you explain general, genuinely-true things about the",
+  "topic itself (how a material behaves, what to look for, common mistakes) — it does NOT mean",
+  "inventing specifics about THIS store or its products that you weren't given: no material,",
+  "certification, warranty, guarantee, return policy, sourcing claim, or statistic about the store's",
+  "own products unless it's implied by the topic/store name in an obviously generic way. This is",
+  "published as a real draft a customer may read — a fabricated claim about the store itself is a",
+  "real, durable mistake, not harmless color. When the topic needs a specific store fact to feel",
+  "complete, write around it in general terms rather than inventing the specific.",
   "Respond with ONLY JSON using these exact keys:",
   "{",
   '  "title": string,',

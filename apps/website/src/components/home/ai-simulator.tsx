@@ -371,20 +371,27 @@ function Result({
       </div>
 
       {/* stat tiles */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {view.tiles.map((s, i) => (
-          <motion.div key={s.label} initial={reduce ? false : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 * i }} className="rounded-xl border border-white/10 bg-white/5 p-3">
-            <s.icon className="h-4 w-4 text-ai-400" />
-            <p className="mt-2 truncate text-sm font-bold text-white">{s.value}</p>
-            <p className="text-[10px] text-white/45">{s.label}</p>
-          </motion.div>
-        ))}
+      <div>
+        <p className="mb-2 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-white/40">
+          <Sparkles className="h-3 w-3" /> Example figures — simulated, not live data
+        </p>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {view.tiles.map((s, i) => (
+            <motion.div key={s.label} initial={reduce ? false : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 * i }} className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <s.icon className="h-4 w-4 text-ai-400" />
+              <p className="mt-2 truncate text-sm font-bold text-white">{s.value}</p>
+              <p className="text-[10px] text-white/45">{s.label}</p>
+            </motion.div>
+          ))}
+        </div>
       </div>
 
       {/* projection chart */}
       <div className="rounded-2xl border border-white/10 bg-ink-950/50 p-4">
         <div className="mb-2 flex items-center justify-between">
-          <p className="text-xs font-semibold text-white/70">12-month projection</p>
+          <p className="text-xs font-semibold text-white/70">
+            12-month projection <span className="font-normal text-white/40">(simulated example)</span>
+          </p>
           <div className="flex items-center gap-3 text-[11px] text-white/50">
             <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-brand-500" /> {view.revLabel}</span>
             <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-ai-500" /> Profit</span>

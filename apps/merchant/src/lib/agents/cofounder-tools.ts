@@ -258,7 +258,7 @@ export function createCofounderTools(opts: { tenantId: string }) {
     {
       name: "ask_business_advisor",
       description:
-        "Get a real, grounded answer about ONE specific store's own numbers, orders, catalog, or (for a connected Shopify store) live shop status — has direct read access to that store's actual data. Use for a deep or precise question about one named store, not a portfolio-wide question (the snapshot already covers those).",
+        "Get a real, grounded answer about ONE specific store's own numbers, orders, catalog, or (for a connected Shopify store) live shop status — has direct read access to that store's actual data. Use for a deep or precise question about one named store, not a portfolio-wide question (the snapshot already covers those) — e.g. 'why are Nomad Threads' conversions down' or 'what's actually in Coastal Co's catalog right now' calls this tool; 'which of my stores has the weakest SEO' or 'how's the business doing overall' stays with the snapshot you already have, even though both compare across stores in some sense — the line is whether the answer needs ONE store's live/detailed data (this tool) or is answerable from the portfolio-level numbers already summarised for you (the snapshot). For a genuine per-store comparison across several stores, prefer answering from the snapshot first and only fall back to calling this once per store if the snapshot genuinely doesn't have what's being asked.",
       schema: z.object({ storeId: z.string(), question: z.string() }),
     },
   );

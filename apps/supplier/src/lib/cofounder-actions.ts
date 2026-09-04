@@ -18,7 +18,13 @@ export async function askCoFounderAction(
   if ("error" in ctx) return ctx;
   if (!message.trim()) return { error: "Say something first." };
 
-  const budget = await assertTokenBudget(700);
+  // Estimate must track the role's real ceiling: askCoFounder calls the
+  // "reasoning" role with maxTokens: 4000 (cofounder-ai.ts) — 700 was a stale
+  // guess from before that role's mitigation was tuned up, and let a supplier
+  // with well under a real call's worth of budget left start one anyway.
+  // recordTokenUsage() below reconciles this against the actual spend
+  // (gateway's real total_tokens) once the call completes.
+  const budget = await assertTokenBudget(4000);
   if (!budget.ok) return { error: budget.error, upgrade: true };
 
   // Full row (not just business_name): getSupplierAnalytics needs it for the
@@ -41,7 +47,14 @@ export async function askCoFounderAction(
     loadChatThread({ tenantId: ctx.supplierId, agent: "supplier_cofounder", threadKey: ctx.supplierId }),
   ]);
   const snapshotLines = [summarizeForAdvisor(revenue), catalog ? summarizeCatalogForAdvisor(catalog) : null];
-  if (thread.summary) snapshotLines.push(`Earlier in this conversation: ${thread.summary}`);
+  // Hedged deliberately: this is an LLM-generated summary of earlier turns,
+  // not a measured number like the lines above it — flag it as your own
+  // (possibly imprecise) recollection so the model doesn't repeat it back
+  // with the same confidence as the real snapshot data.
+  if (thread.summary)
+    snapshotLines.push(
+      `Your own recollection of earlier in this conversation (may be imprecise, it's a summary, not a transcript): ${thread.summary}`,
+    );
   const snapshot = snapshotLines.filter(Boolean).join("\n");
 
   const text = message.trim();
