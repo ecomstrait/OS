@@ -5,6 +5,7 @@ import type { StoreType } from "@ecomstrait/db";
 import { domainTarget } from "@/lib/domain";
 import { DomainCard } from "@/components/settings/domain-card";
 import { ProfileCard } from "@/components/settings/profile-card";
+import { PasswordCard } from "@/components/settings/password-card";
 
 export const metadata: Metadata = { title: "Settings" };
 
@@ -50,6 +51,13 @@ export default async function SettingsPage() {
           <Row label="Email" value={user?.email ?? ""} />
         </dl>
       </section>
+
+      <div className="mt-4">
+        <PasswordCard
+          email={user?.email ?? ""}
+          hasPassword={(user?.identities ?? []).some((i) => i.provider === "email")}
+        />
+      </div>
 
       <section className="mt-6">
         <h2 className="text-sm font-semibold text-ink-950">Stores</h2>

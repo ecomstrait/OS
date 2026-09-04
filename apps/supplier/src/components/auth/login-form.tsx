@@ -15,7 +15,14 @@ export function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [status, setStatus] = useState<"idle" | "loading">("idle");
-  const [error, setError] = useState<string | null>(null);
+  // Seeded from /auth/callback or /auth/confirm's `?error=auth` fallback —
+  // without this, a failed reset/confirmation link just silently lands here
+  // with no explanation of what happened.
+  const [error, setError] = useState<string | null>(
+    params.get("error") === "auth"
+      ? "That link didn't work — it may have expired, already been used, or been opened somewhere other than where you requested it. Request a new one below."
+      : null,
+  );
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();

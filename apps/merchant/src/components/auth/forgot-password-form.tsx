@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Loader2, MailCheck } from "lucide-react";
 import { createClient } from "@ecomstrait/auth/client";
 import { Button, TextField } from "@/components/ui";
-import { authCallbackUrl } from "@/lib/site-url";
+import { siteUrl } from "@/lib/site-url";
 
 /**
  * Both states (the request form, and the "check your inbox" confirmation)
@@ -23,11 +23,14 @@ export function ForgotPasswordForm() {
     setStatus("loading");
     setError(null);
     const supabase = createClient();
-    // The recovery link Supabase emails carries a `?code=` back to our existing
-    // /auth/callback (same PKCE exchange signup confirmation already uses);
-    // `next` tells that route where to send the now-signed-in visitor.
+    // Just the origin — the "Reset Password" email template appends
+    // /auth/confirm?token_hash=...&type=recovery&next=/reset-password itself
+    // via {{ .RedirectTo }}. That route verifies the token_hash directly
+    // (not the PKCE `?code=` /auth/callback uses), which is what makes the
+    // link work when opened in a different browser/device than the one that
+    // requested it — the common case for a password reset.
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${authCallbackUrl()}?next=/reset-password`,
+      redirectTo: siteUrl(),
     });
     if (error) {
       setError(error.message);

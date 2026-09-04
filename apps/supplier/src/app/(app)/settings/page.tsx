@@ -6,6 +6,7 @@ import { createClient } from "@ecomstrait/auth/server";
 import { getMySupplier } from "@/lib/supplier-context";
 import { TeamManager } from "@/components/settings/team-manager";
 import { ProfileCard } from "@/components/settings/profile-card";
+import { PasswordCard } from "@/components/settings/password-card";
 
 export const metadata: Metadata = { title: "Settings" };
 
@@ -61,6 +62,13 @@ export default async function SettingsPage() {
           {my && !my.isOwner && <Row label="Access" value="Staff member" />}
         </dl>
       </section>
+
+      <div className="mt-4">
+        <PasswordCard
+          email={user?.email ?? ""}
+          hasPassword={(user?.identities ?? []).some((i) => i.provider === "email")}
+        />
+      </div>
 
       <section className="mt-4 rounded-2xl border border-ink-100 bg-white p-5">
         <div className="flex items-center justify-between">
