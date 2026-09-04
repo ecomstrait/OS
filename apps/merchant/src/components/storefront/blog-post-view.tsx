@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import type { Storefront } from "@/lib/storefront";
 import type { PostDetail } from "@/lib/blog-api";
 import type { StorefrontNavLink } from "@/lib/storefront-api";
@@ -51,9 +52,8 @@ export function BlogPostView({
           </h1>
 
           {post.coverImage && (
-            <div className="mt-8 aspect-[16/9] overflow-hidden" style={{ background: surface, borderRadius: "var(--radius)" }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={post.coverImage} alt="" className="h-full w-full object-cover" />
+            <div className="relative mt-8 aspect-[16/9] overflow-hidden" style={{ background: surface, borderRadius: "var(--radius)" }}>
+              <Image src={post.coverImage} alt="" fill sizes="(min-width: 640px) 672px, 100vw" className="object-cover" priority />
             </div>
           )}
 

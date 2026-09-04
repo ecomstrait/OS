@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { createAdminClient } from "@ecomstrait/db";
 import { productImage } from "@/lib/catalog";
@@ -130,8 +131,25 @@ export async function resolveStoreForNewsletter(storeId: string): Promise<{ id: 
 type ListingRow = { product_id: string; price: number | null; shipping_note: string | null };
 type Listing = { price: number | null; shippingNote: string | null };
 
-/** Approved listings for a store, keyed by product id. */
-async function approvedListings(db: Admin, storeId: string, productIds?: string[]) {
+/**
+ * Approved listings for a store, keyed by product id.
+ *
+ * `cache()`-wrapped: memoized per request (React's Server Component request
+ * cache, not a persistent one), keyed on the arguments actually passed.
+ * `db` is the module-level singleton `createAdminClient()` always returns
+ * (same reference every call, so it doesn't break the cache key), and every
+ * caller in this file that fetches ALL of a store's listings calls this the
+ * same way — `approvedListings(db, storeId)`, no third argument — so one
+ * home-page render that used to fire this query once per category band
+ * (`listStoreProducts`) plus once more from `listStoreCategories` (itself
+ * called both directly by a page and again internally by `getStorefrontNav`)
+ * now fires it exactly once and reuses the result everywhere. Calls that add
+ * a `productIds` filter (`getStoreProduct`, `getStoreProductsByIds`,
+ * `priceCart`) each build a fresh array, so they don't hit this cache against
+ * each other — a smaller, separate concern from the redundant full-store
+ * fetches this exists to fix.
+ */
+const approvedListings = cache(async (db: Admin, storeId: string, productIds?: string[]) => {
   let query = db
     .from("store_products")
     .select("product_id, price, shipping_note")
@@ -142,7 +160,7 @@ async function approvedListings(db: Admin, storeId: string, productIds?: string[
   return new Map<string, Listing>(
     (data ?? []).map((r: ListingRow) => [r.product_id, { price: r.price, shippingNote: r.shipping_note }]),
   );
-}
+});
 
 function toApiProduct(
   p: {
@@ -254,8 +272,14 @@ export type CategorySummary = {
  * `approvedListings` already does for this store, just carried one step
  * further. A store's live catalog is small enough (tens to low hundreds of
  * products) that this is one query, not N.
+ *
+ * `cache()`-wrapped for the same reason as `approvedListings` above:
+ * `getStorefrontNav` calls this internally, and every page function that
+ * calls `getStorefrontNav` also calls this directly in the same
+ * `Promise.all` for its own category bands/filter list — without this, that
+ * was two independent, identical fetches every single render.
  */
-export async function listStoreCategories(storeId: string): Promise<CategorySummary[]> {
+export const listStoreCategories = cache(async (storeId: string): Promise<CategorySummary[]> => {
   const db = admin();
   if (!db) return [];
 
@@ -286,7 +310,7 @@ export async function listStoreCategories(storeId: string): Promise<CategorySumm
   return [...groups.entries()]
     .sort(([a], [b]) => (a === UNCATEGORIZED ? 1 : b === UNCATEGORIZED ? -1 : a.localeCompare(b)))
     .map(([category, g]) => ({ category, count: g.count, image: g.image }));
-}
+});
 
 export type StorefrontNavLink = { label: string; href: string };
 

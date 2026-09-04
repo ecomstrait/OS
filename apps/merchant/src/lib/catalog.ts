@@ -83,6 +83,17 @@ export type CatalogFilters = {
   supplierId?: string;
   /** A product category ("niche"), or "" / undefined for all. */
   category?: string;
+  /**
+   * "exact" (default) is correct for a real category value chosen from
+   * `getCatalogFacets()`'s own dropdown (Find Suppliers) — it's guaranteed
+   * to already match the DB's exact string. "ilike" is for a freeform niche
+   * phrase pulled out of an AI conversation (`product-suggestions.ts`),
+   * which is never guaranteed to match the DB's exact casing — a real bug
+   * this fixed: a merchant's "smartphones" (lowercase, from chat) silently
+   * matched nothing against the DB's "Smartphones", exactly as if the
+   * category had no products at all, when case-insensitively it did.
+   */
+  categoryMatch?: "exact" | "ilike";
 };
 
 /** Strip LIKE wildcards so a typed `%` matches literally rather than everything. */
@@ -112,7 +123,9 @@ export async function getPublishedCatalog(
     const search = likeSafe(filters.search ?? "");
     if (search) q = q.ilike("title", `%${search}%`);
     if (filters.supplierId) q = q.eq("supplier_id", filters.supplierId);
-    if (filters.category) q = q.eq("category", filters.category);
+    if (filters.category) {
+      q = filters.categoryMatch === "ilike" ? q.ilike("category", filters.category) : q.eq("category", filters.category);
+    }
     return q.order("created_at", { ascending: false });
   };
 
@@ -291,7 +304,10 @@ export async function getPlatformTopSellers(
     .map(([id]) => id);
 
   let productsQuery = admin.from("products").select(SELECT).eq("status", "published").in("id", topIds);
-  if (opts.category) productsQuery = productsQuery.eq("category", opts.category);
+  // ilike, not eq: this function's only caller is product-suggestions.ts,
+  // matching a freeform niche phrase from an AI conversation against the
+  // DB's own category string — never guaranteed to be the same case.
+  if (opts.category) productsQuery = productsQuery.ilike("category", opts.category);
   const { data: rows } = await productsQuery;
 
   const withNames = await withSupplierNames(admin, (rows ?? []) as RawProduct[]);

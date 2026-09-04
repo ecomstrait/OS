@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import { Plus, Minus, ImageOff, Loader2 } from "lucide-react";
 import type { Storefront } from "@/lib/storefront";
 import type { ApiProduct, StorefrontNavLink } from "@/lib/storefront-api";
@@ -125,12 +126,11 @@ function Gallery({ product, surface }: { product: ApiProduct; surface: string })
   return (
     <div>
       <div
-        className="aspect-[4/5] w-full overflow-hidden"
+        className="relative aspect-[4/5] w-full overflow-hidden"
         style={{ background: surface, borderRadius: "var(--radius)" }}
       >
         {images[active] ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={images[active]} alt={product.title} className="h-full w-full object-cover" />
+          <Image src={images[active]} alt={product.title} fill sizes="(min-width: 640px) 50vw, 100vw" className="object-cover" priority />
         ) : (
           <div className="grid h-full w-full place-items-center opacity-30">
             <ImageOff className="h-10 w-10" />
@@ -144,14 +144,13 @@ function Gallery({ product, surface }: { product: ApiProduct; surface: string })
               key={src + i}
               onClick={() => setActive(i)}
               aria-label={`View image ${i + 1}`}
-              className="aspect-square overflow-hidden border-2 transition"
+              className="relative aspect-square overflow-hidden border-2 transition"
               style={{
                 borderRadius: "var(--radius)",
                 borderColor: i === active ? "var(--brand)" : "transparent",
               }}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={src} alt="" className="h-full w-full object-cover" style={{ opacity: i === active ? 1 : 0.6 }} />
+              <Image src={src} alt="" fill sizes="120px" className="object-cover" style={{ opacity: i === active ? 1 : 0.6 }} />
             </button>
           ))}
         </div>

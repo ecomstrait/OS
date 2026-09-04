@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { ShoppingBag, Plus, Minus, Loader2, X, Menu } from "lucide-react";
 import type { Storefront } from "@/lib/storefront";
 import { useStorefrontCart } from "@/components/storefront/use-storefront";
@@ -122,8 +123,10 @@ function ChromeBody({
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <Link href={basePath || "/"} className="shrink-0">
             {store.logoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={store.logoUrl} alt={store.name} className="h-7 object-contain" />
+              // Actual width varies per store (an uploaded logo, unknown
+              // aspect ratio) — width/height here are just a sizing hint for
+              // next/image's optimizer; `w-auto` lets the real ratio show.
+              <Image src={store.logoUrl} alt={store.name} width={160} height={40} className="h-7 w-auto object-contain" priority />
             ) : (
               <span
                 className="text-lg font-semibold"
@@ -272,13 +275,10 @@ function ChromeBody({
                   {cart.lines.map((l) => (
                     <li key={l.productId} className="flex items-center gap-3">
                       <span
-                        className="h-14 w-14 shrink-0 overflow-hidden"
+                        className="relative block h-14 w-14 shrink-0 overflow-hidden"
                         style={{ background: surface, borderRadius: "var(--radius)" }}
                       >
-                        {l.image ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={l.image} alt="" className="h-full w-full object-cover" />
-                        ) : null}
+                        {l.image ? <Image src={l.image} alt="" fill sizes="56px" className="object-cover" /> : null}
                       </span>
                       <div className="min-w-0 flex-1">
                         <p className="line-clamp-1 text-sm font-medium">{l.title}</p>

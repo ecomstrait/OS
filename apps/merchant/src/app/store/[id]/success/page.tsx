@@ -6,6 +6,11 @@ import { confirmOrder } from "@/lib/storefront-orders";
 import { writeCart } from "@/lib/storefront-api";
 
 export const metadata: Metadata = { title: "Thank you" };
+// Overrides the `/store` layout's `revalidate = 60` — this page confirms one
+// customer's own order and clears their cart as a side effect on every real
+// visit; it must never serve a cached response meant for a different
+// customer's session_id.
+export const dynamic = "force-dynamic";
 
 export default async function SuccessPage({
   params,

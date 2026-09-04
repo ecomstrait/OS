@@ -58,12 +58,16 @@ export async function StorefrontHome({
   storeId: string;
   basePath?: string;
 }) {
-  const store = await getStorefront(storeId);
+  // `hasBlog`/`pages` don't depend on `store`, so they run alongside it
+  // rather than after it — was three sequential round trips before this.
+  const [store, hasBlog, pages] = await Promise.all([
+    getStorefront(storeId),
+    hasPublishedPosts(storeId),
+    listStorePages(storeId),
+  ]);
   if (!store) notFound();
 
   const hasAbout = Boolean(store.plan.about || store.plan.aboutMedia);
-  const hasBlog = await hasPublishedPosts(storeId);
-  const pages = await listStorePages(storeId);
   const [navLinks, categories] = await Promise.all([
     getStorefrontNav(storeId, { about: hasAbout, blog: hasBlog, pages, basePath }),
     listStoreCategories(storeId),
@@ -113,23 +117,31 @@ export async function StorefrontProducts({
   storeId,
   category = "",
   q = "",
+  page = 1,
   basePath = `/store/${storeId}`,
 }: {
   storeId: string;
   category?: string;
   q?: string;
+  /** From `?page=` — a real, independently crawlable page of results, not
+   *  just the client-side "Load more" append. See ProductsListingView. */
+  page?: number;
   basePath?: string;
 }) {
-  const store = await getStorefront(storeId);
+  // `hasBlog`/`pages` don't depend on `store`, so they run alongside it
+  // rather than after it — was three sequential round trips before this.
+  const [store, hasBlog, pages] = await Promise.all([
+    getStorefront(storeId),
+    hasPublishedPosts(storeId),
+    listStorePages(storeId),
+  ]);
   if (!store) notFound();
 
   const hasAbout = Boolean(store.plan.about || store.plan.aboutMedia);
-  const hasBlog = await hasPublishedPosts(storeId);
-  const pages = await listStorePages(storeId);
   const [navLinks, categories, initial] = await Promise.all([
     getStorefrontNav(storeId, { about: hasAbout, blog: hasBlog, pages, basePath }),
     listStoreCategories(storeId),
-    listStoreProducts(storeId, { category: category || undefined, q, page: 1 }),
+    listStoreProducts(storeId, { category: category || undefined, q, page }),
   ]);
 
   const origin = await requestOrigin();
@@ -166,6 +178,11 @@ export async function StorefrontProducts({
       <JsonLdScript data={breadcrumbJsonLd(crumbs)} />
       {itemList && <JsonLdScript data={itemList} />}
       <ProductsListingView
+        // Remounts the whole client subtree on a real navigation to a
+        // different category or page — see use-storefront.ts's doc comment
+        // on why this replaces an effect that would otherwise have to
+        // re-sync local state to fresh props by hand.
+        key={`${category}:${page}`}
         store={store}
         navLinks={navLinks}
         categories={categories}
@@ -173,6 +190,7 @@ export async function StorefrontProducts({
         initialTotal={initial.total}
         initialCategory={category}
         initialQuery={q}
+        initialPage={page}
         basePath={basePath}
         categoryDescription={categoryDescription}
       />
@@ -189,13 +207,21 @@ export async function StorefrontProductDetail({
   productId: string;
   basePath?: string;
 }) {
-  const [store, product] = await Promise.all([getStorefront(storeId), getStoreProduct(storeId, productId)]);
+  // None of these four actually depend on each other's result (`hasBlog`/
+  // `pages` only need `storeId`, not `store` itself) — one round trip
+  // instead of the two-or-three sequential stages this used to be.
+  const [store, product, hasBlog, pages] = await Promise.all([
+    getStorefront(storeId),
+    getStoreProduct(storeId, productId),
+    hasPublishedPosts(storeId),
+    listStorePages(storeId),
+  ]);
   if (!store || !product) notFound();
 
   const navLinks = await getStorefrontNav(storeId, {
     about: Boolean(store.plan.about || store.plan.aboutMedia),
-    blog: await hasPublishedPosts(storeId),
-    pages: await listStorePages(storeId),
+    blog: hasBlog,
+    pages,
     basePath,
   });
 
@@ -226,14 +252,17 @@ export async function StorefrontBlogList({
   storeId: string;
   basePath?: string;
 }) {
-  const store = await getStorefront(storeId);
+  const [store, posts, pages] = await Promise.all([
+    getStorefront(storeId),
+    listPublishedPosts(storeId),
+    listStorePages(storeId),
+  ]);
   if (!store) notFound();
 
-  const posts = await listPublishedPosts(storeId);
   const navLinks = await getStorefrontNav(storeId, {
     about: Boolean(store.plan.about || store.plan.aboutMedia),
     blog: posts.length > 0,
-    pages: await listStorePages(storeId),
+    pages,
     basePath,
   });
 
@@ -249,13 +278,17 @@ export async function StorefrontBlogPost({
   slug: string;
   basePath?: string;
 }) {
-  const [store, post] = await Promise.all([getStorefront(storeId), getPublishedPost(storeId, slug)]);
+  const [store, post, pages] = await Promise.all([
+    getStorefront(storeId),
+    getPublishedPost(storeId, slug),
+    listStorePages(storeId),
+  ]);
   if (!store || !post) notFound();
 
   const navLinks = await getStorefrontNav(storeId, {
     about: Boolean(store.plan.about || store.plan.aboutMedia),
     blog: true, // this page's own existence proves at least one post is published
-    pages: await listStorePages(storeId),
+    pages,
     basePath,
   });
 
@@ -301,13 +334,18 @@ export async function StorefrontCustomPage({
   slug: string;
   basePath?: string;
 }) {
-  const [store, page] = await Promise.all([getStorefront(storeId), getStorePage(storeId, slug)]);
+  const [store, page, hasBlog, pages] = await Promise.all([
+    getStorefront(storeId),
+    getStorePage(storeId, slug),
+    hasPublishedPosts(storeId),
+    listStorePages(storeId),
+  ]);
   if (!store || !page) notFound();
 
   const navLinks = await getStorefrontNav(storeId, {
     about: Boolean(store.plan.about || store.plan.aboutMedia),
-    blog: await hasPublishedPosts(storeId),
-    pages: await listStorePages(storeId),
+    blog: hasBlog,
+    pages,
     basePath,
   });
 

@@ -27,6 +27,71 @@ export async function requestOrigin(): Promise<string> {
 }
 
 /**
+ * Google's practical sweet spot for how a title/description actually
+ * renders in a search result — long enough to read as complete, short
+ * enough not to get truncated. Same convention `enrichProduct`'s prompt
+ * already asks for on the supplier side (apps/supplier/src/lib/ai.ts);
+ * enforced here in code rather than only asked for in a prompt, since an AI
+ * response (or a hand-written fallback string) can't be trusted to land in
+ * range on its own — an Ahrefs audit flagging "title too long" / "meta
+ * description too short/too long" across a live storefront is exactly what
+ * this guarantees can't happen again, for every page, regardless of source.
+ */
+const TITLE_MAX = 60;
+const DESCRIPTION_MIN = 120;
+const DESCRIPTION_MAX = 155;
+
+/** Cuts at the last whole word, leaving room for the trailing "…" so the
+ *  result is never more than `max` characters — not `max + 1`. */
+function clampLength(text: string, max: number): string {
+  const clean = text.trim();
+  if (clean.length <= max) return clean;
+  const budget = max - 1;
+  const cut = clean.slice(0, budget).replace(/\s+\S*$/, "");
+  // A single word longer than `budget` (rare, but possible — no whitespace
+  // to cut back to) has nothing to trim — fall back to a hard slice rather
+  // than emit an empty string.
+  return `${cut || clean.slice(0, budget)}…`;
+}
+
+function clampTitle(title: string): string {
+  return clampLength(title, TITLE_MAX);
+}
+
+/**
+ * Appended one at a time until the description clears `DESCRIPTION_MIN` —
+ * a single short sentence isn't reliably enough on its own (a one-word store
+ * name plus an empty AI description would still land under 120 chars after
+ * just one), so this keeps adding until it's actually cleared, then the
+ * caller clamps back down if that overshot `DESCRIPTION_MAX`.
+ */
+function descriptionFillers(storeName: string): string[] {
+  return [
+    `Shop the full ${storeName} collection — quality picks, fast shipping, and easy returns.`,
+    "New arrivals and customer favorites are added regularly, so there's always something worth browsing.",
+  ];
+}
+
+/**
+ * Never returns something shorter than `DESCRIPTION_MIN` — a short AI
+ * response or a terse fallback string (`Shop ${name}.`) gets generic,
+ * store-named closers appended rather than left as thin, easily-flagged
+ * copy. Re-clamped to `DESCRIPTION_MAX` afterward in case that overshoots.
+ */
+function clampDescription(description: string, storeName: string): string {
+  const clean = description.trim();
+  if (clean.length > DESCRIPTION_MAX) return clampLength(clean, DESCRIPTION_MAX);
+
+  let result = clean;
+  for (const filler of descriptionFillers(storeName)) {
+    if (result.length >= DESCRIPTION_MIN) break;
+    const joiner = result && !/[.!?]$/.test(result) ? "." : "";
+    result = result ? `${result}${joiner} ${filler}` : filler;
+  }
+  return result.length > DESCRIPTION_MAX ? clampLength(result, DESCRIPTION_MAX) : result;
+}
+
+/**
  * Metadata every public storefront page needs, folded into one place.
  *
  * `robots: { index: true }` is not optional here — the merchant app's root
@@ -51,14 +116,16 @@ export function storefrontMetadata({
   /** Absolute image URL for OG/Twitter — a product photo, or the store's logo. */
   image?: string | null;
 }): Metadata {
+  const t = clampTitle(title);
+  const d = clampDescription(description, storeName);
   return {
-    title,
-    description,
+    title: t,
+    description: d,
     alternates: { canonical },
     robots: { index: true, follow: true },
     openGraph: {
-      title,
-      description,
+      title: t,
+      description: d,
       url: canonical,
       siteName: storeName,
       type: "website",
@@ -66,8 +133,8 @@ export function storefrontMetadata({
     },
     twitter: {
       card: image ? "summary_large_image" : "summary",
-      title,
-      description,
+      title: t,
+      description: d,
       ...(image ? { images: [image] } : {}),
     },
   };

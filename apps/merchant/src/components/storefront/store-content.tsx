@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { ShieldCheck, PackageCheck, BadgeCheck, ImageOff, Plus } from "lucide-react";
 import type { PlanMedia, StorePlan } from "@/lib/ecomai";
 import type { ApiProduct } from "@/lib/storefront-api";
@@ -314,11 +315,12 @@ export function ProductGrid({
           <Link href={`${basePath}/products/${p.id}`} className="block">
             <div className="relative aspect-[4/5] shrink-0 overflow-hidden" style={{ background: surface, borderRadius: "var(--radius)" }}>
               {p.image ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
+                <Image
                   src={p.image}
                   alt={p.title}
-                  className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
+                  fill
+                  sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+                  className="object-cover transition duration-500 group-hover:scale-[1.04]"
                 />
               ) : (
                 <div className="grid h-full w-full place-items-center opacity-30">

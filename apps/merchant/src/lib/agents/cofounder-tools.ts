@@ -66,14 +66,20 @@ export function createCofounderTools(opts: { tenantId: string }) {
         const { data } = await supabase.from("store_products").select("product_id").eq("store_id", storeId);
         excludeIds = (data ?? []).map((r) => r.product_id);
       }
-      const suggestions = await suggestProductsForStore({
+      const suggested = await suggestProductsForStore({
         category: category ?? null,
         excludeIds,
         limit: limit ?? 6,
       });
-      if (!suggestions.length) return "No matching products found on the platform right now.";
-      return JSON.stringify(
-        suggestions.map((p) => ({
+      if (!suggested.products.length) return "No matching products found on the platform right now.";
+      return JSON.stringify({
+        // False means the requested category matched nothing and these are
+        // genuine platform-wide results instead — say so plainly if you
+        // relay these, never present them as if they were the category
+        // asked for.
+        matchedCategory: suggested.matchedCategory,
+        requestedCategory: suggested.requestedCategory,
+        products: suggested.products.map((p) => ({
           id: p.id,
           title: p.title,
           category: p.category,
@@ -82,12 +88,12 @@ export function createCofounderTools(opts: { tenantId: string }) {
           marginPct: p.marginPct,
           reason: p.reason,
         })),
-      );
+      });
     },
     {
       name: "suggest_products",
       description:
-        "Suggest real, ranked products from the platform catalog for the merchant to sell — ranked by actual units sold and margin, never a guess. Use when asked what to sell, for product ideas, or before building a store around a niche. Pass storeId to exclude products already listed there.",
+        "Suggest real, ranked products from the platform catalog for the merchant to sell — ranked by actual units sold and margin, never a guess. Use when asked what to sell, for product ideas, or before building a store around a niche. Pass storeId to exclude products already listed there. The result's matchedCategory tells you whether the requested category actually had matches — if false, these are platform-wide fallback picks, not the category asked for, and you must say so plainly rather than presenting them as a match.",
       schema: z.object({
         category: z.string().optional().describe("A niche/category hint, e.g. 'shoes' — omit for platform-wide top sellers"),
         storeId: z.string().optional().describe("Exclude products already listed on this store"),

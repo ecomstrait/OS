@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import type { Storefront } from "@/lib/storefront";
 import { storeTokens, tokenStyle } from "@/lib/theme-tokens";
 import type { ApiProduct, StorefrontNavLink } from "@/lib/storefront-api";
@@ -120,9 +121,8 @@ export function StorefrontView({
               description. ---- */}
           {spotlight && (
             <div className="mb-24 grid items-center gap-10 border-y py-14 sm:grid-cols-2 sm:gap-16" style={{ borderColor: line }}>
-              <div className="aspect-[4/5] w-full overflow-hidden" style={{ background: surface, borderRadius: "var(--radius)" }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={spotlight.image!} alt={spotlight.title} className="h-full w-full object-cover" />
+              <div className="relative aspect-[4/5] w-full overflow-hidden" style={{ background: surface, borderRadius: "var(--radius)" }}>
+                <Image src={spotlight.image!} alt={spotlight.title} fill sizes="(min-width: 640px) 50vw, 100vw" className="object-cover" />
               </div>
               <div>
                 <p className="mb-4 text-xs font-semibold uppercase opacity-60" style={{ letterSpacing: "0.2em" }}>
@@ -210,11 +210,12 @@ function CategoryBand({
       >
         {cardImage && (
           <>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <Image
               src={cardImage}
               alt={label}
-              className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+              fill
+              sizes="100vw"
+              className="object-cover transition duration-500 group-hover:scale-[1.03]"
             />
             <div className="absolute inset-0" style={{ background: "linear-gradient(0deg, rgba(0,0,0,.55), rgba(0,0,0,.1))" }} />
           </>

@@ -785,8 +785,8 @@ const PLAN_SYSTEM = [
   '  "heroSub": string,',
   '  "about": string,              // 2-3 sentences',
   '  "collections": string[],      // 3-5 names',
-  '  "seoTitle": string,',
-  '  "seoDescription": string',
+  '  "seoTitle": string,            // <= 60 chars, so a search result never truncates it',
+  '  "seoDescription": string       // 120-155 chars — same convention apps/supplier/src/lib/ai.ts uses',
   "}",
 ].join("\n");
 
@@ -896,8 +896,8 @@ const BLOG_SYSTEM = [
   '  "title": string,',
   '  "excerpt": string,        // one sentence, shown in the blog list',
   '  "body": string,           // the full post',
-  '  "seoTitle": string,',
-  '  "seoDescription": string',
+  '  "seoTitle": string,       // <= 60 chars, so a search result never truncates it',
+  '  "seoDescription": string  // 120-155 chars — same convention apps/supplier/src/lib/ai.ts uses',
   "}",
 ].join("\n");
 

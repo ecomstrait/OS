@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import type { Storefront } from "@/lib/storefront";
 import type { PostSummary } from "@/lib/blog-api";
 import type { StorefrontNavLink } from "@/lib/storefront-api";
@@ -50,12 +51,13 @@ export function BlogListView({
                   className={p.coverImage ? "group grid gap-5 sm:grid-cols-[200px_1fr]" : "group block"}
                 >
                   {p.coverImage && (
-                    <div className="aspect-[4/3] overflow-hidden" style={{ background: surface, borderRadius: "var(--radius)" }}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
+                    <div className="relative aspect-[4/3] overflow-hidden" style={{ background: surface, borderRadius: "var(--radius)" }}>
+                      <Image
                         src={p.coverImage}
                         alt=""
-                        className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+                        fill
+                        sizes="(min-width: 640px) 200px, 100vw"
+                        className="object-cover transition duration-500 group-hover:scale-[1.03]"
                       />
                     </div>
                   )}

@@ -5,21 +5,31 @@ import { categoryLabel } from "@/lib/storefront-shared";
 import { requestOrigin, storefrontMetadata, truncateForMeta } from "@/lib/storefront-seo";
 import { getCachedCategoryDescription } from "@/lib/category-content";
 
+/** `?page=` is only ever meaningful as a positive integer — anything else (missing, `0`, garbage) means page 1. */
+function parsePage(raw: string | undefined): number {
+  return Math.max(1, Number.parseInt(raw ?? "", 10) || 1);
+}
+
 export async function generateMetadata({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ category?: string; q?: string }>;
+  searchParams: Promise<{ category?: string; q?: string; page?: string }>;
 }): Promise<Metadata> {
   const { id } = await params;
-  const { category = "", q = "" } = await searchParams;
+  const { category = "", q = "", page: rawPage } = await searchParams;
   const s = await getStorefront(id);
   if (!s) return { title: "Shop" };
 
   const origin = await requestOrigin();
   const label = category ? categoryLabel(category) : "Shop all";
-  const canonicalPath = category ? `/store/${id}/products?category=${encodeURIComponent(category)}` : `/store/${id}/products`;
+  const page = parsePage(rawPage);
+  const canonicalPath = `/store/${id}/products${
+    category || page > 1
+      ? `?${new URLSearchParams({ ...(category ? { category } : {}), ...(page > 1 ? { page: String(page) } : {}) })}`
+      : ""
+  }`;
   // The AI-written category blurb, once one exists, is real page content —
   // a better meta description than the generic template below it.
   const generated = category ? await getCachedCategoryDescription(id, category) : null;
@@ -50,9 +60,9 @@ export default async function ProductsPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ category?: string; q?: string }>;
+  searchParams: Promise<{ category?: string; q?: string; page?: string }>;
 }) {
   const { id } = await params;
-  const { category = "", q = "" } = await searchParams;
-  return <StorefrontProducts storeId={id} category={category} q={q} />;
+  const { category = "", q = "", page: rawPage } = await searchParams;
+  return <StorefrontProducts storeId={id} category={category} q={q} page={parsePage(rawPage)} />;
 }

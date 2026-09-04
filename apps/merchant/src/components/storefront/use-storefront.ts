@@ -112,33 +112,43 @@ export function useStorefrontCart(storeId: string) {
 }
 
 /**
- * Search + category filter + paging over the storefront's product API.
+ * Search + paging over the storefront's product API, for one fixed category.
  *
- * `category` lives in this hook's own state rather than being re-derived
- * from the URL on every render — the listing page still keeps the URL in
- * sync (so a category link is shareable/bookmarkable), but the fetch itself
- * only needs to know "what to ask the API for right now."
+ * Category switching is real navigation now (a `<Link>` to `?category=...`
+ * in `ProductsListingView`, not client state here) — a category is a small,
+ * finite, worth-crawling set of real destinations, unlike a keyword search,
+ * which stays purely client-side (deliberately `noindex`d, see
+ * `products/page.tsx`). That means `initial`/`initialTotal`/`initialCategory`
+ * would otherwise go stale across such a navigation, since Next reuses the
+ * same component instance for a client-side transition within one route —
+ * fixed not with an effect that re-syncs local state (a real anti-pattern:
+ * a synchronous `setState` in an effect just to mirror a prop is exactly
+ * what "You Might Not Need an Effect" warns about, and this repo's lint
+ * config enforces it) but by `ProductsListingView` keying the component
+ * that calls this hook on `category`/`page` — a changed key remounts it,
+ * which re-runs every `useState(...)` here against the fresh props for
+ * free. See storefront-pages.tsx's `<ProductsListingView key=.../>`.
  */
 export function useStorefrontProducts(
   storeId: string,
   initial: ApiProduct[],
   initialTotal: number,
-  initialCategory?: string,
+  initialCategory: string,
+  initialPage: number,
 ) {
   const base = `/api/storefront/${storeId}`;
   const [products, setProducts] = useState(initial);
   const [total, setTotal] = useState(initialTotal);
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(initialPage);
   const [query, setQuery] = useState("");
-  const [category, setCategoryState] = useState(initialCategory ?? "");
   const [loading, setLoading] = useState(false);
 
   const fetchPage = useCallback(
-    async (nextPage: number, q: string, cat: string, append: boolean) => {
+    async (nextPage: number, q: string, append: boolean) => {
       setLoading(true);
       try {
         const params = new URLSearchParams({ page: String(nextPage), q });
-        if (cat) params.set("category", cat);
+        if (initialCategory) params.set("category", initialCategory);
         const res = await call<{ products: ApiProduct[]; total: number }>(`${base}/products?${params}`);
         setProducts((prev) => (append ? [...prev, ...res.products] : res.products));
         setTotal(res.total);
@@ -149,26 +159,18 @@ export function useStorefrontProducts(
         setLoading(false);
       }
     },
-    [base],
+    [base, initialCategory],
   );
 
   const search = useCallback(
     (q: string) => {
       setQuery(q);
-      void fetchPage(1, q, category, false);
+      void fetchPage(1, q, false);
     },
-    [fetchPage, category],
+    [fetchPage],
   );
 
-  const setCategory = useCallback(
-    (cat: string) => {
-      setCategoryState(cat);
-      void fetchPage(1, query, cat, false);
-    },
-    [fetchPage, query],
-  );
+  const loadMore = useCallback(() => void fetchPage(page + 1, query, true), [fetchPage, page, query]);
 
-  const loadMore = useCallback(() => void fetchPage(page + 1, query, category, true), [fetchPage, page, query, category]);
-
-  return { products, total, loading, query, category, search, setCategory, loadMore, hasMore: products.length < total };
+  return { products, total, loading, query, search, loadMore, hasMore: products.length < total };
 }

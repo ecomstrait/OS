@@ -106,17 +106,17 @@ export async function converseBuilderTurn(
     const lastUser = [...history].reverse().find((h) => h.role === "user")?.content.trim() ?? "";
     const nicheStillUnknown = !context.inferredNiche && history.filter((h) => h.role === "user").length <= 1;
     if (nicheStillUnknown && DELEGATE_PATTERN.test(lastUser)) {
-      const suggestions = await suggestProductsForStore({ limit: 6 });
-      if (suggestions.length) {
+      const suggested = await suggestProductsForStore({ limit: 6 });
+      if (suggested.products.length) {
         return {
           done: false,
           reply: "Here's what's doing well right now — add a few that fit, or just tell me the kind of thing you want to sell.",
-          niche: suggestions[0].category ?? null,
+          niche: suggested.products[0].category ?? null,
           audience: null,
           styleKeyword: null,
           storeName: null,
           tokensUsed: 0,
-          productSuggestions: suggestions,
+          productSuggestions: suggested.products,
         };
       }
     }
@@ -138,17 +138,30 @@ export async function converseBuilderTurn(
       (SHOW_PRODUCTS_PATTERN.test(lastUser) ||
         (SUGGEST_OR_RECOMMEND_PATTERN.test(lastUser) && PRODUCT_CONTEXT_PATTERN.test(lastUser)));
     if (result.showProducts || backstopFired) {
-      const suggestions = await suggestProductsForStore({ category: result.niche ?? context.inferredNiche, limit: 6 });
-      if (suggestions.length) {
+      const suggested = await suggestProductsForStore({ category: result.niche ?? context.inferredNiche, limit: 6 });
+      if (suggested.products.length) {
+        // The requested category came back empty and this is genuinely
+        // platform-wide instead — a real bug this fixed: a merchant who'd
+        // just pivoted to "smartphones" asked what's available and got
+        // shoes back with zero indication they weren't smartphones at all.
+        // This overrides the model's own `reply` too (not just the
+        // backstop's generic one) — `converseBuilder` generated that text
+        // before the catalog was even queried, so it has no way to know
+        // the fallback happened.
+        const categoryMissed = !suggested.matchedCategory && suggested.requestedCategory;
         return {
           ...result,
           done: false,
-          // The model's own `reply` is whatever it decided to say for
-          // whatever it thought this was (often its next scripted
-          // question) — wrong to show alongside product cards it never
-          // planned for. Only override it when the backstop is what fired.
-          reply: backstopFired ? "Here's what's doing well right now:" : result.reply,
-          productSuggestions: suggestions,
+          reply: categoryMissed
+            ? `Nothing published for "${suggested.requestedCategory}" yet — here's what's actually selling across the platform right now:`
+            : // The model's own `reply` is whatever it decided to say for
+              // whatever it thought this was (often its next scripted
+              // question) — wrong to show alongside product cards it never
+              // planned for. Only override it when the backstop is what fired.
+              backstopFired
+              ? "Here's what's doing well right now:"
+              : result.reply,
+          productSuggestions: suggested.products,
         };
       }
     }
@@ -342,11 +355,21 @@ export async function refineStore(
 
   if (res.intent === "suggest_products") {
     const excludeIds = [...(await getSelectedIds())];
-    const suggestions = await suggestProductsForStore({
+    const suggested = await suggestProductsForStore({
       category: res.productCategory || plan.collections?.[0],
       excludeIds,
     });
-    return { plan: res.plan, reply: res.reply, productSuggestions: suggestions };
+    // Same fallback-honesty fix as converseBuilderTurn's backstop above —
+    // res.reply was generated before the catalog was queried, so it can't
+    // know on its own that the requested category came back empty.
+    const categoryMissed = !suggested.matchedCategory && suggested.requestedCategory;
+    return {
+      plan: res.plan,
+      reply: categoryMissed
+        ? `Nothing published for "${suggested.requestedCategory}" yet — here's what's actually selling across the platform right now:`
+        : res.reply,
+      productSuggestions: suggested.products,
+    };
   }
 
   if (res.pageAction) {
@@ -594,11 +617,20 @@ export async function editStore(storeId: string, instruction: string): Promise<E
   if (ai.intent === "suggest_products") {
     const { data: listed } = await supabase.from("store_products").select("product_id").eq("store_id", storeId);
     const excludeIds = (listed ?? []).map((l) => l.product_id);
-    const suggestions = await suggestProductsForStore({
+    const suggested = await suggestProductsForStore({
       category: ai.productCategory || current.collections?.[0],
       excludeIds,
     });
-    return { plan: current, synced: "live", note: ai.reply, productSuggestions: suggestions };
+    // Same fallback-honesty fix as converseBuilderTurn/refineStore above.
+    const categoryMissed = !suggested.matchedCategory && suggested.requestedCategory;
+    return {
+      plan: current,
+      synced: "live",
+      note: categoryMissed
+        ? `Nothing published for "${suggested.requestedCategory}" yet — here's what's actually selling across the platform right now:`
+        : ai.reply,
+      productSuggestions: suggested.products,
+    };
   }
 
   // A whole-page request never touches `content` (`ai.changed` stays empty),

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Search, Loader2 } from "lucide-react";
 import type { Storefront } from "@/lib/storefront";
 import type { ApiProduct, CategorySummary } from "@/lib/storefront-api";
@@ -24,6 +25,7 @@ export function ProductsListingView({
   initialTotal,
   initialCategory,
   initialQuery,
+  initialPage,
   basePath,
   categoryDescription,
 }: {
@@ -34,14 +36,17 @@ export function ProductsListingView({
   initialTotal: number;
   initialCategory: string;
   initialQuery: string;
+  /** From `?page=` — which real, crawlable page this render started from
+   *  (1 unless reached via a "Load more" link directly, e.g. a crawler). */
+  initialPage: number;
   /** `/store/<uuid>` on the id-path route, `""` on a connected domain. */
   basePath: string;
   /**
    * AI-written blurb for `initialCategory`, server-fetched for this page
-   * load only — switching categories via the pills below is client-side
-   * state, not a fresh page render, so this is hidden the moment the
-   * selection no longer matches what it was written for rather than risk
-   * showing the wrong category's copy.
+   * load only — switching categories via the pills below is a real
+   * navigation (a fresh page render), so this always matches whatever
+   * category is actually showing; no client-side staleness to guard against
+   * the way there used to be.
    */
   categoryDescription: string | null;
 }) {
@@ -50,25 +55,45 @@ export function ProductsListingView({
   const surface = "color-mix(in srgb, var(--ink) 4%, var(--bg))";
   const router = useRouter();
 
-  const { products, total, loading, category, search, setCategory, loadMore, hasMore } = useStorefrontProducts(
+  const { products, total, loading, search, loadMore, hasMore } = useStorefrontProducts(
     store.id,
     initialProducts,
     initialTotal,
     initialCategory,
+    initialPage,
   );
   const [queryInput, setQueryInput] = useState(initialQuery);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Keep the URL in sync (shallow — the hook already holds the real state)
-  // so a filtered view is shareable and survives a reload.
+  // so a search is shareable and survives a reload. Category no longer
+  // lives here (switching it is real navigation via the `<Link>` pills
+  // below), so this only ever writes `q` back — `initialCategory` is what
+  // it stays alongside.
   useEffect(() => {
     const params = new URLSearchParams();
-    if (category) params.set("category", category);
+    if (initialCategory) params.set("category", initialCategory);
     if (queryInput) params.set("q", queryInput);
     const qs = params.toString();
     router.replace(`${basePath}/products${qs ? `?${qs}` : ""}`, { scroll: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [category, queryInput]);
+  }, [queryInput]);
+
+  const categoryHref = (cat: string) =>
+    `${basePath}/products${cat ? `?category=${encodeURIComponent(cat)}` : ""}`;
+  const nextPageHref = `${basePath}/products?${new URLSearchParams({
+    ...(initialCategory ? { category: initialCategory } : {}),
+    page: String(initialPage + 1),
+  })}`;
+
+  function onLoadMoreClick(e: React.MouseEvent) {
+    // Progressive enhancement: this is a real `<Link>` to a real, crawlable
+    // `?page=N+1` URL (so a crawler or a no-JS visitor still reaches every
+    // page), but a JS-capable click intercepts it and appends in place
+    // instead — the smooth "Load more" behavior this always had.
+    e.preventDefault();
+    loadMore();
+  }
 
   const onQueryChange = (value: string) => {
     setQueryInput(value);
@@ -92,9 +117,9 @@ export function ProductsListingView({
             className="text-2xl font-semibold sm:text-3xl"
             style={{ fontFamily: "var(--font-heading)", letterSpacing: "-0.01em" }}
           >
-            {category ? categoryLabel(category) : "Shop all"}
+            {initialCategory ? categoryLabel(initialCategory) : "Shop all"}
           </h1>
-          {categoryDescription && category === initialCategory && (
+          {categoryDescription && (
             <p className="mt-3 max-w-2xl text-sm leading-relaxed opacity-70">{categoryDescription}</p>
           )}
 
@@ -112,34 +137,38 @@ export function ProductsListingView({
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => setCategory("")}
-                className="h-9 px-4 text-xs font-semibold uppercase transition"
+              {/* Real links, not buttons — a category is a real, permanent
+                  destination worth a crawler finding on its own, not just
+                  client state. Next still makes this a fast, no-full-reload
+                  navigation; it's just no longer JS-only. */}
+              <Link
+                href={categoryHref("")}
+                className="inline-flex h-9 items-center px-4 text-xs font-semibold uppercase transition"
                 style={{
                   borderRadius: "var(--radius)",
                   letterSpacing: "0.06em",
                   border: `1px solid ${line}`,
-                  background: category === "" ? "var(--brand)" : "transparent",
-                  color: category === "" ? "#fff" : "var(--ink)",
+                  background: initialCategory === "" ? "var(--brand)" : "transparent",
+                  color: initialCategory === "" ? "#fff" : "var(--ink)",
                 }}
               >
                 All
-              </button>
+              </Link>
               {categories.map((c) => (
-                <button
+                <Link
                   key={c.category}
-                  onClick={() => setCategory(c.category)}
-                  className="h-9 px-4 text-xs font-semibold uppercase transition"
+                  href={categoryHref(c.category)}
+                  className="inline-flex h-9 items-center px-4 text-xs font-semibold uppercase transition"
                   style={{
                     borderRadius: "var(--radius)",
                     letterSpacing: "0.06em",
                     border: `1px solid ${line}`,
-                    background: category === c.category ? "var(--brand)" : "transparent",
-                    color: category === c.category ? "#fff" : "var(--ink)",
+                    background: initialCategory === c.category ? "var(--brand)" : "transparent",
+                    color: initialCategory === c.category ? "#fff" : "var(--ink)",
                   }}
                 >
                   {categoryLabel(c.category)} ({c.count})
-                </button>
+                </Link>
               ))}
             </div>
           </div>
@@ -154,15 +183,21 @@ export function ProductsListingView({
 
           {hasMore && (
             <div className="mt-12 text-center">
-              <button
-                onClick={loadMore}
-                disabled={loading}
-                className="inline-flex h-11 items-center gap-2 border px-8 text-xs font-semibold uppercase transition hover:opacity-70 disabled:opacity-50"
+              {/* A real link to a real `?page=N+1` URL, not a bare button —
+                  a crawler (or a no-JS visitor) can follow it straight to
+                  that page's own server-rendered products. A JS click
+                  intercepts it and appends in place instead, same smooth
+                  "Load more" this always was. */}
+              <Link
+                href={nextPageHref}
+                onClick={onLoadMoreClick}
+                aria-disabled={loading}
+                className="inline-flex h-11 items-center gap-2 border px-8 text-xs font-semibold uppercase transition hover:opacity-70 aria-disabled:pointer-events-none aria-disabled:opacity-50"
                 style={{ borderRadius: "var(--radius)", borderColor: line, letterSpacing: "0.08em" }}
               >
                 {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
                 Load more
-              </button>
+              </Link>
             </div>
           )}
         </section>
