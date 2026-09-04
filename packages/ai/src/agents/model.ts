@@ -14,7 +14,21 @@ import type { ModelRole } from "../types";
  */
 export function createChatModel(
   role: ModelRole,
-  opts: { temperature?: number; reasoningEffort?: "none" | "low" | "medium" | "high" } = {},
+  opts: {
+    temperature?: number;
+    reasoningEffort?: "none" | "low" | "medium" | "high";
+    /** Output-token cap. Not threaded through until now (see the note
+     *  below) — every reasoning-role bug hit in this codebase so far was a
+     *  reasoning-capable model spending its ENTIRE budget on invisible
+     *  "thinking" and returning empty content; an agentic tool-calling loop
+     *  doing several reasoning turns is if anything more exposed to that
+     *  than a single plain completion, so this needs to be settable here
+     *  too, not just on the plain `chat()` gateway path. */
+    maxTokens?: number;
+    /** Request timeout in ms. Same reasoning as `maxTokens` above — a
+     *  reasoning-capable model can take real, variable time per turn. */
+    timeoutMs?: number;
+  } = {},
 ): ChatOpenAI {
   const baseURL = process.env.AI_GATEWAY_URL?.trim();
   const apiKey = process.env.AI_GATEWAY_API_KEY?.trim();
@@ -26,6 +40,8 @@ export function createChatModel(
     apiKey,
     temperature: opts.temperature ?? 0.3,
     configuration: { baseURL },
+    ...(opts.maxTokens ? { maxTokens: opts.maxTokens } : {}),
+    ...(opts.timeoutMs ? { timeout: opts.timeoutMs } : {}),
     // `modelKwargs` merges straight into the request body LangChain sends —
     // this is how a provider-specific param like `reasoning_effort` reaches
     // the gateway from here. See `gateway.ts`'s own note: a reasoning-

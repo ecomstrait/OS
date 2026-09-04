@@ -221,6 +221,12 @@ export function StoreBuilder({
   );
   const [uploading, setUploading] = useState(false);
   const [editingContent, setEditingContent] = useState(false);
+  // Below `lg`, chat and preview used to split the workbench 50/50 — on a
+  // real phone that's two panels too short to use at all, chat especially
+  // once the on-screen keyboard opens. Only one shows at a time on mobile
+  // now, each getting the whole panel's height; `lg:` and up still shows
+  // both side by side as before, so this only affects small screens.
+  const [mobileView, setMobileView] = useState<"chat" | "preview">("chat");
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -337,8 +343,11 @@ export function StoreBuilder({
     if (res.theme && !context?.presetTheme) setTheme(res.theme);
     setStage("ready");
     pushAi(
-      `Done! I built "${p.storeName}" with ${res.products?.length ?? 0} products, a matching theme, and SEO. Take a look on the right — want any tweaks? (e.g. "make it navy", "punchier headline"). When it's ready, set how you want to sell and hit Launch my store.`,
+      `Done! I built "${p.storeName}" with ${res.products?.length ?? 0} products lined up, a matching theme, and SEO. Take a look at the preview — want any tweaks? (e.g. "make it navy", "punchier headline"). When it's ready, set how you want to sell and hit Launch my store — that's when these products actually go out to each supplier's approval queue, not before.`,
     );
+    // On mobile, chat and preview are tabs, not a side-by-side split — the
+    // message above just told them to "take a look", so actually show it.
+    setMobileView("preview");
 
     // Persist it as a draft now that there's something to persist. This is what
     // unlocks Content and the media library before Launch — both address a
@@ -403,7 +412,17 @@ export function StoreBuilder({
         else pushAi(`⚠️ ${res.error}`);
         return;
       }
-      if (res.plan) setPlan(res.plan);
+      if (res.plan) {
+        setPlan(res.plan);
+        // `name` (this input field, the preview title bar, and — pre-launch
+        // only — what gets sent to Launch) is a separate mirror of
+        // `plan.storeName`, not derived from it. A real bug this fixed: the
+        // AI would rename the store in `plan.storeName` and confidently say
+        // so, but nothing here ever copied that into `name`, so the field
+        // and the preview chrome kept showing the old name and made a real
+        // rename look like it silently failed.
+        setName(res.plan.storeName);
+      }
       pushAi(res.note ?? "Updated.", res.productSuggestions);
       router.refresh();
       return;
@@ -420,7 +439,14 @@ export function StoreBuilder({
     // preview when it reports an actual edit — and always show its own words
     // rather than a fixed "Updated", which said nothing when it had in fact
     // answered a question or refused something it can't do.
-    if (res.changed?.length && res.plan) setPlan(res.plan);
+    if (res.changed?.length && res.plan) {
+      setPlan(res.plan);
+      // Same sync as the live-edit branch above — pre-launch, this also
+      // matters for the debounced autosave effect, which sends this `name`
+      // state (not `plan.storeName`) to `saveDraft`, and for `create()`,
+      // which does the same to `createStore` on Launch.
+      setName(res.plan.storeName);
+    }
     pushAi(res.reply ?? "Updated — check the preview.", res.productSuggestions);
   }
 
@@ -692,8 +718,31 @@ export function StoreBuilder({
 
   return (
     <div className="flex h-[80vh] min-h-[560px] flex-col overflow-hidden rounded-2xl border border-ink-200 bg-white shadow-xl shadow-ink-950/5 lg:flex-row">
+      {/* Mobile-only Chat/Preview switch — see `mobileView`'s note above. */}
+      <div className="flex shrink-0 border-b border-ink-100 lg:hidden">
+        {(["chat", "preview"] as const).map((v) => (
+          <button
+            key={v}
+            type="button"
+            onClick={() => setMobileView(v)}
+            className={cn(
+              "flex-1 border-b-2 py-2.5 text-center text-sm font-semibold capitalize transition",
+              mobileView === v ? "border-brand-500 text-brand-700" : "border-transparent text-ink-400",
+            )}
+          >
+            {v}
+          </button>
+        ))}
+      </div>
+
       {/* ---- Left: chat ---- */}
-      <div className="flex h-1/2 w-full flex-col border-b border-ink-100 lg:h-full lg:w-[38%] lg:border-b-0 lg:border-r">
+      <div
+        className={cn(
+          "w-full flex-col border-b border-ink-100 lg:flex lg:h-full lg:w-[38%] lg:border-b-0 lg:border-r",
+          mobileView === "chat" ? "flex h-full" : "hidden",
+        )}
+      >
+
         <div className="flex items-center justify-between gap-2 border-b border-ink-100 px-4 py-3">
           <div className="flex items-center gap-2">
             <span className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-brand-500 to-ai-600 text-white">
@@ -824,7 +873,12 @@ export function StoreBuilder({
       </div>
 
       {/* ---- Right: preview + action bar ---- */}
-      <div className="flex h-1/2 flex-1 flex-col bg-ink-50/50 lg:h-full">
+      <div
+        className={cn(
+          "flex-1 flex-col bg-ink-50/50 lg:flex lg:h-full",
+          mobileView === "preview" ? "flex h-full" : "hidden",
+        )}
+      >
         <div className="flex items-center justify-between gap-2 border-b border-ink-100 px-4 py-3">
           <p className="text-sm font-bold text-ink-950">Preview</p>
           <button

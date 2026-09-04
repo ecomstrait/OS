@@ -48,10 +48,16 @@ function parseBlocks(text: string): Block[] {
   return blocks;
 }
 
-/** Inline formatting within one line/paragraph: **bold** and `code`. */
+/**
+ * Inline formatting within one line/paragraph: **bold**, `code`, and
+ * [text](url) links — the last one added once Co-Founder became an
+ * orchestrator that can hand back a real link (e.g. "open it in
+ * /builder?draft=..." after building a store); before that, nothing this
+ * chat produced ever contained one, so it was never missed.
+ */
 function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
   const nodes: React.ReactNode[] = [];
-  const pattern = /\*\*(.+?)\*\*|`([^`]+)`/g;
+  const pattern = /\*\*(.+?)\*\*|`([^`]+)`|\[([^\]]+)\]\(([^)\s]+)\)/g;
   let lastIndex = 0;
   let key = 0;
   let match: RegExpExecArray | null;
@@ -64,6 +70,18 @@ function renderInline(text: string, keyPrefix: string): React.ReactNode[] {
         <code key={`${keyPrefix}-${key++}`} className="rounded bg-ink-100 px-1 py-0.5 text-[0.85em]">
           {match[2]}
         </code>,
+      );
+    } else if (match[3] !== undefined && match[4] !== undefined) {
+      const external = /^https?:\/\//.test(match[4]);
+      nodes.push(
+        <a
+          key={`${keyPrefix}-${key++}`}
+          href={match[4]}
+          {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+          className="font-semibold text-brand-600 underline underline-offset-2 hover:text-brand-700"
+        >
+          {match[3]}
+        </a>,
       );
     }
     lastIndex = pattern.lastIndex;

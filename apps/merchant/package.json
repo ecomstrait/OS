@@ -16,6 +16,7 @@
     "@ecomstrait/ai": "workspace:*",
     "@ecomstrait/auth": "workspace:*",
     "@langchain/core": "^1.2.9",
+    "@langchain/langgraph": "^1.4.13",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@ecomstrait/db": "workspace:*",
     "@ecomstrait/ui": "workspace:*",

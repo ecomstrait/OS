@@ -134,6 +134,12 @@ const BUILDER_SYSTEM = [
   "You need to learn: what they sell (niche), who their customers are (audience), what visual style/vibe fits their brand, and what to name the store.",
   "Ask ONE short, conversational question at a time — never a list, never more than one question in a message.",
   "Don't drag this out: once you have enough to build a good store — often after 2-4 of their replies — stop asking.",
+  "The store name is the one thing you must always actually ask about before finishing, even once",
+  "niche/audience/style already feel like enough to build on — never silently invent or guess a name",
+  "the merchant was never given a chance to weigh in on. Asking and them delegating it (\"you pick\",",
+  "\"surprise me\") is fine and lets you finish; simply never having asked is not — check the",
+  "conversation so far and if the name genuinely never came up, ask for it next before setting",
+  "done=true, whatever else is already known.",
   "",
   "Classify every message as one of three types before anything else — this matters more than",
   "filling in the four answers, because guessing wrong here means ignoring what they actually said:",
@@ -176,7 +182,9 @@ const BUILDER_SYSTEM = [
   '"reply" is your next question for type "answer", your lead-in for "show_products", or your',
   '  response to whatever they said for "other".',
   'done=true only ever applies to type "answer", once you have enough — "reply" is then a short',
-  '  one-line wrap-up (e.g. "Got it — building your store.") and "niche" must be filled in.',
+  '  one-line wrap-up (e.g. "Got it — building your store.") and "niche" must be filled in. Also',
+  "  never true unless the store name has actually come up in the conversation (given, or asked",
+  "  and delegated) — see the store-name rule above.",
 ].join("\n");
 
 /** The old fixed 4-question script, kept only as this conversation's no-gateway fallback. */
@@ -250,57 +258,96 @@ export async function converseBuilder(
   if (context.presetTheme) known.push(`style/theme already chosen: ${context.presetTheme}`);
   const system = BUILDER_SYSTEM + (known.length ? `\n\nKnown so far: ${known.join("; ")}.` : "");
 
-  try {
-    const { content, tokensUsed } = await chat(
-      "workhorse",
-      [{ role: "system", content: system }, ...history],
-      // `reasoningEffort: "none"` matters here, not just for speed: the
-      // reasoning-capable model now behind this role can otherwise spend the
-      // ENTIRE maxTokens budget on invisible "thinking" and return empty
-      // content — see gateway.ts's own note on this failure mode. `workhorse`
-      // is meant to be the fast, general-purpose role; it never needs to think.
-      { temperature: 0.7, maxTokens: 500, responseFormatJson: true, timeoutMs: 12000, reasoningEffort: "none" },
-    );
-    const parsed = JSON.parse(content) as {
-      type?: string;
-      done?: boolean;
-      reply?: string;
-      niche?: string | null;
-      audience?: string | null;
-      styleKeyword?: string | null;
-      storeName?: string | null;
-    };
-
-    const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
-    const niche = str(parsed.niche) ?? context.inferredNiche ?? null;
-    const styleKeyword = str(parsed.styleKeyword) ?? context.presetTheme ?? null;
-    const reply = str(parsed.reply) ?? (parsed.done ? "Got it — building your store." : "Tell me a bit more.");
-    // Asking to see products is never "done" — showing options isn't the
-    // same as having enough to build, whatever the model said alongside it.
-    // "other" (a real question, confusion, off-topic) isn't "done" either —
-    // only "answer" can complete the build.
-    const showProducts = parsed.type === "show_products";
-    const isAnswer = parsed.type !== "show_products" && parsed.type !== "other";
-
-    // "done" with no niche isn't usable — generateStorePlan needs something to
-    // build around, so treat it as one more turn rather than handing it "".
-    if (!(isAnswer && parsed.done && niche) || showProducts) {
-      return {
-        done: false,
-        reply,
-        niche,
-        audience: str(parsed.audience),
-        styleKeyword,
-        storeName: str(parsed.storeName),
-        tokensUsed,
-        showProducts,
-      };
+  // A real, confirmed live bug lived here: with 3+ messages of history (any
+  // real back-and-forth, not just the opening question), the model currently
+  // behind `workhorse` would deterministically (reproduced at temperature 0)
+  // emit a single whitespace character and stop (`finish_reason: "stop"`, 1
+  // completion token) instead of an actual JSON reply — `fast-cheap` and
+  // `reasoning` handled the identical multi-turn+JSON-mode request correctly,
+  // isolating it to whatever's mapped to this one role. Confirmed live that
+  // `reasoningEffort: "none"` was making this WORSE, not better: with it set,
+  // the same request instead burned its entire `maxTokens` budget on
+  // invisible reasoning (`reasoning_tokens` pinned to the cap) and still
+  // returned nothing. Dropping `reasoningEffort` entirely and giving the
+  // model real room to actually think (see `converseBuilderOnce`'s
+  // maxTokens/timeout below) resolved it reliably in live testing (0/3
+  // failures after the fix, vs. a consistent failure before it on the exact
+  // same multi-turn input). A retry stays here as defense in depth for a
+  // genuine transient blip — degrading to `presetConverse()` below on total
+  // failure is unchanged, so this only ever improves the odds of the real
+  // conversation, never adds risk.
+  const MAX_ATTEMPTS = 2;
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      return await converseBuilderOnce(system, history, context);
+    } catch (err) {
+      lastErr = err;
     }
-
-    return { done: true, reply, niche, audience: str(parsed.audience), styleKeyword, storeName: str(parsed.storeName), tokensUsed };
-  } catch {
-    return presetConverse(history, context);
   }
+  console.error("[ai] converseBuilder failed after retries, falling back to the fixed script:", lastErr);
+  return presetConverse(history, context);
+}
+
+async function converseBuilderOnce(
+  system: string,
+  history: BuilderTurn[],
+  context: BuilderKnownContext,
+): Promise<ConverseResult> {
+  const { content, tokensUsed } = await chat(
+    "workhorse",
+    [{ role: "system", content: system }, ...history],
+    // No `reasoningEffort` here, deliberately — every OTHER `workhorse`
+    // call site in this file sets `reasoningEffort: "none"` because that
+    // role is never supposed to need deep thought, but this specific call
+    // (the only one sending real multi-turn history) measurably needed the
+    // opposite: live testing showed `"none"` made this role's underlying
+    // model burn its whole `maxTokens` budget on invisible reasoning and
+    // return nothing for a 3+ message conversation, while leaving reasoning
+    // unset and giving it real headroom (3000 tokens, a 20s timeout) let it
+    // actually finish and answer correctly, consistently, on the identical
+    // input. See the retry loop above for the full incident — don't
+    // "simplify" this back to match the other call sites without retesting
+    // a real multi-turn conversation first.
+    { temperature: 0.7, maxTokens: 3000, responseFormatJson: true, timeoutMs: 20000 },
+  );
+  const parsed = JSON.parse(content) as {
+    type?: string;
+    done?: boolean;
+    reply?: string;
+    niche?: string | null;
+    audience?: string | null;
+    styleKeyword?: string | null;
+    storeName?: string | null;
+  };
+
+  const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  const niche = str(parsed.niche) ?? context.inferredNiche ?? null;
+  const styleKeyword = str(parsed.styleKeyword) ?? context.presetTheme ?? null;
+  const reply = str(parsed.reply) ?? (parsed.done ? "Got it — building your store." : "Tell me a bit more.");
+  // Asking to see products is never "done" — showing options isn't the
+  // same as having enough to build, whatever the model said alongside it.
+  // "other" (a real question, confusion, off-topic) isn't "done" either —
+  // only "answer" can complete the build.
+  const showProducts = parsed.type === "show_products";
+  const isAnswer = parsed.type !== "show_products" && parsed.type !== "other";
+
+  // "done" with no niche isn't usable — generateStorePlan needs something to
+  // build around, so treat it as one more turn rather than handing it "".
+  if (!(isAnswer && parsed.done && niche) || showProducts) {
+    return {
+      done: false,
+      reply,
+      niche,
+      audience: str(parsed.audience),
+      styleKeyword,
+      storeName: str(parsed.storeName),
+      tokensUsed,
+      showProducts,
+    };
+  }
+
+  return { done: true, reply, niche, audience: str(parsed.audience), styleKeyword, storeName: str(parsed.storeName), tokensUsed };
 }
 
 /** Map a free-text style answer to one of our themes. */

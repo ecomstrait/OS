@@ -17,6 +17,8 @@ export {
   createBusinessAdvisorAgent,
   createAnalyticsAgent,
   runOrchestrator,
+  contentToText,
+  sumUsage,
   decideRestock,
   type OrchestratorInput,
   type OrchestratorResult,

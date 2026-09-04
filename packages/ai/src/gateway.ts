@@ -101,7 +101,13 @@ export async function chat(
   }
   const data = await res.json();
   const content: string | undefined = data?.choices?.[0]?.message?.content;
-  if (!content) {
+  // `!content` alone missed a real variant of the same failure: a reasoning
+  // model burning its whole budget on invisible thinking can emit a handful
+  // of literal whitespace characters instead of a fully empty string — that
+  // passes a plain truthiness check, gets treated as valid, and then fails
+  // confusingly downstream (e.g. `JSON.parse("   ")` → "Unexpected end of
+  // JSON input", with no hint this was ever a gateway/model problem at all).
+  if (!content?.trim()) {
     // A reasoning-capable model can spend its ENTIRE `max_tokens` budget on
     // invisible "thinking" and emit no visible answer at all — that reads
     // identically to a dead gateway from the caller's side otherwise. This

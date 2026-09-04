@@ -201,6 +201,20 @@ export async function autoSelectProducts(niche: string, limit = 8): Promise<Cata
   return withSupplierNames(admin, rows.slice(0, limit));
 }
 
+/**
+ * Fetch specific published products by id, in no particular order — for a
+ * caller that already knows which products it wants (e.g. the Co-Founder
+ * orchestrator's `build_store` tool, resolving ids a prior `suggest_products`
+ * tool call surfaced) rather than needing them ranked or filtered.
+ */
+export async function getProductsByIds(ids: string[]): Promise<CatalogProduct[]> {
+  if (!ids.length) return [];
+  const admin = createAdminClient();
+  if (!admin) return [];
+  const { data } = await admin.from("products").select(SELECT).eq("status", "published").in("id", ids);
+  return withSupplierNames(admin, data ?? []);
+}
+
 /** The set of product ids the current user has selected. */
 export async function getSelectedIds(): Promise<Set<string>> {
   const supabase = await createClient();

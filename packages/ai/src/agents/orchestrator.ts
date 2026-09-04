@@ -22,7 +22,7 @@ type Route = "advisor" | "analytics";
  * Extracting text parts explicitly is what actually fixes that, not a
  * `String()`/`JSON.stringify()` fallback that merely looks like it works.
  */
-function contentToText(content: BaseMessage["content"]): string {
+export function contentToText(content: BaseMessage["content"]): string {
   if (typeof content === "string") return content;
   return content
     .map((part) => (typeof part === "object" && part !== null && "text" in part ? String(part.text) : ""))
@@ -166,7 +166,7 @@ export async function runOrchestrator(input: OrchestratorInput): Promise<Orchest
   return { reply, route: final.route, agentRunId };
 }
 
-function sumUsage(messages: BaseMessage[]): { inputTokens: number; outputTokens: number } {
+export function sumUsage(messages: BaseMessage[]): { inputTokens: number; outputTokens: number } {
   let inputTokens = 0;
   let outputTokens = 0;
   for (const m of messages) {

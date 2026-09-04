@@ -588,7 +588,19 @@ export async function editStore(storeId: string, instruction: string): Promise<E
 
   const { error: upErr } = await supabase
     .from("stores")
-    .update({ content: plan as unknown as Record<string, unknown> })
+    .update({
+      content: plan as unknown as Record<string, unknown>,
+      // `storeName` lives in two places that must never drift apart: inside
+      // `content` (what the plan itself renders) and this top-level column
+      // (what /stores, list_my_stores, and everywhere else that isn't
+      // rendering the plan actually reads). A real bug this fixed: asking
+      // this chat to rename a store got a confident "Done — renamed to X"
+      // reply, `content.storeName` really did change, but this column never
+      // did — so the Stores list, the dashboard, and this store's own
+      // browser-tab title kept showing the old name, and it looked like
+      // nothing had happened at all.
+      ...(ai.changed.includes("storeName") ? { name: plan.storeName.trim() || "My Store" } : {}),
+    })
     .eq("id", storeId);
   if (upErr) return { error: upErr.message };
 
@@ -858,7 +870,7 @@ export async function discardDraft(storeId: string): Promise<{ ok?: true; error?
  * a new one, so the media uploaded during the build stays attached to the store
  * that ends up live.
  */
-export async function createStore(input: {
+export type LaunchStoreInput = {
   draftId?: string | null;
   name: string;
   type: StoreType;
@@ -866,7 +878,19 @@ export async function createStore(input: {
   logoUrl?: string | null;
   plan: StorePlan;
   products: { id: string; price: number | null }[];
-}): Promise<{ error?: string; upgrade?: boolean } | never> {
+};
+
+export type LaunchStoreResult = { storeId: string; liveUrl?: string } | { error: string; upgrade?: boolean };
+
+/**
+ * The actual DB-mutation work behind launching a store — pulled out of
+ * `createStore()` (below) so it can be reused by anything that isn't a
+ * form submission and can't tolerate `createStore`'s `redirect()` call,
+ * which throws and has no return value on success. The Co-Founder
+ * orchestrator's `launch_store` tool is the reason this exists — see
+ * `apps/merchant/src/lib/agents/cofounder-tools.ts`.
+ */
+export async function launchStoreCore(input: LaunchStoreInput): Promise<LaunchStoreResult> {
   const gate = await assertCanCreateStore();
   if (!gate.ok) return { error: gate.error, upgrade: true };
 
@@ -949,11 +973,34 @@ export async function createStore(input: {
         status: "pending" as const,
       })),
     );
+
+    // These products just became real listings (awaiting supplier approval)
+    // on a real store — they're no longer "queued for a store not built
+    // yet". A real bug this fixed: the pre-launch `selected_products` basket
+    // was never cleared on launch, so Selected Inventory kept showing the
+    // same products as still "queued" indefinitely, right alongside their
+    // new, real "awaiting supplier" listing on the store just created.
+    await supabase
+      .from("selected_products")
+      .delete()
+      .eq("user_id", user.id)
+      .in(
+        "product_id",
+        input.products.map((p) => p.id),
+      );
   }
 
+  let liveUrl: string | undefined;
   if (isOwn) {
-    await supabase.from("stores").update({ live_url: `${merchantUrl()}/store/${store.id}` }).eq("id", store.id);
+    liveUrl = `${merchantUrl()}/store/${store.id}`;
+    await supabase.from("stores").update({ live_url: liveUrl }).eq("id", store.id);
   }
 
+  return { storeId: store.id, liveUrl };
+}
+
+export async function createStore(input: LaunchStoreInput): Promise<{ error?: string; upgrade?: boolean } | never> {
+  const result = await launchStoreCore(input);
+  if ("error" in result) return result;
   redirect("/stores");
 }

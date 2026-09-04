@@ -2,10 +2,10 @@
 
 import { createClient } from "@ecomstrait/auth/server";
 import { createAdminClient } from "@ecomstrait/db";
-import { chat, isGatewayConfigured, getOrComputeSnapshot } from "@ecomstrait/ai";
+import { getOrComputeSnapshot } from "@ecomstrait/ai";
 import { getMerchantSnapshot, summarizeMerchantForAdvisor, type MerchantSnapshot } from "@/lib/cofounder-snapshot";
-import { askCoFounder, type CoFounderTurn } from "@/lib/cofounder-ai";
-import { askBusinessAdvisor } from "@/lib/agents/business-advisor";
+import type { CoFounderTurn } from "@/lib/cofounder-ai";
+import { runCofounderOrchestrator } from "@/lib/agents/cofounder-orchestrator";
 import { getEntitlements, assertTokenBudget, recordTokenUsage } from "@/lib/entitlements";
 import { PLAN_ENTITLEMENTS } from "@ecomstrait/db";
 
@@ -16,45 +16,17 @@ import { PLAN_ENTITLEMENTS } from "@ecomstrait/db";
 const SNAPSHOT_TTL_MS = 15 * 60 * 1000;
 
 /**
- * Does this message clearly ask about ONE of the merchant's specific
- * stores? If so, name it — the caller then routes to the tool-grounded
- * advisor scoped to that store instead of the broad snapshot. A cheap,
- * single-word classification, same role/shape as the orchestrator's own
- * router (packages/ai/src/agents/orchestrator.ts) — this is deliberately
- * NOT that orchestrator's router itself, since this decision (broad vs.
- * one-store) happens one layer above it, before the orchestrator's own
- * advisor-vs-analytics routing ever runs.
+ * Co-Founder is now a single orchestrating agent (`runCofounderOrchestrator`,
+ * `lib/agents/cofounder-orchestrator.ts`) rather than a router in front of
+ * two disconnected paths — the model itself decides, via its own tools
+ * (`lib/agents/cofounder-tools.ts`), whether a message needs the portfolio
+ * snapshot below, a deep look at one specific store, or an actual action
+ * (suggest products, build/launch a store, edit one's content or SEO). This
+ * function's only remaining job is assembling what the orchestrator needs
+ * to start: the cached snapshot digest, the plan/entitlements line, and the
+ * token-budget guardrail — the store-name pre-classification that used to
+ * live here (`detectStoreTarget`) is gone; `list_my_stores` replaces it.
  */
-async function detectStoreTarget(
-  message: string,
-  stores: { id: string; name: string }[],
-): Promise<string | null> {
-  if (!stores.length || !isGatewayConfigured()) return null;
-  try {
-    const { content } = await chat(
-      "fast-cheap",
-      [
-        {
-          role: "system",
-          content:
-            "Given a merchant's message and a list of their store names, decide whether the message is " +
-            "clearly asking about ONE SPECIFIC store by name (or an unambiguous nickname of one) — not a " +
-            "general question about the whole business, growth, or strategy. " +
-            `Store names: ${stores.map((s) => s.name).join(", ")}. ` +
-            'Reply with ONLY the exact store name from that list if confident, or the single word "none".',
-        },
-        { role: "user", content: message },
-      ],
-      { temperature: 0, maxTokens: 20, timeoutMs: 8000, reasoningEffort: "none" },
-    );
-    const answer = content.trim().toLowerCase();
-    return stores.find((s) => s.name.toLowerCase() === answer)?.id ?? null;
-  } catch (err) {
-    console.error("[cofounder] store-target classification failed, staying on the broad snapshot:", err);
-    return null;
-  }
-}
-
 export async function askCoFounderAction(
   history: CoFounderTurn[],
   message: string,
@@ -70,28 +42,10 @@ export async function askCoFounderAction(
   const budget = await assertTokenBudget(700);
   if (!budget.ok) return { error: budget.error, upgrade: true };
 
-  const [{ data: profile }, { data: storeRows }, entitlements] = await Promise.all([
+  const [{ data: profile }, entitlements] = await Promise.all([
     supabase.from("profiles").select("full_name").eq("user_id", user.id).maybeSingle(),
-    supabase.from("stores").select("id, name").eq("user_id", user.id),
     getEntitlements(),
   ]);
-
-  // A question naming one specific store gets a real, tool-grounded answer
-  // from that store's own Business Advisor (live Shopify/DB access) instead
-  // of the broad cross-store snapshot below — same orchestrator `editStore`
-  // used to call directly; it now lives here instead (Docs/prompts —
-  // Builder stopped answering business questions; Co-Founder does).
-  const stores = (storeRows ?? []).filter((s): s is { id: string; name: string } => Boolean(s.name));
-  const storeId = await detectStoreTarget(text, stores);
-  if (storeId) {
-    try {
-      const advisor = await askBusinessAdvisor({ tenantId: user.id, storeId, message: text });
-      return { reply: advisor.reply };
-    } catch (err) {
-      console.error("[cofounder] store-specific advisor failed, falling back to the broad snapshot:", err);
-      // Fall through — a broad-but-real answer beats a dead end.
-    }
-  }
 
   const admin = createAdminClient();
   const snapshot = await getOrComputeSnapshot<MerchantSnapshot>("merchant", user.id, SNAPSHOT_TTL_MS, () =>
@@ -100,7 +54,13 @@ export async function askCoFounderAction(
   const planLine = `Plan: ${PLAN_ENTITLEMENTS[entitlements.plan].label} (${entitlements.storesUsed}/${entitlements.storeLimit} stores used, ${entitlements.tokensRemaining.toLocaleString()} AI tokens left today).`;
   const digest = [summarizeMerchantForAdvisor(snapshot), planLine].join("\n");
 
-  const result = await askCoFounder(profile?.full_name || "your business", digest, history, text);
+  const result = await runCofounderOrchestrator({
+    tenantId: user.id,
+    businessName: profile?.full_name || "your business",
+    snapshot: digest,
+    history,
+    message: text,
+  });
   await recordTokenUsage(result.tokensUsed);
   return { reply: result.reply };
 }
