@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@ecomstrait/auth/server";
 import { createAdminClient, type StoreType, type StoreStatus } from "@ecomstrait/db";
+import { loadChatThread, appendChatTurns } from "@ecomstrait/ai";
 import { revalidatePath } from "next/cache";
 import { assertTokenBudget, recordTokenUsage, assertCanCreateStore } from "@/lib/entitlements";
 import { autoSelectProducts, getSelectedProducts, getSelectedIds, productImage } from "@/lib/catalog";
@@ -292,9 +293,38 @@ export async function refineStore(
   const budget = await assertTokenBudget(500);
   if (!budget.ok) return { error: budget.error, upgrade: true };
 
+  // A draft's chat memory is keyed by its store id — a session that hasn't
+  // built anything yet (no draftId) has nothing to key on, same as it has
+  // nowhere to save the plan itself yet either.
+  let userId: string | null = null;
+  let conversationSummary: string | null = null;
+  if (draftId) {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    userId = user?.id ?? null;
+    if (userId) {
+      const thread = await loadChatThread({ tenantId: userId, agent: "merchant_builder", threadKey: draftId });
+      conversationSummary = thread.summary;
+    }
+  }
+
   const existingPages = draftId ? await listStorePages(draftId) : [];
-  const res = await applyMerchantRequest(plan, instruction, existingPages);
+  const res = await applyMerchantRequest(plan, instruction, existingPages, conversationSummary);
   await recordTokenUsage(res.tokensUsed);
+
+  if (draftId && userId) {
+    await appendChatTurns({
+      tenantId: userId,
+      agent: "merchant_builder",
+      threadKey: draftId,
+      turns: [
+        { role: "user", content: instruction.trim() },
+        { role: "assistant", content: res.reply },
+      ],
+    });
+  }
 
   if (res.intent === "suggest_products") {
     const excludeIds = [...(await getSelectedIds())];
@@ -529,9 +559,19 @@ export async function editStore(storeId: string, instruction: string): Promise<E
 
   const current = normalizePlan(store.content);
   const existingPages = await listStorePages(storeId);
-  const ai = await applyMerchantRequest(current, instruction, existingPages);
+  const thread = await loadChatThread({ tenantId: user.id, agent: "merchant_builder", threadKey: storeId });
+  const ai = await applyMerchantRequest(current, instruction, existingPages, thread.summary);
   const plan = ai.plan;
   await recordTokenUsage(ai.tokensUsed);
+  await appendChatTurns({
+    tenantId: user.id,
+    agent: "merchant_builder",
+    threadKey: storeId,
+    turns: [
+      { role: "user", content: instruction.trim() },
+      { role: "assistant", content: ai.reply },
+    ],
+  });
 
   // Same reasoning as pageAction below — a whole-page/product-suggestion
   // request never touches `content` (`ai.changed` stays empty), so this has
@@ -711,6 +751,28 @@ export async function updateStore(
  * `draftId` pins a specific draft — the builder passes the one it's resuming,
  * so a second tab can't quietly redirect the work into a different row.
  */
+/**
+ * Save the opening "asking" conversation's chat history for the first time,
+ * the moment a store id actually exists to key it on — `runBuild()` calls
+ * this once, right after `ensureDraftStore()` succeeds, with everything
+ * accumulated so far. Before that point there's nothing to key a thread on
+ * (matches today's behavior: a session abandoned before any draft has
+ * nothing worth resuming either), so nothing is lost by not saving turn by
+ * turn during that stage — just bulk-saved the one time it first can be.
+ */
+export async function saveBuilderChatHistory(
+  storeId: string,
+  turns: { role: "user" | "assistant"; content: string }[],
+): Promise<void> {
+  if (!turns.length) return;
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return;
+  await appendChatTurns({ tenantId: user.id, agent: "merchant_builder", threadKey: storeId, turns });
+}
+
 export async function ensureDraftStore(input: {
   draftId?: string | null;
   name: string;

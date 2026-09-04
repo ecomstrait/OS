@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { createClient } from "@ecomstrait/auth/server";
+import { loadChatThread } from "@ecomstrait/ai";
 import { productImage } from "@/lib/catalog";
 import { normalizePlan } from "@/lib/store-plan";
 import { getEntitlements } from "@/lib/entitlements";
@@ -75,7 +76,10 @@ export default async function EditStorePage({ params }: { params: Promise<{ id: 
     products,
   };
 
-  const e = await getEntitlements();
+  const [e, thread] = await Promise.all([
+    getEntitlements(),
+    loadChatThread({ tenantId: user.id, agent: "merchant_builder", threadKey: store.id }),
+  ]);
 
   return (
     <div className="mx-auto max-w-7xl">
@@ -95,6 +99,7 @@ export default async function EditStorePage({ params }: { params: Promise<{ id: 
         initialTheme={existing.theme}
         canCreateStore={e.canCreateStore}
         existing={existing}
+        initialChatMessages={thread.messages}
       />
     </div>
   );

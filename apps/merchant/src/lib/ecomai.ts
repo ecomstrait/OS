@@ -600,6 +600,12 @@ export async function applyMerchantRequest(
   /** Slug/title of every page the store already has, so the model can match
    *  an update/delete to the right one instead of guessing a new slug. */
   existingPages: { slug: string; title: string }[] = [],
+  /** The persisted chat thread's rolling summary, when there is one — this
+   *  call has no message history of its own (each instruction is evaluated
+   *  independently against the current plan), so this is the one thread of
+   *  memory it gets of anything said earlier in the conversation. See
+   *  `Docs/prompts/merchant-chat-edit-and-pages.md`. */
+  conversationSummary?: string | null,
 ): Promise<MerchantReply> {
   const text = instruction.trim();
   if (text.length < 2) {
@@ -633,7 +639,7 @@ export async function applyMerchantRequest(
           role: "user",
           content: `Current store:\n${JSON.stringify(visible)}\n\nExisting pages: ${
             existingPages.length ? JSON.stringify(existingPages) : "(none yet)"
-          }\n\nMerchant says: ${text}`,
+          }${conversationSummary ? `\n\nConversation so far: ${conversationSummary}` : ""}\n\nMerchant says: ${text}`,
         },
       ],
       // reasoningEffort: "none" — see the note on the converseBuilder call

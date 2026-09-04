@@ -35,3 +35,9 @@ export {
   type Approval,
   type ApprovalStatus,
 } from "./guardrails";
+export {
+  loadChatThread,
+  appendChatTurns,
+  type ChatThreadMessage,
+  type ChatAgent,
+} from "./memory/chat-threads";

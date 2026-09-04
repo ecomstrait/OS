@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { createClient } from "@ecomstrait/auth/server";
+import { loadChatThread } from "@ecomstrait/ai";
 import { getMySupplier } from "@/lib/supplier-context";
 import { PendingGate } from "@/components/app/pending-gate";
 import { getEntitlements } from "@/lib/entitlements";
@@ -27,7 +28,15 @@ export default async function CoFounderPage() {
     );
   }
 
-  const e = await getEntitlements();
+  // `supplier` (checked above) only ever resolved via the `my` branch, so
+  // `my` is guaranteed here — captured once to avoid repeating `my!`.
+  const supplierId = my!.supplierId;
+  const [e, thread] = await Promise.all([
+    getEntitlements(),
+    // One thread per supplier business, not per staff account — anyone on
+    // the team who opens this chat continues the same conversation.
+    loadChatThread({ tenantId: supplierId, agent: "supplier_cofounder", threadKey: supplierId }),
+  ]);
 
   return (
     <div className="mx-auto flex h-[calc(100vh-8rem)] max-w-3xl flex-col">
@@ -43,7 +52,7 @@ export default async function CoFounderPage() {
           {e.tokensRemaining.toLocaleString()} AI tokens left today
         </span>
       </div>
-      <CoFounderChat businessName={supplier.business_name} />
+      <CoFounderChat businessName={supplier.business_name} initialMessages={thread.messages} />
     </div>
   );
 }

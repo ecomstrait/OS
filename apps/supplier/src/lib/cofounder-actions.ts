@@ -1,5 +1,6 @@
 "use server";
 
+import { loadChatThread, appendChatTurns } from "@ecomstrait/ai";
 import { requireApprovedSupplier } from "@/lib/supplier-context";
 import { getSupplierRevenueAnalytics, summarizeForAdvisor } from "@/lib/revenue-analytics";
 import { getSupplierAnalytics, summarizeCatalogForAdvisor } from "@/lib/analytics-data";
@@ -9,7 +10,10 @@ import { assertTokenBudget, recordTokenUsage } from "@/lib/entitlements";
 export async function askCoFounderAction(
   history: CoFounderTurn[],
   message: string,
-): Promise<{ reply: string } | { error: string; upgrade?: boolean }> {
+): Promise<
+  | { reply: string; reasoningContent?: string; providerSpecificFields?: Record<string, unknown> }
+  | { error: string; upgrade?: boolean }
+> {
   const ctx = await requireApprovedSupplier();
   if ("error" in ctx) return ctx;
   if (!message.trim()) return { error: "Say something first." };
@@ -29,15 +33,37 @@ export async function askCoFounderAction(
   // combined into one digest — previously only revenue was wired in, so the
   // advisor had no way to answer anything about products, stock, or the
   // quality score.
-  const [revenue, catalog] = await Promise.all([
+  const [revenue, catalog, thread] = await Promise.all([
     getSupplierRevenueAnalytics(ctx.supabase, ctx.supplierId),
     supplier ? getSupplierAnalytics(ctx.supabase, supplier) : null,
+    // One thread per supplier business (not per staff account) — see
+    // packages/ai/src/memory/chat-threads.ts.
+    loadChatThread({ tenantId: ctx.supplierId, agent: "supplier_cofounder", threadKey: ctx.supplierId }),
   ]);
-  const snapshot = [summarizeForAdvisor(revenue), catalog ? summarizeCatalogForAdvisor(catalog) : null]
-    .filter(Boolean)
-    .join("\n");
+  const snapshotLines = [summarizeForAdvisor(revenue), catalog ? summarizeCatalogForAdvisor(catalog) : null];
+  if (thread.summary) snapshotLines.push(`Earlier in this conversation: ${thread.summary}`);
+  const snapshot = snapshotLines.filter(Boolean).join("\n");
 
-  const result = await askCoFounder(supplier?.business_name || "your business", snapshot, history, message.trim());
+  const text = message.trim();
+  const result = await askCoFounder(supplier?.business_name || "your business", snapshot, history, text);
   await recordTokenUsage(result.tokensUsed);
-  return { reply: result.reply };
+  await appendChatTurns({
+    tenantId: ctx.supplierId,
+    agent: "supplier_cofounder",
+    threadKey: ctx.supplierId,
+    turns: [
+      { role: "user", content: text },
+      {
+        role: "assistant",
+        content: result.reply,
+        reasoningContent: result.reasoningContent,
+        providerSpecificFields: result.providerSpecificFields,
+      },
+    ],
+  });
+  return {
+    reply: result.reply,
+    reasoningContent: result.reasoningContent,
+    providerSpecificFields: result.providerSpecificFields,
+  };
 }

@@ -2,9 +2,23 @@ import "server-only";
 import { chat, isGatewayConfigured } from "@ecomstrait/ai";
 import type { ChatMessage } from "@ecomstrait/ai";
 
-export type CoFounderTurn = { role: "user" | "assistant"; content: string };
+export type CoFounderTurn = {
+  role: "user" | "assistant";
+  content: string;
+  /** See `ChatMessage.reasoningContent` — must be carried through when an
+   *  assistant turn from a reasoning-capable model gets replayed as history
+   *  on a later call, or the gateway silently degrades that turn's
+   *  chain-of-thought (see gateway.ts). */
+  reasoningContent?: string;
+  providerSpecificFields?: Record<string, unknown>;
+};
 
-export type CoFounderReply = { reply: string; tokensUsed: number };
+export type CoFounderReply = {
+  reply: string;
+  tokensUsed: number;
+  reasoningContent?: string;
+  providerSpecificFields?: Record<string, unknown>;
+};
 
 const SYSTEM_PROMPT = (businessName: string, snapshot: string) =>
   [
@@ -82,14 +96,24 @@ export async function askCoFounder(
   const messages: ChatMessage[] = [
     { role: "system", content: SYSTEM_PROMPT(businessName, snapshot) },
     // Cap history so the prompt doesn't grow unbounded over a long session.
-    ...history.slice(-12).map((t): ChatMessage => ({ role: t.role, content: t.content })),
+    // reasoningContent/providerSpecificFields carried through verbatim — see
+    // ChatMessage's doc comment; dropping them here is exactly what produces
+    // the gateway's "reasoning_content is missing" warning on turn 2+.
+    ...history.slice(-12).map(
+      (t): ChatMessage => ({
+        role: t.role,
+        content: t.content,
+        reasoningContent: t.reasoningContent,
+        providerSpecificFields: t.providerSpecificFields,
+      }),
+    ),
     { role: "user", content: message },
   ];
 
   let lastError: unknown;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
-      const { content, tokensUsed } = await chat("reasoning", messages, {
+      const { content, tokensUsed, reasoningContent, providerSpecificFields } = await chat("reasoning", messages, {
         temperature: 0.5,
         // Real bug, not a transient one: at 700 (even 2000), the reasoning
         // model behind this role spent its ENTIRE budget on invisible
@@ -106,7 +130,7 @@ export async function askCoFounder(
         // why (the failure was previously swallowed with no logging at all).
         timeoutMs: 45000,
       });
-      return { reply: content, tokensUsed };
+      return { reply: content, tokensUsed, reasoningContent, providerSpecificFields };
     } catch (err) {
       lastError = err;
       // A single retry absorbs a transient blip (a gateway restart, one

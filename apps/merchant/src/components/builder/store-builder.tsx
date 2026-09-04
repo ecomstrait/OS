@@ -22,6 +22,7 @@ import {
   ensureDraftStore,
   saveDraft,
   discardDraft,
+  saveBuilderChatHistory,
   type PreviewProduct,
   type BuilderTurn,
   type ConverseResult,
@@ -108,6 +109,7 @@ export function StoreBuilder({
   existing,
   draft,
   context,
+  initialChatMessages,
 }: {
   userId: string;
   initialTheme: string;
@@ -116,6 +118,11 @@ export function StoreBuilder({
   /** An unlaunched build to pick back up. Ignored when editing a live store. */
   draft?: DraftStore | null;
   context?: BuilderContext;
+  /** The persisted chat thread for this store (existing or resumed), last
+   *  (up to) 30 messages — see `packages/ai/src/memory/chat-threads.ts`.
+   *  Undefined/empty for a genuinely fresh session, which has no store id
+   *  yet to have persisted anything against. */
+  initialChatMessages?: { role: "user" | "assistant"; content: string }[];
 }) {
   const router = useRouter();
   const idRef = useRef(0);
@@ -139,7 +146,9 @@ export function StoreBuilder({
   );
 
   const [messages, setMessages] = useState<Msg[]>(
-    existing
+    initialChatMessages?.length
+      ? initialChatMessages.map((m, i) => ({ id: i, role: m.role === "assistant" ? "ai" : "user", content: m.content }))
+      : existing
       ? [
           {
             id: 0,
@@ -200,8 +209,11 @@ export function StoreBuilder({
   );
   // The running transcript sent to converseBuilderTurn — separate from
   // `messages` (which also carries the greeting bubbles above, not part of
-  // the actual conversation the AI is reasoning over).
-  const [history, setHistory] = useState<BuilderTurn[]>([]);
+  // the actual conversation the AI is reasoning over). Seeded from the
+  // persisted thread when resuming a draft, so the "asking" stage — the one
+  // stage that actually threads history to the model — remembers a Q&A that
+  // was left unfinished, not just re-shows it on screen.
+  const [history, setHistory] = useState<BuilderTurn[]>(initialChatMessages ?? []);
 
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -307,12 +319,20 @@ export function StoreBuilder({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function runBuild(answers: {
-    niche: string | null;
-    audience: string | null;
-    styleKeyword: string | null;
-    storeName: string | null;
-  }) {
+  async function runBuild(
+    answers: {
+      niche: string | null;
+      audience: string | null;
+      styleKeyword: string | null;
+      storeName: string | null;
+    },
+    // Passed explicitly rather than read from the `history` state closure:
+    // this runs synchronously right after `setHistory(...)` in `send()`
+    // below, before React has applied that update, so `history` here would
+    // still be one turn behind — missing exactly the exchange that just
+    // finished the conversation.
+    transcript: BuilderTurn[],
+  ) {
     setBusy(true);
     pushAi(
       context?.productCount
@@ -365,6 +385,11 @@ export function StoreBuilder({
       pushAi(
         "I've saved this as a draft, so you can edit the text and swap in your own images and video from Content before anything goes live.",
       );
+      // First time a store id exists for this session — bulk-save the whole
+      // opening conversation now, since there was nothing to key it on
+      // before this point. Fire-and-forget: a history-saving hiccup should
+      // never block or error out a build that already succeeded.
+      void saveBuilderChatHistory(draftRes.storeId, transcript);
     } else if (draftRes.error) {
       // Non-fatal: the build is still on screen and still launchable, the
       // merchant just can't upload media until the draft saves.
@@ -390,10 +415,11 @@ export function StoreBuilder({
         else pushAi(res.error);
         return;
       }
-      setHistory([...nextHistory, { role: "assistant", content: res.reply }]);
+      const finalHistory: BuilderTurn[] = [...nextHistory, { role: "assistant", content: res.reply }];
+      setHistory(finalHistory);
       pushAi(res.reply, res.productSuggestions);
       if (res.done) {
-        await runBuild(res);
+        await runBuild(res, finalHistory);
       }
       return;
     }

@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { createClient } from "@ecomstrait/auth/server";
+import { loadChatThread } from "@ecomstrait/ai";
 import { getEntitlements } from "@/lib/entitlements";
 import { CoFounderChat } from "@/components/cofounder/cofounder-chat";
 
@@ -13,9 +14,13 @@ export default async function CoFounderPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [{ data: profile }, e] = await Promise.all([
+  const [{ data: profile }, e, thread] = await Promise.all([
     supabase.from("profiles").select("full_name").eq("user_id", user.id).maybeSingle(),
     getEntitlements(),
+    // One thread per merchant (their whole portfolio, not one per store) —
+    // see Docs/prompts/merchant-cofounder-chat.md for why this chat reasons
+    // across stores rather than about just one.
+    loadChatThread({ tenantId: user.id, agent: "merchant_cofounder", threadKey: user.id }),
   ]);
 
   return (
@@ -32,7 +37,7 @@ export default async function CoFounderPage() {
           {e.tokensRemaining.toLocaleString()} AI tokens left today
         </span>
       </div>
-      <CoFounderChat businessName={profile?.full_name ?? null} />
+      <CoFounderChat businessName={profile?.full_name ?? null} initialMessages={thread.messages} />
     </div>
   );
 }

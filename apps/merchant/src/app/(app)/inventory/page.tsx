@@ -63,12 +63,28 @@ export default async function InventoryPage({
             The products you&apos;re selling, and which store each one is on.
           </p>
         </div>
-        <Link
-          href="/find-suppliers"
-          className="inline-flex items-center gap-2 rounded-xl border border-ink-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink-800 hover:bg-ink-50"
-        >
-          <Search className="h-4 w-4" /> Find more products
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href="/find-suppliers"
+            className="inline-flex items-center gap-2 rounded-xl border border-ink-200 bg-white px-4 py-2.5 text-sm font-semibold text-ink-800 hover:bg-ink-50"
+          >
+            <Search className="h-4 w-4" /> Find more products
+          </Link>
+          {/* Same action, same target, same styling as the identical button on
+              Find Suppliers (find-suppliers/page.tsx) — /builder reads the
+              selected_products basket itself, so there's nothing to pass
+              through. Only shown once there's something queued for it to build
+              around; unlike Find Suppliers this page has no reason to show a
+              disabled placeholder when the basket is empty. */}
+          {preLaunch.length > 0 && (
+            <Link
+              href="/builder"
+              className="inline-flex items-center gap-2 rounded-xl bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-brand-600"
+            >
+              <Sparkles className="h-4 w-4" /> Create a store with selected inventory
+            </Link>
+          )}
+        </div>
       </div>
 
       {all.length > 0 && (

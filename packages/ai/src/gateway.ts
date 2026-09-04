@@ -66,6 +66,18 @@ export async function chat(
   const model = resolveModel(role);
   const request = summarizeChatRequest(role, model, messages, opts);
 
+  // Wire format uses the provider's own snake_case field names; `ChatMessage`
+  // keeps them off every non-reasoning call site's plate as optional,
+  // camelCase fields. Only emitted on a message that actually carries them —
+  // an assistant turn from a non-reasoning model, or a user/system message,
+  // sends exactly what it always sent.
+  const wireMessages = messages.map((m) => ({
+    role: m.role,
+    content: m.content,
+    ...(m.reasoningContent ? { reasoning_content: m.reasoningContent } : {}),
+    ...(m.providerSpecificFields ? { provider_specific_fields: m.providerSpecificFields } : {}),
+  }));
+
   let res: Response;
   try {
     res = await fetch(`${baseUrl}/chat/completions`, {
@@ -77,7 +89,7 @@ export async function chat(
         max_tokens: opts.maxTokens ?? 800,
         ...(opts.responseFormatJson ? { response_format: { type: "json_object" } } : {}),
         ...(opts.reasoningEffort ? { reasoning_effort: opts.reasoningEffort } : {}),
-        messages,
+        messages: wireMessages,
       }),
       signal: AbortSignal.timeout(opts.timeoutMs ?? 15000),
     });
@@ -130,7 +142,20 @@ export async function chat(
     );
   }
 
-  return { content, model, tokensUsed: data?.usage?.total_tokens ?? 0 };
+  // Reasoning-model chain-of-thought for this reply, if any — see
+  // `ChatMessage.reasoningContent`'s doc comment. Absent (undefined, not
+  // dropped) for a non-reasoning model behind the role.
+  const reasoningContent: string | undefined = data?.choices?.[0]?.message?.reasoning_content || undefined;
+  const providerSpecificFields: Record<string, unknown> | undefined =
+    data?.choices?.[0]?.message?.provider_specific_fields || undefined;
+
+  return {
+    content,
+    model,
+    tokensUsed: data?.usage?.total_tokens ?? 0,
+    ...(reasoningContent ? { reasoningContent } : {}),
+    ...(providerSpecificFields ? { providerSpecificFields } : {}),
+  };
 }
 
 export async function embed(texts: string[]): Promise<EmbeddingResult[]> {

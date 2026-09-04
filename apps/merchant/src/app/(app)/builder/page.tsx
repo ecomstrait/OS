@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { createClient } from "@ecomstrait/auth/server";
+import { loadChatThread } from "@ecomstrait/ai";
 import { getEntitlements } from "@/lib/entitlements";
 import { getSelectedProducts } from "@/lib/catalog";
 import { storeThemes } from "@/content/themes";
@@ -52,6 +53,14 @@ export default async function BuilderPage({
   // is explicit, so it always wins.
   const resumable = draft || !skipping ? await loadDraftStore(user.id, draft) : null;
 
+  // A store id only exists once a draft row does — a genuinely fresh session
+  // (no `resumable`) has nothing to key a chat thread on yet, same as it has
+  // no store to save anything else against either. See
+  // `packages/ai/src/memory/chat-threads.ts`.
+  const thread = resumable
+    ? await loadChatThread({ tenantId: user.id, agent: "merchant_builder", threadKey: resumable.id })
+    : null;
+
   return (
     <div className="mx-auto max-w-7xl">
       <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
@@ -75,6 +84,7 @@ export default async function BuilderPage({
         canCreateStore={e.canCreateStore}
         draft={resumable}
         context={context}
+        initialChatMessages={thread?.messages}
       />
     </div>
   );

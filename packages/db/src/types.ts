@@ -779,6 +779,27 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["ai_snapshot_cache"]["Row"]>;
         Relationships: [];
       };
+      ai_chat_threads: {
+        Row: {
+          id: string;
+          tenant_id: string;
+          agent: "merchant_cofounder" | "supplier_cofounder" | "merchant_builder";
+          thread_key: string;
+          messages: { role: "user" | "assistant"; content: string; at?: string }[];
+          summary: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          tenant_id: string;
+          agent: "merchant_cofounder" | "supplier_cofounder" | "merchant_builder";
+          thread_key: string;
+          messages?: { role: "user" | "assistant"; content: string; at?: string }[];
+          summary?: string | null;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["ai_chat_threads"]["Row"]>;
+        Relationships: [];
+      };
       merchant_wallets: {
         Row: { user_id: string; balance: number; updated_at: string };
         Insert: { user_id: string; balance?: number };
@@ -918,6 +939,7 @@ export type AiEmbedding = Database["public"]["Tables"]["ai_embeddings"]["Row"];
 export type AiAgentRun = Database["public"]["Tables"]["ai_agent_runs"]["Row"];
 export type AiApproval = Database["public"]["Tables"]["ai_approvals"]["Row"];
 export type AiCostLedgerEntry = Database["public"]["Tables"]["ai_cost_ledger"]["Row"];
+export type AiChatThread = Database["public"]["Tables"]["ai_chat_threads"]["Row"];
 export type MerchantWallet = Database["public"]["Tables"]["merchant_wallets"]["Row"];
 export type SupplierWallet = Database["public"]["Tables"]["supplier_wallets"]["Row"];
 export type WalletTransaction = Database["public"]["Tables"]["wallet_transactions"]["Row"];

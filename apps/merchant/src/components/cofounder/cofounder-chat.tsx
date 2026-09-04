@@ -9,8 +9,17 @@ import { UpgradeModal } from "@/components/billing/upgrade-modal";
 
 type Message = CoFounderTurn;
 
-export function CoFounderChat({ businessName }: { businessName: string | null }) {
-  const [messages, setMessages] = useState<Message[]>([]);
+export function CoFounderChat({
+  businessName,
+  initialMessages = [],
+}: {
+  businessName: string | null;
+  /** The persisted thread's last (up to) 30 messages — see
+   *  `Docs/prompts/merchant-cofounder-chat.md` — so reopening this chat
+   *  continues the conversation instead of starting cold. */
+  initialMessages?: Message[];
+}) {
+  const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [upgradeMsg, setUpgradeMsg] = useState<string | null>(null);

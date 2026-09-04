@@ -2,7 +2,7 @@
 
 import { createClient } from "@ecomstrait/auth/server";
 import { createAdminClient } from "@ecomstrait/db";
-import { getOrComputeSnapshot } from "@ecomstrait/ai";
+import { getOrComputeSnapshot, loadChatThread, appendChatTurns } from "@ecomstrait/ai";
 import { getMerchantSnapshot, summarizeMerchantForAdvisor, type MerchantSnapshot } from "@/lib/cofounder-snapshot";
 import type { CoFounderTurn } from "@/lib/cofounder-ai";
 import { runCofounderOrchestrator } from "@/lib/agents/cofounder-orchestrator";
@@ -48,11 +48,19 @@ export async function askCoFounderAction(
   ]);
 
   const admin = createAdminClient();
-  const snapshot = await getOrComputeSnapshot<MerchantSnapshot>("merchant", user.id, SNAPSHOT_TTL_MS, () =>
-    getMerchantSnapshot(supabase, admin, user.id),
-  );
+  const [snapshot, thread] = await Promise.all([
+    getOrComputeSnapshot<MerchantSnapshot>("merchant", user.id, SNAPSHOT_TTL_MS, () =>
+      getMerchantSnapshot(supabase, admin, user.id),
+    ),
+    // The persisted thread's rolling summary — real memory of anything
+    // older than the last 30 messages this same chat already carries as
+    // `history`. See packages/ai/src/memory/chat-threads.ts.
+    loadChatThread({ tenantId: user.id, agent: "merchant_cofounder", threadKey: user.id }),
+  ]);
   const planLine = `Plan: ${PLAN_ENTITLEMENTS[entitlements.plan].label} (${entitlements.storesUsed}/${entitlements.storeLimit} stores used, ${entitlements.tokensRemaining.toLocaleString()} AI tokens left today).`;
-  const digest = [summarizeMerchantForAdvisor(snapshot), planLine].join("\n");
+  const digestLines = [summarizeMerchantForAdvisor(snapshot), planLine];
+  if (thread.summary) digestLines.push(`Earlier in this conversation: ${thread.summary}`);
+  const digest = digestLines.join("\n");
 
   const result = await runCofounderOrchestrator({
     tenantId: user.id,
@@ -62,5 +70,14 @@ export async function askCoFounderAction(
     message: text,
   });
   await recordTokenUsage(result.tokensUsed);
+  await appendChatTurns({
+    tenantId: user.id,
+    agent: "merchant_cofounder",
+    threadKey: user.id,
+    turns: [
+      { role: "user", content: text },
+      { role: "assistant", content: result.reply },
+    ],
+  });
   return { reply: result.reply };
 }
