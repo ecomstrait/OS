@@ -12,11 +12,14 @@ export function PageView({
   navLinks,
   page,
   basePath,
+  previewMode,
 }: {
   store: Storefront;
   navLinks: StorefrontNavLink[];
   page: PageDetail;
   basePath: string;
+  /** See StorefrontChrome — set inside the Store Builder's preview. */
+  previewMode?: boolean;
 }) {
   const t = storeTokens(store.theme, store.plan.brandColors);
   const paragraphs = page.body
@@ -29,7 +32,7 @@ export function PageView({
       className="min-h-screen"
       style={{ ...tokenStyle(t), background: "var(--bg)", color: "var(--ink)", fontFamily: "var(--font-body)" }}
     >
-      <StorefrontChrome store={store} navLinks={navLinks} basePath={basePath}>
+      <StorefrontChrome store={store} navLinks={navLinks} basePath={basePath} previewMode={previewMode}>
         <article className="mx-auto max-w-2xl px-6 py-14 sm:py-20">
           <h1
             className="text-3xl font-semibold"

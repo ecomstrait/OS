@@ -23,7 +23,7 @@ import {
 } from "@/lib/ecomai";
 import { normalizePlan } from "@/lib/store-plan";
 import { purgeStoreMedia } from "@/lib/draft-sweep";
-import { listStorePages } from "@/lib/pages-api";
+import { listStorePages, listStorePagesWithBody, type PageDetail } from "@/lib/pages-api";
 import { listStoreProducts } from "@/lib/storefront-api";
 
 export type PreviewProduct = {
@@ -817,6 +817,28 @@ export async function saveBuilderChatHistory(
   } = await supabase.auth.getUser();
   if (!user) return;
   await appendChatTurns({ tenantId: user.id, agent: "merchant_builder", threadKey: storeId, turns });
+}
+
+/**
+ * Refetch a store's custom pages for the live preview — called after a
+ * "ready"-stage chat turn (editStore/refineStore), since a page is the one
+ * thing the preview shows that can actually be created *through this same
+ * chat*, mid-session (blog posts are written from a separate screen, so an
+ * initial load covers those; see store-builder.tsx). `listStorePages()`
+ * itself has no ownership check of its own (by design — it's a public read
+ * for the live storefront's nav, see pages-api.ts), so this wrapper adds
+ * one, matching every other function in this file that takes a storeId
+ * from the client.
+ */
+export async function listBuilderPreviewPages(storeId: string): Promise<PageDetail[]> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return [];
+  const { data: store } = await supabase.from("stores").select("id").eq("id", storeId).eq("user_id", user.id).maybeSingle();
+  if (!store) return [];
+  return listStorePagesWithBody(storeId);
 }
 
 export async function ensureDraftStore(input: {

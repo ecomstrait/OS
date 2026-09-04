@@ -12,11 +12,14 @@ export function BlogPostView({
   navLinks,
   post,
   basePath,
+  previewMode,
 }: {
   store: Storefront;
   navLinks: StorefrontNavLink[];
   post: PostDetail;
   basePath: string;
+  /** See StorefrontChrome — set inside the Store Builder's preview. */
+  previewMode?: boolean;
 }) {
   const t = storeTokens(store.theme, store.plan.brandColors);
   const surface = "color-mix(in srgb, var(--ink) 4%, var(--bg))";
@@ -32,7 +35,7 @@ export function BlogPostView({
       className="min-h-screen"
       style={{ ...tokenStyle(t), background: "var(--bg)", color: "var(--ink)", fontFamily: "var(--font-body)" }}
     >
-      <StorefrontChrome store={store} navLinks={navLinks} basePath={basePath}>
+      <StorefrontChrome store={store} navLinks={navLinks} basePath={basePath} previewMode={previewMode}>
         <article className="mx-auto max-w-2xl px-6 py-14 sm:py-20">
           <a
             href={`${basePath}/blog`}

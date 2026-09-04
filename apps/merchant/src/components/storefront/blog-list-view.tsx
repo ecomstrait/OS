@@ -17,11 +17,14 @@ export function BlogListView({
   navLinks,
   posts,
   basePath,
+  previewMode,
 }: {
   store: Storefront;
   navLinks: StorefrontNavLink[];
   posts: PostSummary[];
   basePath: string;
+  /** See StorefrontChrome — set inside the Store Builder's preview. */
+  previewMode?: boolean;
 }) {
   const t = storeTokens(store.theme, store.plan.brandColors);
   const surface = "color-mix(in srgb, var(--ink) 4%, var(--bg))";
@@ -31,7 +34,7 @@ export function BlogListView({
       className="min-h-screen"
       style={{ ...tokenStyle(t), background: "var(--bg)", color: "var(--ink)", fontFamily: "var(--font-body)" }}
     >
-      <StorefrontChrome store={store} navLinks={navLinks} basePath={basePath}>
+      <StorefrontChrome store={store} navLinks={navLinks} basePath={basePath} previewMode={previewMode}>
         <section className="mx-auto max-w-3xl px-6 py-14 sm:py-20">
           <h1
             className="text-2xl font-semibold sm:text-3xl"

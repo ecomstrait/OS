@@ -3,13 +3,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { StorefrontView, ProductGrid, type CategoryBand } from "@/components/storefront/storefront-view";
 import { ProductDetailView } from "@/components/storefront/product-detail-view";
+import { BlogListView } from "@/components/storefront/blog-list-view";
+import { BlogPostView } from "@/components/storefront/blog-post-view";
+import { PageView } from "@/components/storefront/page-view";
 import { StorefrontChrome } from "@/components/storefront/storefront-chrome";
 import { storeTokens, tokenStyle } from "@/lib/theme-tokens";
 import { categoryLabel, UNCATEGORIZED } from "@/lib/storefront-shared";
 import { cn } from "@ecomstrait/ui";
 import type { Storefront } from "@/lib/storefront";
 import type { ApiProduct, StorefrontNavLink } from "@/lib/storefront-api";
-import { BUILDER_PREVIEW_READY, BUILDER_PREVIEW_DATA } from "@/lib/builder-preview-protocol";
+import { BUILDER_PREVIEW_READY, BUILDER_PREVIEW_DATA, type BuilderPreviewPayload } from "@/lib/builder-preview-protocol";
 
 /**
  * Bare preview target for the Store Builder (components/builder/store-builder.tsx),
@@ -33,27 +36,32 @@ import { BUILDER_PREVIEW_READY, BUILDER_PREVIEW_DATA } from "@/lib/builder-previ
  * No server data, no auth: everything it renders arrives via postMessage
  * from whichever window opened it (the builder's live, unsaved draft
  * state), so this route needs nothing of its own and is safe to load
- * unauthenticated.
+ * unauthenticated. That's also why `pages`/`posts` in the payload carry full
+ * bodies, not just summaries — there's no round-trip available here to fetch
+ * one on demand when a merchant actually opens it.
  *
  * Navigation: there's no real store id behind any of this, so the actual
  * `/store/[id]/products` etc. routes can't serve it (no row to look up —
  * for a draft that's never been saved, they'd 404; for a live store being
  * edited, they'd serve the last *saved* version, silently showing the wrong
  * thing for exactly the edits this preview exists to show). So "Shop all",
- * category cards, and product cards don't really navigate — clicking one
- * swaps which of three local views renders, all fed from the same payload,
- * with the URL bar never moving. `BASE_PATH` is just the prefix every link
- * in the payload already uses (built by store-builder.tsx to match what the
- * real site's links look like); it's never an actual route here.
+ * category cards, product cards, blog links, and custom-page links don't
+ * really navigate — clicking one swaps which local view renders, all fed
+ * from the same payload, with the URL bar never moving. `BASE_PATH` is just
+ * the prefix every link in the payload already uses (built by
+ * store-builder.tsx to match what the real site's links look like); it's
+ * never an actual route here.
  */
 
-type Payload = {
-  store: Storefront;
-  navLinks: StorefrontNavLink[];
-  categoryBands: CategoryBand[];
-};
+type Payload = BuilderPreviewPayload;
 
-type View = { type: "home" } | { type: "products"; category: string } | { type: "product"; productId: string };
+type View =
+  | { type: "home" }
+  | { type: "products"; category: string }
+  | { type: "product"; productId: string }
+  | { type: "blog" }
+  | { type: "blog-post"; slug: string }
+  | { type: "page"; slug: string };
 
 const READY = BUILDER_PREVIEW_READY;
 const DATA = BUILDER_PREVIEW_DATA;
@@ -111,39 +119,53 @@ export default function BuilderPreviewFramePage() {
     return [...byId.values()];
   }, [payload?.categoryBands]);
 
-  const handleNavClick = useCallback((e: React.MouseEvent) => {
-    const a = (e.target as HTMLElement).closest("a");
-    if (!a) return; // not a link click — e.g. "Add to cart" — leave it alone
-    const href = a.getAttribute("href");
-    if (!href) return;
-    let url: URL;
-    try {
-      url = new URL(href, window.location.href);
-    } catch {
-      return;
-    }
-    if (url.origin !== window.location.origin) return; // external — let it open normally
-    if (url.pathname === window.location.pathname) return; // e.g. href="#categories" — a same-page anchor, let the browser scroll to it
-    if (!url.pathname.startsWith(BASE_PATH)) {
-      e.preventDefault(); // looks internal but isn't a route this preview understands — block rather than 404
-      return;
-    }
-    e.preventDefault();
-    const rest = url.pathname.slice(BASE_PATH.length);
-    if (rest === "" || rest === "/") {
-      setView({ type: "home" });
-    } else if (rest === "/products") {
-      setView({ type: "products", category: url.searchParams.get("category") ?? "" });
-    } else if (rest.startsWith("/products/")) {
-      setView({ type: "product", productId: decodeURIComponent(rest.slice("/products/".length)) });
-    } else {
-      return; // blog/custom pages etc. — not supported in preview yet, no-op
-    }
-    if (url.hash) {
-      const id = url.hash.slice(1);
-      requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth" }));
-    }
-  }, []);
+  const handleNavClick = useCallback(
+    (e: React.MouseEvent) => {
+      const a = (e.target as HTMLElement).closest("a");
+      if (!a) return; // not a link click — e.g. "Add to cart" — leave it alone
+      const href = a.getAttribute("href");
+      if (!href) return;
+      let url: URL;
+      try {
+        url = new URL(href, window.location.href);
+      } catch {
+        return;
+      }
+      if (url.origin !== window.location.origin) return; // external — let it open normally
+      if (url.pathname === window.location.pathname) return; // e.g. href="#categories" — a same-page anchor, let the browser scroll to it
+      if (!url.pathname.startsWith(BASE_PATH)) {
+        e.preventDefault(); // looks internal but isn't a route this preview understands — block rather than 404
+        return;
+      }
+      e.preventDefault();
+      const rest = url.pathname.slice(BASE_PATH.length);
+      const slug = rest.replace(/^\//, "");
+      if (rest === "" || rest === "/") {
+        setView({ type: "home" });
+      } else if (rest === "/products") {
+        setView({ type: "products", category: url.searchParams.get("category") ?? "" });
+      } else if (rest.startsWith("/products/")) {
+        setView({ type: "product", productId: decodeURIComponent(rest.slice("/products/".length)) });
+      } else if (rest === "/blog") {
+        setView({ type: "blog" });
+      } else if (rest.startsWith("/blog/")) {
+        setView({ type: "blog-post", slug: decodeURIComponent(rest.slice("/blog/".length)) });
+      } else if (payload?.pages.some((p) => p.slug === slug)) {
+        // A bare top-level slug — matches the real site's own routing
+        // precedence (its `[slug]` dynamic segment only ever catches what
+        // isn't `products`/`blog`/`success`): only treat it as a custom page
+        // once it's confirmed to actually be one, never guess.
+        setView({ type: "page", slug: decodeURIComponent(slug) });
+      } else {
+        return; // not a route this preview understands — no-op rather than a dead click
+      }
+      if (url.hash) {
+        const id = url.hash.slice(1);
+        requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth" }));
+      }
+    },
+    [payload?.pages],
+  );
 
   if (!payload) return null;
 
@@ -159,6 +181,7 @@ export default function BuilderPreviewFramePage() {
           store={payload.store}
           navLinks={payload.navLinks}
           categoryBands={payload.categoryBands}
+          productsBySection={payload.productsBySection}
           basePath={BASE_PATH}
           previewMode
         />
@@ -185,6 +208,31 @@ export default function BuilderPreviewFramePage() {
           return (
             <ProductDetailView store={payload.store} product={product} navLinks={payload.navLinks} basePath={BASE_PATH} previewMode />
           );
+        })()}
+      {view.type === "blog" && <BlogListView store={payload.store} navLinks={payload.navLinks} posts={payload.posts} basePath={BASE_PATH} previewMode />}
+      {view.type === "blog-post" &&
+        (() => {
+          const post = payload.posts.find((p) => p.slug === view.slug);
+          if (!post) {
+            return (
+              <div className="grid min-h-screen place-items-center p-8 text-center text-sm opacity-60">
+                That post isn&apos;t in this preview (unpublished, or never existed).
+              </div>
+            );
+          }
+          return <BlogPostView store={payload.store} navLinks={payload.navLinks} post={post} basePath={BASE_PATH} previewMode />;
+        })()}
+      {view.type === "page" &&
+        (() => {
+          const page = payload.pages.find((p) => p.slug === view.slug);
+          if (!page) {
+            return (
+              <div className="grid min-h-screen place-items-center p-8 text-center text-sm opacity-60">
+                That page isn&apos;t in this preview (removed, or never existed).
+              </div>
+            );
+          }
+          return <PageView store={payload.store} navLinks={payload.navLinks} page={page} basePath={BASE_PATH} previewMode />;
         })()}
     </div>
   );

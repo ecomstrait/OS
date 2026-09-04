@@ -8,6 +8,8 @@ import { getEntitlements } from "@/lib/entitlements";
 import { DEFAULT_THEME_ID } from "@/content/themes";
 import { StoreBuilder, type ExistingStore } from "@/components/builder/store-builder";
 import type { PreviewProduct } from "@/lib/builder-actions";
+import { listStorePagesWithBody } from "@/lib/pages-api";
+import { listPublishedPostsWithBody } from "@/lib/blog-api";
 
 export const metadata: Metadata = { title: "Edit store" };
 
@@ -76,9 +78,11 @@ export default async function EditStorePage({ params }: { params: Promise<{ id: 
     products,
   };
 
-  const [e, thread] = await Promise.all([
+  const [e, thread, pages, posts] = await Promise.all([
     getEntitlements(),
     loadChatThread({ tenantId: user.id, agent: "merchant_builder", threadKey: store.id }),
+    listStorePagesWithBody(store.id),
+    listPublishedPostsWithBody(store.id),
   ]);
 
   return (
@@ -100,6 +104,8 @@ export default async function EditStorePage({ params }: { params: Promise<{ id: 
         canCreateStore={e.canCreateStore}
         existing={existing}
         initialChatMessages={thread.messages}
+        initialPages={pages}
+        initialPosts={posts}
       />
     </div>
   );

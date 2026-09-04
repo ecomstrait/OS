@@ -39,6 +39,37 @@ export async function listPublishedPosts(storeId: string): Promise<PostSummary[]
     .map((p) => ({ id: p.id, title: p.title, slug: p.slug, excerpt: p.excerpt, coverImage: p.cover_image, publishedAt: p.published_at }));
 }
 
+/**
+ * Every published post on a store, full body included — for the Store
+ * Builder's live preview, same reasoning as `listStorePagesWithBody`
+ * (pages-api.ts): that preview has no server round-trip per click, so
+ * whatever it might open has to already be in hand.
+ */
+export async function listPublishedPostsWithBody(storeId: string): Promise<PostDetail[]> {
+  const admin = createAdminClient();
+  if (!admin) return [];
+  const { data, error } = await admin
+    .from("store_posts")
+    .select("id, title, slug, excerpt, body, cover_image, seo_title, seo_description, published_at")
+    .eq("store_id", storeId)
+    .eq("status", "published")
+    .order("published_at", { ascending: false });
+  if (error) console.error("[blog-api] could not list posts with body:", error.message);
+  return (data ?? [])
+    .filter((p): p is typeof p & { published_at: string } => p.published_at != null)
+    .map((p) => ({
+      id: p.id,
+      title: p.title,
+      slug: p.slug,
+      excerpt: p.excerpt,
+      coverImage: p.cover_image,
+      publishedAt: p.published_at,
+      body: p.body,
+      seoTitle: p.seo_title,
+      seoDescription: p.seo_description,
+    }));
+}
+
 /** A single published post by slug, or null if it doesn't exist or isn't published. */
 export async function getPublishedPost(storeId: string, slug: string): Promise<PostDetail | null> {
   const admin = createAdminClient();

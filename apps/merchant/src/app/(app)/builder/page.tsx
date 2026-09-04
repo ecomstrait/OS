@@ -8,6 +8,8 @@ import { storeThemes } from "@/content/themes";
 import { StoreBuilder, type BuilderContext } from "@/components/builder/store-builder";
 import { loadDraftStore } from "@/lib/drafts";
 import { sweepExpiredDrafts } from "@/lib/draft-sweep";
+import { listStorePagesWithBody } from "@/lib/pages-api";
+import { listPublishedPostsWithBody } from "@/lib/blog-api";
 
 export const metadata: Metadata = { title: "Store Builder" };
 
@@ -57,9 +59,13 @@ export default async function BuilderPage({
   // (no `resumable`) has nothing to key a chat thread on yet, same as it has
   // no store to save anything else against either. See
   // `packages/ai/src/memory/chat-threads.ts`.
-  const thread = resumable
-    ? await loadChatThread({ tenantId: user.id, agent: "merchant_builder", threadKey: resumable.id })
-    : null;
+  const [thread, pages, posts] = resumable
+    ? await Promise.all([
+        loadChatThread({ tenantId: user.id, agent: "merchant_builder", threadKey: resumable.id }),
+        listStorePagesWithBody(resumable.id),
+        listPublishedPostsWithBody(resumable.id),
+      ])
+    : [null, [], []];
 
   return (
     <div className="mx-auto max-w-7xl">
@@ -85,6 +91,8 @@ export default async function BuilderPage({
         draft={resumable}
         context={context}
         initialChatMessages={thread?.messages}
+        initialPages={pages}
+        initialPosts={posts}
       />
     </div>
   );

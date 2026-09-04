@@ -23,6 +23,7 @@ import {
   saveDraft,
   discardDraft,
   saveBuilderChatHistory,
+  listBuilderPreviewPages,
   type PreviewProduct,
   type BuilderTurn,
   type ConverseResult,
@@ -37,8 +38,10 @@ import type { CategoryBand } from "@/components/storefront/storefront-view";
 import type { Storefront } from "@/lib/storefront";
 import type { ApiProduct, StorefrontNavLink } from "@/lib/storefront-api";
 import { categoryLabel, UNCATEGORIZED } from "@/lib/storefront-shared";
-import { BUILDER_PREVIEW_READY, BUILDER_PREVIEW_DATA } from "@/lib/builder-preview-protocol";
+import { BUILDER_PREVIEW_READY, BUILDER_PREVIEW_DATA, type BuilderPreviewPayload } from "@/lib/builder-preview-protocol";
 import { UpgradeModal } from "@/components/billing/upgrade-modal";
+import type { PageDetail } from "@/lib/pages-api";
+import type { PostDetail } from "@/lib/blog-api";
 
 /**
  * An already-launched store, opened in the same workbench used to build it.
@@ -56,6 +59,28 @@ export type ExistingStore = {
 };
 
 type Msg = { id: number; role: "ai" | "user"; content: string; productSuggestions?: ProductSuggestion[] };
+
+/** Shared by `previewCategoryBands` and `previewProductsBySection` — the
+ *  same shape the preview always builds a `PreviewProduct` into for
+ *  anything `StorefrontView`/`ProductGrid` renders. */
+function toApiProduct(p: PreviewProduct): ApiProduct {
+  return {
+    id: p.id,
+    title: p.title,
+    description: null,
+    category: p.category,
+    image: p.image,
+    images: p.image ? [p.image] : [],
+    price: p.price,
+    compareAtPrice: null,
+    available: 99,
+    inStock: true,
+    sizes: null,
+    material: null,
+    fitNote: null,
+    shippingNote: null,
+  };
+}
 
 /**
  * What the merchant already decided before arriving here — products picked in
@@ -110,6 +135,8 @@ export function StoreBuilder({
   draft,
   context,
   initialChatMessages,
+  initialPages,
+  initialPosts,
 }: {
   userId: string;
   initialTheme: string;
@@ -123,6 +150,13 @@ export function StoreBuilder({
    *  Undefined/empty for a genuinely fresh session, which has no store id
    *  yet to have persisted anything against. */
   initialChatMessages?: { role: "user" | "assistant"; content: string }[];
+  /** Custom pages (existing or resumed) — refreshed mid-session after any
+   *  chat turn that might have created one, since these ARE created through
+   *  this exact chat, unlike blog posts. See `listBuilderPreviewPages`. */
+  initialPages?: PageDetail[];
+  /** Published blog posts (existing or resumed) — written from the store's
+   *  own Blog screen, not this chat, so an initial load is enough. */
+  initialPosts?: PostDetail[];
 }) {
   const router = useRouter();
   const idRef = useRef(0);
@@ -254,6 +288,11 @@ export function StoreBuilder({
   const [discarding, setDiscarding] = useState(false);
   /** The id whose media the editor addresses: a live store, or the draft. */
   const mediaStoreId = existing?.id ?? draftId;
+
+  // Custom pages and blog posts, for the preview — see the props' own doc
+  // comments for why pages get refreshed mid-session and posts don't.
+  const [pages, setPages] = useState<PageDetail[]>(initialPages ?? []);
+  const [posts] = useState<PostDetail[]>(initialPosts ?? []);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -450,6 +489,11 @@ export function StoreBuilder({
         setName(res.plan.storeName);
       }
       pushAi(res.note ?? "Updated.", res.productSuggestions);
+      // Fire-and-forget: a custom page is the one thing the preview shows
+      // that's actually created *through this chat* — refresh it after
+      // every ready-stage turn (cheap, one indexed query) rather than
+      // trying to detect precisely which turns touched a page.
+      void refreshPreviewPages(existing.id);
       router.refresh();
       return;
     }
@@ -474,6 +518,14 @@ export function StoreBuilder({
       setName(res.plan.storeName);
     }
     pushAi(res.reply ?? "Updated — check the preview.", res.productSuggestions);
+    if (draftId) void refreshPreviewPages(draftId);
+  }
+
+  /** See the `send()` call sites above — never awaited there, a page-list
+   *  refresh failing shouldn't disrupt a chat turn that already succeeded. */
+  async function refreshPreviewPages(storeId: string) {
+    const fresh = await listBuilderPreviewPages(storeId);
+    setPages(fresh);
   }
 
   const [addingProductId, setAddingProductId] = useState<string | null>(null);
@@ -651,22 +703,6 @@ export function StoreBuilder({
       const key = p.category?.trim() || UNCATEGORIZED;
       groups.set(key, [...(groups.get(key) ?? []), p]);
     }
-    const toApiProduct = (p: PreviewProduct): ApiProduct => ({
-      id: p.id,
-      title: p.title,
-      description: null,
-      category: p.category,
-      image: p.image,
-      images: p.image ? [p.image] : [],
-      price: p.price,
-      compareAtPrice: null,
-      available: 99,
-      inStock: true,
-      sizes: null,
-      material: null,
-      fitNote: null,
-      shippingNote: null,
-    });
     return [...groups.entries()].map(([category, items]) => ({
       category,
       products: items.map(toApiProduct),
@@ -674,15 +710,38 @@ export function StoreBuilder({
     }));
   }, [products]);
 
+  // "products"-type content sections (e.g. "Best sellers") only store
+  // `productIds` — resolved here against the store's own already-loaded
+  // `products` state, the same way `previewCategoryBands` already resolves
+  // real product data, so the preview shows exactly what the live site will
+  // once launched (storefront-pages.tsx resolves the same section type the
+  // same way, server-side, for the real homepage).
+  const previewProductsBySection = useMemo(() => {
+    const bySection: Record<string, ApiProduct[]> = {};
+    const byId = new Map(products.map((p) => [p.id, p]));
+    for (const section of plan?.sections ?? []) {
+      if (section.type !== "products") continue;
+      bySection[section.id] = (section.productIds ?? [])
+        .map((id) => byId.get(id))
+        .filter((p): p is PreviewProduct => Boolean(p))
+        .map(toApiProduct);
+    }
+    return bySection;
+  }, [plan?.sections, products]);
+
   const previewNavLinks: StorefrontNavLink[] = useMemo(() => {
     const links: StorefrontNavLink[] = previewCategoryBands
       .filter((b) => b.category !== UNCATEGORIZED)
       .map((b) => ({ label: categoryLabel(b.category), href: `/store/preview/products?category=${encodeURIComponent(b.category)}` }));
     links.push({ label: "Shop all", href: "/store/preview/products" });
+    // Same ordering getStorefrontNav (the real nav builder) already uses —
+    // Blog only when there's something to show, custom pages last.
+    if (posts.length > 0) links.push({ label: "Blog", href: "/store/preview/blog" });
     links.push({ label: "Sale", href: "/store/preview#sale" });
     if (plan?.about) links.push({ label: "About", href: "/store/preview#about" });
+    for (const p of pages) links.push({ label: p.title, href: `/store/preview/${p.slug}` });
     return links;
-  }, [previewCategoryBands, plan?.about]);
+  }, [previewCategoryBands, plan?.about, posts, pages]);
 
   // Preview panel lives in an <iframe> (builder-preview-frame/page.tsx) so
   // the Mobile/Tablet/Desktop toggle actually changes its real viewport
@@ -705,13 +764,15 @@ export function StoreBuilder({
   useEffect(() => {
     function sendTo(win: Window | null, readyRef: { current: boolean }) {
       if (!readyRef.current || !win || win.closed || !previewStore) return;
-      win.postMessage(
-        {
-          type: BUILDER_PREVIEW_DATA,
-          payload: { store: previewStore, navLinks: previewNavLinks, categoryBands: previewCategoryBands },
-        },
-        window.location.origin,
-      );
+      const payload: BuilderPreviewPayload = {
+        store: previewStore,
+        navLinks: previewNavLinks,
+        categoryBands: previewCategoryBands,
+        pages,
+        posts,
+        productsBySection: previewProductsBySection,
+      };
+      win.postMessage({ type: BUILDER_PREVIEW_DATA, payload }, window.location.origin);
     }
     function onMessage(e: MessageEvent) {
       if (e.origin !== window.location.origin) return;
@@ -730,7 +791,7 @@ export function StoreBuilder({
     sendTo(previewFrameRef.current?.contentWindow ?? null, previewFrameReady);
     sendTo(previewWindowRef.current, previewWindowReady);
     return () => window.removeEventListener("message", onMessage);
-  }, [previewStore, previewNavLinks, previewCategoryBands]);
+  }, [previewStore, previewNavLinks, previewCategoryBands, pages, posts, previewProductsBySection]);
 
   function openLivePreview() {
     // A named target: clicking the button again while the tab is still open
