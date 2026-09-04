@@ -37,7 +37,10 @@ export default async function SettlementsPage() {
 
   const [{ data: batches }, { data: pendingLedger }, { data: requests }] = await Promise.all([
     supabase.from("settlement_batches").select("*").order("run_at", { ascending: false }),
-    supabase.from("payable_ledger").select("account_type, account_id, amount, held").eq("status", "pending"),
+    supabase
+      .from("payable_ledger")
+      .select("account_type, account_id, amount, held, payout_request_id")
+      .eq("status", "pending"),
     supabase
       .from("payout_requests")
       .select(
@@ -52,20 +55,33 @@ export default async function SettlementsPage() {
   const requestList = requests ?? [];
 
   // Group pending payables by account — an admin thinks in terms of "this
-  // supplier's balance", not individual order-level rows.
-  const byAccount = new Map<string, { accountType: "merchant" | "supplier"; accountId: string; total: number; held: boolean }>();
+  // supplier's balance", not individual order-level rows. Two independent
+  // reasons a row can be excluded from the next settlement run: an admin's
+  // own hold (holdAccountPayables), or it's locked to someone's own open
+  // withdrawal request (payout_request_id) — tracked separately so the
+  // Hold/Release control below never touches the latter.
+  const byAccount = new Map<
+    string,
+    { accountType: "merchant" | "supplier"; accountId: string; total: number; adminHeld: boolean; awaitingWithdrawal: boolean; holdableTotal: number }
+  >();
   for (const row of ledgerRows) {
     const key = `${row.account_type}:${row.account_id}`;
+    const earmarked = row.payout_request_id !== null;
     const existing = byAccount.get(key);
     if (existing) {
       existing.total += row.amount;
-      // Flag as held if ANY pending row for this account is held — never
-      // silently hide an active hold just because a newer, still-unheld
-      // payable also came in for the same account. "Release" clears every
-      // pending row regardless, so this can't get stuck.
-      existing.held = existing.held || row.held;
+      existing.adminHeld = existing.adminHeld || (row.held && !earmarked);
+      existing.awaitingWithdrawal = existing.awaitingWithdrawal || earmarked;
+      if (!earmarked) existing.holdableTotal += row.amount;
     } else {
-      byAccount.set(key, { accountType: row.account_type, accountId: row.account_id, total: row.amount, held: row.held });
+      byAccount.set(key, {
+        accountType: row.account_type,
+        accountId: row.account_id,
+        total: row.amount,
+        adminHeld: row.held && !earmarked,
+        awaitingWithdrawal: earmarked,
+        holdableTotal: earmarked ? 0 : row.amount,
+      });
     }
   }
   const accountRows = [...byAccount.values()].sort((a, b) => b.total - a.total);
@@ -159,14 +175,25 @@ export default async function SettlementsPage() {
                   <td className="px-4 py-3 capitalize text-ink-500">{a.accountType}</td>
                   <td className="px-4 py-3 text-right font-medium text-ink-900">{money(a.total)}</td>
                   <td className="px-4 py-3">
-                    {a.held ? (
-                      <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">On hold</span>
-                    ) : (
-                      <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700">Eligible</span>
-                    )}
+                    <div className="flex flex-wrap gap-1.5">
+                      {a.awaitingWithdrawal && (
+                        <span className="rounded-full bg-ink-100 px-2 py-0.5 text-xs font-medium text-ink-600">
+                          Withdrawal in review
+                        </span>
+                      )}
+                      {a.adminHeld && (
+                        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">On hold</span>
+                      )}
+                      {!a.awaitingWithdrawal && !a.adminHeld && (
+                        <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-medium text-brand-700">Eligible</span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3">
-                    <HoldReleaseButton accountType={a.accountType} accountId={a.accountId} held={a.held} />
+                    {/* Nothing left an admin hold can act on — every pending row here is already claimed by someone's own withdrawal request. */}
+                    {a.holdableTotal > 0 && (
+                      <HoldReleaseButton accountType={a.accountType} accountId={a.accountId} held={a.adminHeld} />
+                    )}
                   </td>
                 </tr>
               ))}

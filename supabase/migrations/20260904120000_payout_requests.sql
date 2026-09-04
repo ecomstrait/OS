@@ -57,6 +57,36 @@ create table if not exists public.payout_requests (
 create index if not exists payout_requests_account_idx
   on public.payout_requests (account_type, account_id, status);
 
+-- ---- link a withdrawal request to the specific ledger rows it cashes out --
+-- Without this, "Pending payout" on the wallet page never moves when a
+-- withdrawal is marked paid (the underlying payable_ledger rows are still
+-- 'pending'), and those same rows could also get swept into a separate
+-- weekly settlement batch — the same money processed twice. This is set the
+-- moment a request is submitted (earmarking specific rows, oldest first, up
+-- to the requested amount — see requestPayout in each app's
+-- wallet-actions.ts), which also implicitly holds them (`held = true`) so a
+-- settlement run in between can't touch them either. On approval
+-- (markPayoutRequestPaid) those exact rows flip to `status = 'paid_out'`;
+-- on decline (declinePayoutRequest) the link and hold are both cleared,
+-- returning them to the normal pending pool.
+alter table public.payable_ledger add column if not exists payout_request_id uuid
+  references public.payout_requests (id) on delete set null;
+
+create index if not exists payable_ledger_payout_request_idx
+  on public.payable_ledger (payout_request_id)
+  where payout_request_id is not null;
+
+-- A payable_ledger row settled via a direct withdrawal, as opposed to the
+-- weekly batch ('settled'). Both are terminal / excluded from
+-- runWeeklySettlement — kept distinct only so the two payout mechanisms
+-- stay individually auditable in the ledger.
+--
+-- `ADD VALUE IF NOT EXISTS` must run as its own top-level statement — unlike
+-- every other enum/table above, it cannot be wrapped in a `do $$ ... $$`
+-- block (Postgres rejects ALTER TYPE ... ADD VALUE from inside a function
+-- body), and IF NOT EXISTS already makes it safe to re-run on its own.
+alter type public.payable_status add value if not exists 'paid_out';
+
 alter table public.payout_requests enable row level security;
 
 drop policy if exists "payout_requests_select_own" on public.payout_requests;

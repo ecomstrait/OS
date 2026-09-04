@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@ecomstrait/db";
-import { creditWallet, releaseHeldOrders } from "@ecomstrait/db/wallet";
+import { creditWallet, releaseHeldOrders, earmarkPayablesForPayout } from "@ecomstrait/db/wallet";
 import { getStripe, supplierUrl } from "@/lib/stripe";
 import { getSupplierContext } from "@/lib/supplier-context";
 
@@ -95,6 +95,15 @@ export async function reconcileWalletTopup(sessionId: string): Promise<void> {
  * done (see the merchant app's settlement-actions.ts markPayoutRequestPaid).
  * Doesn't move money itself. Refuses a second open request while one is
  * already pending, and refuses an amount over what's actually owed.
+ *
+ * The specific `payable_ledger` rows being cashed out (oldest first, up to
+ * the requested amount) are locked to this request right here — not just a
+ * number on the payout_requests row — so "Pending payout" on the wallet page
+ * actually drops once it's paid, and the same money can't also get swept
+ * into a separate weekly settlement batch in the meantime. Each row is tied
+ * to one order, so the amount actually withdrawn can end up a little more
+ * than what was typed (whatever fully covers it) — the returned `amount` is
+ * the real figure to show back.
  */
 export async function requestPayout(input: {
   amount: number;
@@ -103,12 +112,12 @@ export async function requestPayout(input: {
   bankAccountNumber: string;
   bankRoutingCode?: string;
   note?: string;
-}): Promise<{ error?: string }> {
+}): Promise<{ error?: string; amount?: number }> {
   const ctx = await getSupplierContext();
   if ("error" in ctx) return ctx;
 
-  const amount = Number(input.amount);
-  if (!Number.isFinite(amount) || amount <= 0) return { error: "Enter a withdrawal amount." };
+  const requested = Number(input.amount);
+  if (!Number.isFinite(requested) || requested <= 0) return { error: "Enter a withdrawal amount." };
 
   const bankAccountName = input.bankAccountName.trim();
   const bankName = input.bankName.trim();
@@ -126,28 +135,49 @@ export async function requestPayout(input: {
     .maybeSingle();
   if (existing) return { error: "You already have a withdrawal request pending review." };
 
-  const { data: pendingRows } = await ctx.supabase
+  // Only pending, not-already-held rows are up for grabs — an admin hold or
+  // another open request has first claim on the rest.
+  const { data: available } = await ctx.supabase
     .from("payable_ledger")
-    .select("amount")
+    .select("id, amount")
     .eq("account_type", "supplier")
     .eq("account_id", ctx.supplierId)
-    .eq("status", "pending");
-  const pendingTotal = (pendingRows ?? []).reduce((s, p) => s + p.amount, 0);
-  if (pendingTotal <= 0) return { error: "Nothing pending to withdraw yet." };
-  if (amount > pendingTotal) return { error: `You can withdraw up to $${pendingTotal.toFixed(2)}.` };
+    .eq("status", "pending")
+    .eq("held", false)
+    .order("created_at", { ascending: true });
+  const rows = available ?? [];
+  const availableTotal = rows.reduce((s, r) => s + r.amount, 0);
+  if (availableTotal <= 0) return { error: "Nothing pending to withdraw yet." };
+  if (requested > availableTotal) return { error: `You can withdraw up to $${availableTotal.toFixed(2)}.` };
 
-  const { error } = await ctx.supabase.from("payout_requests").insert({
-    account_type: "supplier",
-    account_id: ctx.supplierId,
-    amount,
-    bank_account_name: bankAccountName,
-    bank_name: bankName,
-    bank_account_number: bankAccountNumber,
-    bank_routing_code: input.bankRoutingCode?.trim() || null,
-    note: input.note?.trim() || null,
-  });
-  if (error) return { error: error.message };
+  const earmarkIds: string[] = [];
+  let covered = 0;
+  for (const row of rows) {
+    if (covered >= requested) break;
+    earmarkIds.push(row.id);
+    covered += row.amount;
+  }
+
+  const { data: inserted, error } = await ctx.supabase
+    .from("payout_requests")
+    .insert({
+      account_type: "supplier",
+      account_id: ctx.supplierId,
+      amount: covered,
+      bank_account_name: bankAccountName,
+      bank_name: bankName,
+      bank_account_number: bankAccountNumber,
+      bank_routing_code: input.bankRoutingCode?.trim() || null,
+      note: input.note?.trim() || null,
+    })
+    .select("id")
+    .single();
+  if (error || !inserted) return { error: error?.message ?? "Couldn't submit the request." };
+
+  const admin = createAdminClient();
+  if (!admin) return { error: "Database isn't configured." };
+  await earmarkPayablesForPayout(admin, earmarkIds, inserted.id);
 
   revalidatePath("/wallet");
-  return {};
+  return { amount: covered };
 }

@@ -32,7 +32,7 @@ export type OrderCreditStatus =
   | "awaiting_merchant_credits"
   | "awaiting_supplier_credits"
   | "reversed";
-export type PayableStatus = "pending" | "settled";
+export type PayableStatus = "pending" | "settled" | "paid_out";
 export type SettlementBatchStatus = "draft" | "paid";
 export type PayoutRequestStatus = "pending" | "paid" | "declined";
 export type PlanTier = "free" | "basic" | "premium" | "full";
@@ -853,6 +853,8 @@ export type Database = {
           settlement_batch_id: string | null;
           /** Admin-set: excluded from `runWeeklySettlement` while true, independent of any payout_requests row. */
           held: boolean;
+          /** Set while this row is earmarked for a specific (usually still-pending) withdrawal request — see payout_requests. */
+          payout_request_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -863,6 +865,7 @@ export type Database = {
           status?: PayableStatus;
           settlement_batch_id?: string | null;
           held?: boolean;
+          payout_request_id?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["payable_ledger"]["Row"]>;
         Relationships: [];

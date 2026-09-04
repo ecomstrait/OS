@@ -164,13 +164,15 @@ export default async function WalletPage({
               <HandCoins className="h-6 w-6" />
             </span>
             <div>
-              <p className="text-xs text-ink-500">Pending payout</p>
+              <p className="text-xs text-ink-500">Available to withdraw</p>
               <p className="text-2xl font-bold text-ink-950">{money(pendingPayout)}</p>
-              <p className="text-[11px] text-ink-400">Owed by EcomStrait — next settlement</p>
+              <p className="text-[11px] text-ink-400">Margin earned on completed COD orders</p>
             </div>
           </div>
           {openRequest ? (
-            <p className="text-xs font-medium text-brand-700">Requested — an admin will review it.</p>
+            <p className="text-xs font-medium text-brand-700">
+              {money(openRequest.amount)} requested — an admin will review it.
+            </p>
           ) : (
             <WithdrawalForm pendingPayout={pendingPayout} />
           )}

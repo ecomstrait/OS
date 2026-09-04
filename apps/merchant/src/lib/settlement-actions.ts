@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@ecomstrait/auth/server";
 import { createAdminClient } from "@ecomstrait/db";
 import type { WalletAccountType } from "@ecomstrait/db";
+import { settlePayoutRequestLedger, releasePayoutRequestLedger } from "@ecomstrait/db/wallet";
 import { runWeeklySettlement } from "@/lib/settlement";
 
 /** Resolves the caller's Supabase session + confirms they're an admin, or an error. Shared by every action below. */
@@ -56,11 +57,15 @@ export async function runSettlementNow(): Promise<{ error?: string; count?: numb
 }
 
 /**
- * Puts every currently-pending `payable_ledger` row for one account on hold
- * — excluded from `runWeeklySettlement` (this batch and every later one)
- * until `releaseAccountPayables` clears it. Independent of any
- * `payout_requests` row; an admin can hold an account that never asked for
- * early payout at all.
+ * Puts every currently-pending, not-already-earmarked `payable_ledger` row
+ * for one account on hold — excluded from `runWeeklySettlement` (this batch
+ * and every later one) until `releaseAccountPayables` clears it. Independent
+ * of any `payout_requests` row; an admin can hold an account that never
+ * asked for early payout at all. Rows already locked to an open withdrawal
+ * request (`payout_request_id` set) are left alone — this is a coarser,
+ * account-wide hold and must never touch what a specific request already
+ * claimed, or releasing it later would silently free rows the withdrawal
+ * flow still expects to settle by itself.
  */
 export async function holdAccountPayables(
   accountType: WalletAccountType,
@@ -74,7 +79,8 @@ export async function holdAccountPayables(
     .update({ held: true })
     .eq("account_type", accountType)
     .eq("account_id", accountId)
-    .eq("status", "pending");
+    .eq("status", "pending")
+    .is("payout_request_id", null);
   if (error) return { error: error.message };
 
   revalidatePath("/admin/settlements");
@@ -94,7 +100,8 @@ export async function releaseAccountPayables(
     .update({ held: false })
     .eq("account_type", accountType)
     .eq("account_id", accountId)
-    .eq("status", "pending");
+    .eq("status", "pending")
+    .is("payout_request_id", null);
   if (error) return { error: error.message };
 
   revalidatePath("/admin/settlements");
@@ -107,6 +114,12 @@ export async function releaseAccountPayables(
  * browser already uploaded directly to the private `payout-receipts` bucket
  * (same client-side-upload pattern as the avatar uploader) — this action
  * only records it, it never touches file bytes itself.
+ *
+ * Also settles the specific `payable_ledger` rows requestPayout earmarked
+ * for this request (`status -> 'paid_out'`) — without this, "Pending
+ * payout" on the wallet page would never reflect a completed withdrawal,
+ * and those rows would still be there for the next `runWeeklySettlement` to
+ * (wrongly) pay out a second time.
  */
 export async function markPayoutRequestPaid(
   requestId: string,
@@ -129,11 +142,20 @@ export async function markPayoutRequestPaid(
     .eq("id", requestId);
   if (error) return { error: error.message };
 
+  await settlePayoutRequestLedger(ctx.admin, requestId);
+
   revalidatePath("/admin/settlements");
+  revalidatePath("/wallet");
   return {};
 }
 
-/** Declines a withdrawal request (e.g. bad bank details) — `adminNote` is shown to the requester as the reason. */
+/**
+ * Declines a withdrawal request (e.g. bad bank details) — `adminNote` is
+ * shown to the requester as the reason. Also releases the `payable_ledger`
+ * rows requestPayout earmarked for it, back into the normal pending pool —
+ * otherwise they'd stay held forever, invisible to both a future withdrawal
+ * request and the weekly settlement.
+ */
 export async function declinePayoutRequest(requestId: string, adminNote?: string): Promise<{ error?: string }> {
   const ctx = await requireAdmin();
   if ("error" in ctx) return ctx;
@@ -149,6 +171,9 @@ export async function declinePayoutRequest(requestId: string, adminNote?: string
     .eq("id", requestId);
   if (error) return { error: error.message };
 
+  await releasePayoutRequestLedger(ctx.admin, requestId);
+
   revalidatePath("/admin/settlements");
+  revalidatePath("/wallet");
   return {};
 }

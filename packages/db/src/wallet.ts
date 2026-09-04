@@ -161,6 +161,58 @@ export async function recordPayable(
 }
 
 /**
+ * Locks specific pending payable_ledger rows to one withdrawal request —
+ * `held = true` so a settlement run can't sweep them out from under it while
+ * it's under review, plus the `payout_request_id` link so
+ * `settlePayoutRequestLedger`/`releasePayoutRequestLedger` below know
+ * exactly which rows to resolve later. Called right after inserting the
+ * `payout_requests` row itself (see requestPayout in each app's
+ * wallet-actions.ts) — `rowIds` is whatever the caller already selected
+ * (oldest first, accumulated up to the requested amount).
+ */
+export async function earmarkPayablesForPayout(
+  admin: Admin,
+  rowIds: string[],
+  payoutRequestId: string,
+): Promise<void> {
+  if (rowIds.length === 0) return;
+  const { error } = await admin
+    .from("payable_ledger")
+    .update({ held: true, payout_request_id: payoutRequestId })
+    .in("id", rowIds);
+  if (error) throw error;
+}
+
+/**
+ * Settles the ledger rows earmarked for a withdrawal request once an admin
+ * has actually paid it out — `paid_out` rather than `settled` only so the
+ * two payout mechanisms (a direct withdrawal vs. the weekly batch) stay
+ * individually auditable; both are equally terminal to runWeeklySettlement.
+ * Called from markPayoutRequestPaid.
+ */
+export async function settlePayoutRequestLedger(admin: Admin, payoutRequestId: string): Promise<void> {
+  const { error } = await admin
+    .from("payable_ledger")
+    .update({ status: "paid_out", held: false })
+    .eq("payout_request_id", payoutRequestId);
+  if (error) throw error;
+}
+
+/**
+ * Releases the ledger rows earmarked for a withdrawal request that got
+ * declined — back into the normal pending pool, eligible again for a future
+ * withdrawal request or the next weekly settlement. Called from
+ * declinePayoutRequest.
+ */
+export async function releasePayoutRequestLedger(admin: Admin, payoutRequestId: string): Promise<void> {
+  const { error } = await admin
+    .from("payable_ledger")
+    .update({ held: false, payout_request_id: null })
+    .eq("payout_request_id", payoutRequestId);
+  if (error) throw error;
+}
+
+/**
  * After a top-up, retry the debit for every order this account still has on
  * hold, oldest first, stopping at the first one that still doesn't fit (the
  * rest won't either until another top-up lands).
