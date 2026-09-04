@@ -70,9 +70,17 @@ export async function createProduct(
   redirect("/catalog");
 }
 
+/** Never trust a client-supplied string as a redirect target as-is — must be
+ *  a same-app catalog path, or fall back to the plain list. */
+function safeReturnTo(raw?: string): string {
+  if (raw && raw.startsWith("/catalog") && !raw.startsWith("//")) return raw;
+  return "/catalog";
+}
+
 export async function updateProduct(
   id: string,
   input: ProductInput,
+  returnTo?: string,
 ): Promise<{ error: string; upgrade?: boolean } | never> {
   const ctx = await requireApprovedSupplier();
   if ("error" in ctx) return ctx;
@@ -100,7 +108,7 @@ export async function updateProduct(
   after(() => syncProductToStores(id, { previousPrice: before?.retail_price ?? null }));
 
   revalidatePath("/catalog");
-  redirect("/catalog");
+  redirect(safeReturnTo(returnTo));
 }
 
 export async function deleteProduct(id: string): Promise<{ error?: string }> {

@@ -39,7 +39,17 @@ export default async function CatalogPage({
       );
     }
     const { data, count } = await query
+      // `created_at` alone isn't a stable sort key: bulk imports insert every
+      // row in one statement, so a whole CSV batch shares the exact same
+      // timestamp, and Postgres doesn't promise a consistent order among
+      // ties — an UPDATE (publish/unpublish/edit) rewrites that row's tuple
+      // and can visibly reshuffle the tied group on the next fetch, which is
+      // exactly the "position changes after publishing" bug. `id` (a UUID,
+      // effectively random but fixed per row) breaks every tie the same way
+      // on every request, page, and refresh — deterministic without
+      // depending on database default ordering.
       .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
       .range(from, to);
     return { rows: data ?? [], count: count ?? 0 };
   }
@@ -58,6 +68,16 @@ export default async function CatalogPage({
   const searching = q.length > 0;
   const shown = list.length;
   const summary = total > 0 ? `${(page - 1) * size + 1}–${(page - 1) * size + shown} of ${total}` : undefined;
+
+  // The exact list URL (search + page) a row's Edit link should return to —
+  // threaded through so Cancel/Save on the edit page lands back on this same
+  // filtered/paginated view instead of resetting to a bare /catalog.
+  const returnQs = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value == null) continue;
+    returnQs.set(key, Array.isArray(value) ? (value[0] ?? "") : value);
+  }
+  const returnTo = returnQs.toString() ? `/catalog?${returnQs.toString()}` : "/catalog";
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -105,7 +125,7 @@ export default async function CatalogPage({
               />
             ) : (
               <>
-                <CatalogTable products={list} />
+                <CatalogTable products={list} returnTo={returnTo} />
                 <Pagination basePath="/catalog" params={params} page={page} total={total} size={size} />
               </>
             )}

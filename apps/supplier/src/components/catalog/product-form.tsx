@@ -52,12 +52,15 @@ export function ProductForm({
   productId,
   initial,
   canAddProduct = true,
+  returnTo,
 }: {
   userId: string;
   productId?: string;
   initial?: Partial<ProductFormValues>;
   /** Omitted (and defaulted true) on the edit form — the catalog limit only gates adding a new product. */
   canAddProduct?: boolean;
+  /** Edit form only — the catalog list URL (search + page) to return to on save, so it doesn't reset to an unfiltered page 1. */
+  returnTo?: string;
 }) {
   const [form, setForm] = useState<ProductFormValues>({ ...EMPTY, ...initial });
   const [saving, setSaving] = useState(false);
@@ -145,7 +148,7 @@ export function ProductForm({
     setError(null);
     const payload = { ...form };
     const res = productId
-      ? await updateProduct(productId, payload)
+      ? await updateProduct(productId, payload, returnTo)
       : await createProduct(payload);
     // Success redirects; only errors return.
     if (res && "error" in res) {

@@ -1,6 +1,6 @@
 "use server";
 
-import { redirect } from "next/navigation";
+import { redirect, RedirectType } from "next/navigation";
 import { createClient } from "@ecomstrait/auth/server";
 import type { DocumentType } from "@ecomstrait/db/types";
 import type { SupplierForm } from "@/lib/onboarding";
@@ -88,5 +88,13 @@ export async function submitOnboarding(input: {
     { onConflict: "supplier_id" },
   );
 
-  redirect("/dashboard?onboarded=1");
+  // `redirect()` called from a Server Action defaults to `push`, which would
+  // leave the pre-submission /onboarding entry in browser history — pressing
+  // Back would restore that entry's already-rendered wizard (client state
+  // frozen at whatever step it was on when the route was first fetched,
+  // typically step 1), even though the application has since moved past
+  // "pending" server-side. `replace` removes that entry instead of leaving
+  // it dangling, so Back goes to wherever the supplier actually was before
+  // onboarding, not a stale wizard.
+  redirect("/dashboard?onboarded=1", RedirectType.replace);
 }

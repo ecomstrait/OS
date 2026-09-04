@@ -16,16 +16,24 @@ import {
 import { bulkSetStock, bulkAdjustStock } from "@/lib/inventory-actions";
 import type { BulkResult } from "@/lib/bulk";
 import { BulkBar } from "@/components/catalog/bulk-bar";
+import { useToast } from "@/components/app/toast";
 
 type Row = Pick<
   Product,
   "id" | "title" | "category" | "status" | "retail_price" | "stock" | "images"
 >;
 
-export function CatalogTable({ products }: { products: Row[] }) {
+/**
+ * `returnTo` is the current list URL (search + page), threaded in from the
+ * catalog page's own searchParams — the Edit link forwards it so Cancel/Save
+ * on the edit page can return here instead of a bare, filter-losing
+ * `/catalog`.
+ */
+export function CatalogTable({ products, returnTo }: { products: Row[]; returnTo: string }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const supabase = createClient();
+  const { showToast } = useToast();
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [result, setResult] = useState<BulkResult | null>(null);
@@ -60,13 +68,24 @@ export function CatalogTable({ products }: { products: Row[] }) {
     setSelected((prev) => (products.every((p) => prev.has(p.id)) ? new Set() : new Set(products.map((p) => p.id))));
   }
 
-  /** Run a bulk action, surface its result, and refresh the list. */
-  function runBulk(action: () => Promise<BulkResult>, clearOnSuccess = false) {
+  /**
+   * Run a bulk action, surface its result, and refresh the list.
+   * `onDone` is an extra, optional callback for the caller's own feedback
+   * (e.g. a toast) — kept separate from the inline `result` status text so
+   * existing bulk actions (publish/unpublish/stock) keep their current
+   * behavior unchanged; only callers that pass it get more.
+   */
+  function runBulk(
+    action: () => Promise<BulkResult>,
+    clearOnSuccess = false,
+    onDone?: (res: BulkResult) => void,
+  ) {
     setResult(null);
     start(async () => {
       const res = await action();
       setResult(res);
       if (!res.error && clearOnSuccess) setSelected(new Set());
+      onDone?.(res);
       router.refresh();
     });
   }
@@ -86,7 +105,9 @@ export function CatalogTable({ products }: { products: Row[] }) {
   function remove(p: Row) {
     if (!confirm(`Delete "${p.title}"? This can't be undone.`)) return;
     start(async () => {
-      await deleteProduct(p.id);
+      const res = await deleteProduct(p.id);
+      if (res.error) showToast(res.error, "error");
+      else showToast(`"${p.title}" deleted.`);
       router.refresh();
     });
   }
@@ -98,7 +119,14 @@ export function CatalogTable({ products }: { products: Row[] }) {
       )
     )
       return;
-    runBulk(() => bulkDeleteProducts(ids), true);
+    runBulk(
+      () => bulkDeleteProducts(ids),
+      true,
+      (res) => {
+        if (res.error) showToast(res.error, "error");
+        else showToast(`${res.affected} product${res.affected === 1 ? "" : "s"} deleted.`);
+      },
+    );
   }
 
   return (
@@ -191,7 +219,7 @@ export function CatalogTable({ products }: { products: Row[] }) {
                         {p.status === "published" ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
                       <Link
-                        href={`/catalog/${p.id}/edit`}
+                        href={`/catalog/${p.id}/edit?from=${encodeURIComponent(returnTo)}`}
                         aria-label="Edit"
                         className="grid h-8 w-8 place-items-center rounded-lg text-ink-500 hover:bg-ink-100"
                       >
@@ -219,8 +247,8 @@ export function CatalogTable({ products }: { products: Row[] }) {
           count={ids.length}
           pending={pending}
           result={result}
-          onPublish={() => runBulk(() => bulkSetProductStatus(ids, "published"))}
-          onUnpublish={() => runBulk(() => bulkSetProductStatus(ids, "draft"))}
+          onPublish={() => runBulk(() => bulkSetProductStatus(ids, "published"), true)}
+          onUnpublish={() => runBulk(() => bulkSetProductStatus(ids, "draft"), true)}
           onSetStock={(stock) => runBulk(() => bulkSetStock(ids, stock))}
           onAdjustStock={(delta) => runBulk(() => bulkAdjustStock(ids, delta))}
           onDelete={bulkRemove}
