@@ -76,7 +76,7 @@ function ChromeBody({
   cartApi,
   previewMode,
 }: Omit<ChromeProps, "previewMode"> & { cartApi: CartApi; previewMode: boolean }) {
-  const { cart, busy, error, setQuantity, remove, checkout } = cartApi;
+  const { cart, isPending, error, setQuantity, remove, checkout } = cartApi;
   const [open, setOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -272,49 +272,58 @@ function ChromeBody({
                 <p className="text-sm opacity-50">Your cart is empty.</p>
               ) : (
                 <ul className="flex flex-col gap-5">
-                  {cart.lines.map((l) => (
-                    <li key={l.productId} className="flex items-center gap-3">
-                      <span
-                        className="relative block h-14 w-14 shrink-0 overflow-hidden"
-                        style={{ background: surface, borderRadius: "var(--radius)" }}
-                      >
-                        {l.image ? <Image src={l.image} alt="" fill sizes="56px" className="object-cover" /> : null}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="line-clamp-1 text-sm font-medium">{l.title}</p>
-                        <p className="text-xs opacity-60">${l.unitPrice.toFixed(2)}</p>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => setQuantity(l.productId, l.quantity - 1)}
-                          disabled={busy}
-                          aria-label="Decrease quantity"
-                          className="grid h-7 w-7 place-items-center border opacity-70 disabled:opacity-30"
-                          style={{ borderColor: line, borderRadius: "var(--radius)" }}
+                  {cart.lines.map((l) => {
+                    // Each button in this row tracks only its own action —
+                    // "-" and "+" both call `setQuantity`, so they're split
+                    // by an explicit pending key rather than sharing one,
+                    // otherwise clicking "+" would also spin "-".
+                    const decPending = isPending(`qty-dec:${l.productId}`);
+                    const incPending = isPending(`qty-inc:${l.productId}`);
+                    const removePending = isPending(`remove:${l.productId}`);
+                    return (
+                      <li key={l.productId} className="flex items-center gap-3">
+                        <span
+                          className="relative block h-14 w-14 shrink-0 overflow-hidden"
+                          style={{ background: surface, borderRadius: "var(--radius)" }}
                         >
-                          <Minus className="h-3.5 w-3.5" />
-                        </button>
-                        <span className="w-6 text-center text-sm">{l.quantity}</span>
-                        <button
-                          onClick={() => setQuantity(l.productId, l.quantity + 1)}
-                          disabled={busy || l.quantity >= l.available}
-                          aria-label="Increase quantity"
-                          className="grid h-7 w-7 place-items-center border opacity-70 disabled:opacity-30"
-                          style={{ borderColor: line, borderRadius: "var(--radius)" }}
-                        >
-                          <Plus className="h-3.5 w-3.5" />
-                        </button>
-                        <button
-                          onClick={() => remove(l.productId)}
-                          disabled={busy}
-                          aria-label={`Remove ${l.title}`}
-                          className="ml-1 grid h-7 w-7 place-items-center opacity-50 transition hover:text-red-500 hover:opacity-100 disabled:opacity-30"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </li>
-                  ))}
+                          {l.image ? <Image src={l.image} alt="" fill sizes="56px" className="object-cover" /> : null}
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="line-clamp-1 text-sm font-medium">{l.title}</p>
+                          <p className="text-xs opacity-60">${l.unitPrice.toFixed(2)}</p>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => setQuantity(l.productId, l.quantity - 1, `qty-dec:${l.productId}`)}
+                            disabled={decPending}
+                            aria-label="Decrease quantity"
+                            className="grid h-7 w-7 place-items-center border opacity-70 disabled:opacity-30"
+                            style={{ borderColor: line, borderRadius: "var(--radius)" }}
+                          >
+                            {decPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Minus className="h-3.5 w-3.5" />}
+                          </button>
+                          <span className="w-6 text-center text-sm">{l.quantity}</span>
+                          <button
+                            onClick={() => setQuantity(l.productId, l.quantity + 1, `qty-inc:${l.productId}`)}
+                            disabled={incPending || l.quantity >= l.available}
+                            aria-label="Increase quantity"
+                            className="grid h-7 w-7 place-items-center border opacity-70 disabled:opacity-30"
+                            style={{ borderColor: line, borderRadius: "var(--radius)" }}
+                          >
+                            {incPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                          </button>
+                          <button
+                            onClick={() => remove(l.productId)}
+                            disabled={removePending}
+                            aria-label={`Remove ${l.title}`}
+                            className="ml-1 grid h-7 w-7 place-items-center opacity-50 transition hover:text-red-500 hover:opacity-100 disabled:opacity-30"
+                          >
+                            {removePending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
+                          </button>
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </div>
@@ -327,11 +336,11 @@ function ChromeBody({
               {error && <p className="mb-3 text-sm text-red-500">{error}</p>}
               <button
                 onClick={checkout}
-                disabled={busy || cart.lines.length === 0}
+                disabled={isPending("checkout") || cart.lines.length === 0}
                 className="inline-flex h-12 w-full items-center justify-center gap-2 text-sm font-semibold uppercase text-white transition hover:opacity-85 disabled:opacity-40"
                 style={{ background: "var(--brand)", borderRadius: "var(--radius)", letterSpacing: "0.08em" }}
               >
-                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Checkout"}
+                {isPending("checkout") ? <Loader2 className="h-4 w-4 animate-spin" /> : "Checkout"}
               </button>
             </div>
           </div>

@@ -51,7 +51,7 @@ export function usePreviewCart(products: StorefrontProduct[]) {
     [byId, cart],
   );
 
-  const setQuantity = useCallback((productId: string, quantity: number) => {
+  const setQuantity = useCallback((productId: string, quantity: number, _pendingKey?: string) => {
     setError(null);
     setLines((prev) =>
       quantity <= 0
@@ -70,5 +70,9 @@ export function usePreviewCart(products: StorefrontProduct[]) {
     setError("Checkout isn't available in preview — launch your store to sell for real.");
   }, []);
 
-  return { cart, busy: false, error, add, setQuantity, remove, checkout };
+  // Everything here is synchronous local state — nothing is ever actually
+  // "in flight" to show a per-button loading state for.
+  const isPending = useCallback(() => false, []);
+
+  return { cart, isPending, error, add, setQuantity, remove, checkout };
 }

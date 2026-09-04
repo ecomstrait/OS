@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { ArrowUp, RotateCcw, Sparkles } from "lucide-react";
+import { ArrowUp, RotateCcw, Sparkles, Copy, Check, Square } from "lucide-react";
 import { AiAvatar } from "@/components/ecomai/ai-avatar";
 import { Button } from "@/components/ui/button";
 import type { ChatMessage } from "@/lib/ask";
@@ -40,9 +40,15 @@ export function AskEcomAI() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [source, setSource] = useState<"preset" | "groq" | null>(null);
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  // Unlike the Server-Action-based chats elsewhere in this app, this one
+  // talks to a plain Route Handler over `fetch` — a real AbortController
+  // actually cancels the in-flight network request, not just the UI's wait
+  // on it.
+  const controllerRef = useRef<AbortController | null>(null);
 
   // Keep the conversation pinned to the latest message.
   useEffect(() => {
@@ -59,12 +65,15 @@ export function AskEcomAI() {
     setMessages(next);
     setInput("");
     setLoading(true);
+    const controller = new AbortController();
+    controllerRef.current = controller;
 
     try {
       const res = await fetch("/api/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: next.filter((m) => m !== GREETING) }),
+        signal: controller.signal,
       });
       const data = await res.json();
       const answer: string =
@@ -73,7 +82,8 @@ export function AskEcomAI() {
           : "Sorry — something went wrong on my end. Please try again.";
       setSource(data?.source === "groq" ? "groq" : "preset");
       setMessages((m) => [...m, { role: "assistant", content: answer }]);
-    } catch {
+    } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return; // Stopped — nothing more to say.
       setMessages((m) => [
         ...m,
         {
@@ -84,9 +94,23 @@ export function AskEcomAI() {
       ]);
     } finally {
       setLoading(false);
+      controllerRef.current = null;
       // Return focus to the composer for a natural back-and-forth.
       requestAnimationFrame(() => inputRef.current?.focus());
     }
+  }
+
+  /** Actually cancels the in-flight request (see `controllerRef`'s doc
+   *  comment) — for a question sent by mistake, no reason to wait it out. */
+  function stop() {
+    controllerRef.current?.abort();
+  }
+
+  function copyMessage(i: number, text: string) {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedIndex(i);
+      setTimeout(() => setCopiedIndex((cur) => (cur === i ? null : cur)), 1200);
+    });
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -141,31 +165,53 @@ export function AskEcomAI() {
           {/* Messages */}
           <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto px-5 py-6">
             {messages.map((m, i) => (
-              <motion.div
-                key={i}
-                initial={reduce ? { opacity: 0 } : { opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.35, ease: EASE }}
-                className={cn("flex items-end gap-2.5", m.role === "user" && "flex-row-reverse")}
-              >
-                {m.role === "assistant" ? (
-                  <AiAvatar size={30} />
-                ) : (
-                  <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-lg bg-white/10 text-[11px] font-bold text-ink-100">
-                    You
-                  </span>
-                )}
-                <div
+              <div key={i} className={cn("flex flex-col gap-1", m.role === "user" ? "items-end" : "items-start")}>
+                <motion.div
+                  initial={reduce ? { opacity: 0 } : { opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.35, ease: EASE }}
+                  className={cn("flex items-end gap-2.5", m.role === "user" && "flex-row-reverse")}
+                >
+                  {m.role === "assistant" ? (
+                    <AiAvatar size={30} />
+                  ) : (
+                    <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-lg bg-white/10 text-[11px] font-bold text-ink-100">
+                      You
+                    </span>
+                  )}
+                  <div
+                    className={cn(
+                      "max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
+                      m.role === "user"
+                        ? "rounded-br-md bg-gradient-to-br from-brand-500 to-brand-600 text-white shadow-lg shadow-brand-500/20"
+                        : "rounded-bl-md border border-white/10 bg-white/[0.06] text-ink-100",
+                    )}
+                  >
+                    {m.content}
+                  </div>
+                </motion.div>
+                {/* Offset by the avatar's own width + gap so this lines up
+                    under the bubble, not under the avatar. */}
+                <button
+                  type="button"
+                  onClick={() => copyMessage(i, m.content)}
+                  aria-label="Copy message"
                   className={cn(
-                    "max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed",
-                    m.role === "user"
-                      ? "rounded-br-md bg-gradient-to-br from-brand-500 to-brand-600 text-white shadow-lg shadow-brand-500/20"
-                      : "rounded-bl-md border border-white/10 bg-white/[0.06] text-ink-100",
+                    "inline-flex items-center gap-1 px-1 text-[11px] font-medium text-ink-400 transition-colors hover:text-ink-100",
+                    m.role === "user" ? "mr-10" : "ml-10",
                   )}
                 >
-                  {m.content}
-                </div>
-              </motion.div>
+                  {copiedIndex === i ? (
+                    <>
+                      <Check className="h-3 w-3 text-brand-400" /> Copied
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-3 w-3" /> Copy
+                    </>
+                  )}
+                </button>
+              </div>
             ))}
 
             {loading && (
@@ -210,14 +256,25 @@ export function AskEcomAI() {
                 placeholder="Ask EcomAI anything…"
                 className="max-h-32 flex-1 resize-none bg-transparent py-1.5 text-sm text-white placeholder:text-ink-400 focus:outline-none"
               />
-              <button
-                onClick={() => void send(input)}
-                disabled={!input.trim() || loading}
-                aria-label="Send"
-                className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-ai-500 to-ai-600 text-white shadow-lg shadow-ai-500/30 transition-opacity disabled:opacity-40"
-              >
-                <ArrowUp className="h-4 w-4" />
-              </button>
+              {loading ? (
+                <button
+                  onClick={stop}
+                  aria-label="Stop"
+                  title="Stop — sent the wrong thing?"
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-red-400/30 bg-red-500/10 text-red-300 transition-colors hover:bg-red-500/20"
+                >
+                  <Square className="h-3.5 w-3.5 fill-current" />
+                </button>
+              ) : (
+                <button
+                  onClick={() => void send(input)}
+                  disabled={!input.trim()}
+                  aria-label="Send"
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-ai-500 to-ai-600 text-white shadow-lg shadow-ai-500/30 transition-opacity disabled:opacity-40"
+                >
+                  <ArrowUp className="h-4 w-4" />
+                </button>
+              )}
             </div>
             <AnimatePresence>
               <motion.p

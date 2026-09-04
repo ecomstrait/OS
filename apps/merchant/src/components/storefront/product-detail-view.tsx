@@ -160,7 +160,8 @@ function Gallery({ product, surface }: { product: ApiProduct; surface: string })
 }
 
 function AddToCart({ product }: { product: ApiProduct }) {
-  const { add, busy } = useStorefrontCartContext();
+  const { add, isPending } = useStorefrontCartContext();
+  const pending = isPending(`add:${product.id}`);
   const [qty, setQty] = useState(1);
   const line = "color-mix(in srgb, var(--ink) 12%, transparent)";
 
@@ -198,11 +199,11 @@ function AddToCart({ product }: { product: ApiProduct }) {
       </div>
       <button
         onClick={() => add(product.id, qty)}
-        disabled={busy}
+        disabled={pending}
         className="inline-flex h-12 flex-1 items-center justify-center gap-2 text-sm font-semibold uppercase text-white transition hover:opacity-85 disabled:opacity-50"
         style={{ background: "var(--brand)", borderRadius: "var(--radius)", letterSpacing: "0.08em" }}
       >
-        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add to cart"}
+        {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Add to cart"}
       </button>
     </div>
   );

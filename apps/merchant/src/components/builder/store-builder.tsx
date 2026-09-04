@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Sparkles, Loader2, Send, Store, Globe, ShoppingBag, ImagePlus, X, Check, ExternalLink, ArrowLeft, Pencil, Trash2, Smartphone, Tablet, Monitor, Plus, Eye } from "lucide-react";
+import { Sparkles, Loader2, Send, Store, Globe, ShoppingBag, ImagePlus, X, Check, ExternalLink, ArrowLeft, Pencil, Trash2, Smartphone, Tablet, Monitor, Plus, Eye, Copy, Square } from "lucide-react";
 import { cn } from "@ecomstrait/ui";
 import { createClient } from "@ecomstrait/auth/client";
 import type { StoreType } from "@ecomstrait/db";
@@ -251,6 +251,14 @@ export function StoreBuilder({
 
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  // `busy` is plain state (not `useTransition`), which is what makes Stop
+  // possible at all — these are Server Actions with no cancellation
+  // primitive, so nothing actually aborts the in-flight request; this just
+  // guards against ITS eventual result still landing after the visitor
+  // already gave up on it. Reset at the start of every new send, not just
+  // on stop.
+  const cancelledRef = useRef(false);
+  const [copiedId, setCopiedId] = useState<number | null>(null);
   const [plan, setPlan] = useState<StorePlan | null>(existing?.plan ?? resumed?.plan ?? null);
   const [products, setProducts] = useState<PreviewProduct[]>(
     existing?.products ?? resumed?.products ?? [],
@@ -327,6 +335,20 @@ export function StoreBuilder({
     setMessages((m) => [...m, { id: nextId(), role: "ai", content, productSuggestions }]);
   }
 
+  /** Give up on the in-flight reply — for a prompt sent by mistake, no point
+   *  waiting out (or later being confused by) an answer to it. */
+  function stop() {
+    cancelledRef.current = true;
+    setBusy(false);
+  }
+
+  function copyMessage(id: number, text: string) {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedId(id);
+      setTimeout(() => setCopiedId((cur) => (cur === id ? null : cur)), 1200);
+    });
+  }
+
   // The conversation's opening question is the AI's own, not a hardcoded
   // string — asking with an empty transcript is exactly how it decides what
   // (if anything, given `knownContext`) it still needs to know first.
@@ -341,7 +363,7 @@ export function StoreBuilder({
       if (cancelled) return;
       setBusy(true);
       const res = await converseBuilderTurn([], knownContext);
-      if (cancelled) return;
+      if (cancelled || cancelledRef.current) return;
       setBusy(false);
       if ("error" in res) {
         if (res.upgrade) setUpgradeMsg(res.error);
@@ -388,6 +410,7 @@ export function StoreBuilder({
       // strictly more correct with no downside for the empty case.
       { useSelected: true },
     );
+    if (cancelledRef.current) return; // Stopped — don't apply a build the visitor already gave up on.
     setBusy(false);
     if (res.error) {
       if (res.upgrade) setUpgradeMsg(res.error);
@@ -442,12 +465,14 @@ export function StoreBuilder({
     setInput("");
     setError(null);
     setMessages((m) => [...m, { id: nextId(), role: "user", content: text }]);
+    cancelledRef.current = false;
 
     if (stage === "asking") {
       setBusy(true);
       const nextHistory: BuilderTurn[] = [...history, { role: "user", content: text }];
       const res: (ConverseResult & { productSuggestions?: ProductSuggestion[] }) | { error: string; upgrade?: boolean } =
         await converseBuilderTurn(nextHistory, knownContext);
+      if (cancelledRef.current) return;
       setBusy(false);
       if ("error" in res) {
         if (res.upgrade) setUpgradeMsg(res.error);
@@ -471,6 +496,7 @@ export function StoreBuilder({
     // the in-memory preview until "Launch my store".
     if (existing) {
       const res = await editStore(existing.id, text);
+      if (cancelledRef.current) return;
       setBusy(false);
       if (res.error) {
         if (res.upgrade) setUpgradeMsg(res.error);
@@ -499,6 +525,7 @@ export function StoreBuilder({
     }
 
     const res = await refineStore(plan, text, draftId);
+    if (cancelledRef.current) return;
     setBusy(false);
     if (res.error) {
       if (res.upgrade) setUpgradeMsg(res.error);
@@ -866,6 +893,22 @@ export function StoreBuilder({
                     as literal asterisks instead of formatted text. */}
                 {m.role === "ai" ? <ChatMarkdown text={m.content} /> : m.content}
               </div>
+              <button
+                type="button"
+                onClick={() => copyMessage(m.id, m.content)}
+                aria-label="Copy message"
+                className="mt-1 inline-flex items-center gap-1 px-1 text-[11px] font-medium text-ink-400 transition hover:text-ink-700"
+              >
+                {copiedId === m.id ? (
+                  <>
+                    <Check className="h-3 w-3 text-brand-600" /> Copied
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-3 w-3" /> Copy
+                  </>
+                )}
+              </button>
               {m.productSuggestions && m.productSuggestions.length > 0 && (
                 <div className="mt-2 grid w-full max-w-[95%] grid-cols-2 gap-2 sm:grid-cols-3">
                   {m.productSuggestions.map((p) => {
@@ -937,9 +980,21 @@ export function StoreBuilder({
               placeholder={stage === "ready" ? "Ask for a tweak…" : "Type your answer…"}
               className="max-h-24 min-h-9 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-ink-400"
             />
-            <button onClick={send} disabled={busy || input.trim().length < 1} aria-label="Send" className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-500 text-white transition hover:bg-brand-600 disabled:opacity-50">
-              <Send className="h-4 w-4" />
-            </button>
+            {busy ? (
+              <button
+                type="button"
+                onClick={stop}
+                aria-label="Stop"
+                title="Stop — sent the wrong thing?"
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-red-200 bg-red-50 text-red-600 transition hover:bg-red-100"
+              >
+                <Square className="h-3.5 w-3.5 fill-current" />
+              </button>
+            ) : (
+              <button onClick={send} disabled={input.trim().length < 1} aria-label="Send" className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-500 text-white transition hover:bg-brand-600 disabled:opacity-50">
+                <Send className="h-4 w-4" />
+              </button>
+            )}
           </div>
           {/* Logo import */}
           <div className="mt-2 flex items-center gap-2">

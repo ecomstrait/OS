@@ -6,6 +6,7 @@ import { autoSelectProducts, getProductsByIds } from "@/lib/catalog";
 import { suggestProductsForStore } from "@/lib/product-suggestions";
 import { generateStorePlan, themeForStyle, type PlanAnswers, type StorePlan } from "@/lib/ecomai";
 import { ensureDraftStore, launchStoreCore, editStore } from "@/lib/builder-actions";
+import { generatePostDraft } from "@/lib/blog-actions";
 import { assertTokenBudget, recordTokenUsage } from "@/lib/entitlements";
 import { askBusinessAdvisor } from "./business-advisor";
 
@@ -224,8 +225,28 @@ export function createCofounderTools(opts: { tenantId: string }) {
     {
       name: "edit_store_content",
       description:
-        "Edit an existing store's own content — headline, tagline, brand colors, about text, SEO title/description, collections, announcement bar, footer, or a whole custom page (Contact Us, FAQ, etc). Also the right tool for SEO analysis/improvement requests for this store. Give the full instruction in plain English, e.g. 'improve the SEO' or 'make the headline shorter and use a deep green'.",
+        "Edit an existing store's own content — headline, tagline, brand colors, about text, SEO title/description, collections, announcement bar, footer, or a whole custom page (Contact Us, FAQ, etc). Also the right tool for SEO analysis/improvement requests for this store. NEVER use this for a blog post — a blog post is a completely separate feature (see write_blog_post) from a custom page, even though both start from 'add a...'. Give the full instruction in plain English, e.g. 'improve the SEO' or 'make the headline shorter and use a deep green'.",
       schema: z.object({ storeId: z.string(), instruction: z.string() }),
+    },
+  );
+
+  const writeBlogPost = tool(
+    async ({ storeId, topic }: { storeId: string; topic: string }) => {
+      const result = await generatePostDraft(storeId, topic);
+      if (result.error) return result.error;
+      const post = result.post!;
+      return JSON.stringify({
+        title: post.title,
+        slug: post.slug,
+        status: post.status,
+        note: `Saved as a draft on this store's Blog screen — it's not published yet, the merchant still reviews it there first.`,
+      });
+    },
+    {
+      name: "write_blog_post",
+      description:
+        "The Blog Draft Writer: write a REAL blog post for a store from a topic — the same AI writing engine the store's own Blog screen uses (full title, excerpt, body, SEO fields), saved as a real draft post there, never published automatically. This is the ONLY tool for 'write/add a blog post' — never edit_store_content or build_store, which have no idea blog posts exist as their own feature (store_posts, not a custom page or plan content). For more than one post, call this once per topic.",
+      schema: z.object({ storeId: z.string(), topic: z.string().describe("What the post should be about") }),
     },
   );
 
@@ -242,5 +263,5 @@ export function createCofounderTools(opts: { tenantId: string }) {
     },
   );
 
-  return [listMyStores, suggestProducts, buildStore, launchStore, editStoreContent, askAdvisor];
+  return [listMyStores, suggestProducts, buildStore, launchStore, editStoreContent, writeBlogPost, askAdvisor];
 }

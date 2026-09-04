@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { ShieldCheck, PackageCheck, BadgeCheck, ImageOff, Plus } from "lucide-react";
+import { ShieldCheck, PackageCheck, BadgeCheck, ImageOff, Plus, Loader2 } from "lucide-react";
 import type { PlanMedia, StorePlan } from "@/lib/ecomai";
 import type { ApiProduct } from "@/lib/storefront-api";
 import { useStorefrontCartContext } from "@/components/storefront/storefront-chrome";
@@ -302,7 +302,7 @@ export function ProductGrid({
   basePath: string;
   surface: string;
 }) {
-  const { add, busy } = useStorefrontCartContext();
+  const { add, isPending } = useStorefrontCartContext();
 
   if (!products.length) {
     return <p className="py-10 text-center text-sm opacity-50">No products here yet.</p>;
@@ -310,57 +310,61 @@ export function ProductGrid({
 
   return (
     <div className="grid gap-x-6 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
-      {products.map((p) => (
-        <div key={p.id} className="group flex flex-col">
-          <Link href={`${basePath}/products/${p.id}`} className="block">
-            <div className="relative aspect-[4/5] shrink-0 overflow-hidden" style={{ background: surface, borderRadius: "var(--radius)" }}>
-              {p.image ? (
-                <Image
-                  src={p.image}
-                  alt={p.title}
-                  fill
-                  sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
-                  className="object-cover transition duration-500 group-hover:scale-[1.04]"
-                />
-              ) : (
-                <div className="grid h-full w-full place-items-center opacity-30">
-                  <ImageOff className="h-8 w-8" />
+      {products.map((p) => {
+        const pending = isPending(`add:${p.id}`);
+        return (
+          <div key={p.id} className="group flex flex-col">
+            <Link href={`${basePath}/products/${p.id}`} className="block">
+              <div className="relative aspect-[4/5] shrink-0 overflow-hidden" style={{ background: surface, borderRadius: "var(--radius)" }}>
+                {p.image ? (
+                  <Image
+                    src={p.image}
+                    alt={p.title}
+                    fill
+                    sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+                    className="object-cover transition duration-500 group-hover:scale-[1.04]"
+                  />
+                ) : (
+                  <div className="grid h-full w-full place-items-center opacity-30">
+                    <ImageOff className="h-8 w-8" />
+                  </div>
+                )}
+                <div className="absolute left-3 top-3 flex flex-col gap-1.5">
+                  {!p.inStock && (
+                    <span
+                      className="px-2.5 py-1 text-[10px] font-semibold uppercase"
+                      style={{ background: "var(--bg)", color: "var(--ink)", letterSpacing: "0.08em", borderRadius: "var(--radius)" }}
+                    >
+                      Sold out
+                    </span>
+                  )}
+                  {p.compareAtPrice != null && (
+                    <span
+                      className="px-2.5 py-1 text-[10px] font-semibold uppercase text-white"
+                      style={{ background: "var(--brand)", letterSpacing: "0.08em", borderRadius: "var(--radius)" }}
+                    >
+                      Sale
+                    </span>
+                  )}
                 </div>
-              )}
-              <div className="absolute left-3 top-3 flex flex-col gap-1.5">
-                {!p.inStock && (
-                  <span
-                    className="px-2.5 py-1 text-[10px] font-semibold uppercase"
-                    style={{ background: "var(--bg)", color: "var(--ink)", letterSpacing: "0.08em", borderRadius: "var(--radius)" }}
-                  >
-                    Sold out
-                  </span>
-                )}
-                {p.compareAtPrice != null && (
-                  <span
-                    className="px-2.5 py-1 text-[10px] font-semibold uppercase text-white"
-                    style={{ background: "var(--brand)", letterSpacing: "0.08em", borderRadius: "var(--radius)" }}
-                  >
-                    Sale
-                  </span>
-                )}
               </div>
-            </div>
-            <div className="flex flex-1 flex-col gap-2 pt-4">
-              <p className="line-clamp-2 text-sm font-medium">{p.title}</p>
-              <PriceTag product={p} className="text-sm" />
-            </div>
-          </Link>
-          <button
-            onClick={() => add(p.id, 1)}
-            disabled={busy || !p.inStock}
-            className="mt-3 inline-flex h-10 items-center justify-center gap-1.5 text-xs font-semibold uppercase text-white transition hover:opacity-85 disabled:opacity-40"
-            style={{ background: "var(--brand)", borderRadius: "var(--radius)", letterSpacing: "0.08em" }}
-          >
-            <Plus className="h-3.5 w-3.5" /> {p.inStock ? "Add to cart" : "Sold out"}
-          </button>
-        </div>
-      ))}
+              <div className="flex flex-1 flex-col gap-2 pt-4">
+                <p className="line-clamp-2 text-sm font-medium">{p.title}</p>
+                <PriceTag product={p} className="text-sm" />
+              </div>
+            </Link>
+            <button
+              onClick={() => add(p.id, 1)}
+              disabled={pending || !p.inStock}
+              className="mt-3 inline-flex h-10 items-center justify-center gap-1.5 text-xs font-semibold uppercase text-white transition hover:opacity-85 disabled:opacity-40"
+              style={{ background: "var(--brand)", borderRadius: "var(--radius)", letterSpacing: "0.08em" }}
+            >
+              {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}{" "}
+              {pending ? "Adding…" : p.inStock ? "Add to cart" : "Sold out"}
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
 }
